@@ -2,13 +2,14 @@ import React, { useState, useEffect } from "react";
 import { base44 } from "@/api/base44Client";
 import PageHeader from "@/components/PageHeader";
 import { Button } from "@/components/ui/button";
-import { Users, UserCheck, Globe2, Settings2, TrendingUp, AlertTriangle, ShieldCheck, Info, UserX } from "lucide-react";
+import { Users, UserCheck, Globe2, Settings2, TrendingUp, AlertTriangle, ShieldCheck, Info, UserX, Building2 } from "lucide-react";
 import {
   ResponsiveContainer, RadialBarChart, RadialBar, PolarAngleAxis,
   BarChart, Bar, XAxis, YAxis, ReferenceLine, Tooltip, CartesianGrid, Cell,
 } from "recharts";
 import { BAND_META, computeNitaqat, saudisNeededForSafe } from "@/lib/nitaqat";
 import NitaqatActivitySelect from "@/components/NitaqatActivitySelect";
+import NitaqatIsicSelect from "@/components/NitaqatIsicSelect";
 import { useI18n } from "@/lib/i18n";
 import { useToast } from "@/components/ui/use-toast";
 import { cn } from "@/lib/utils";
@@ -21,6 +22,9 @@ export default function Nitaqat() {
     title: "النطاقات (نسبة التوطين)", subtitle: "حساب نطاق كيانك وفق معادلة «نطاقات المطور» المعتمدة في الدليل الإجرائي 2026 لوزارة الموارد البشرية",
     activityLabel: "النشاط المعتمد (رمز النشاط)",
     activityHint: "ابحث برمز النشاط أو باسمه — من قائمة الأنشاط الـ41 المعتمدة لدى مكتب العمل.",
+    isicLabel: "النشاط الاقتصادي الرسمي (الدليل الوطني للأنشطة الاقتصادية ISIC4 — وزارة التجارة)",
+    isicHint: "ابحث برمز النشاط أو باسمه — أكثر من 2,800 نشاط رسمي.",
+    isicNote: "النشاط الاقتصادي مأخوذ من الدليل الوطني الرسمي للأنشطة الاقتصادية (2,800 نشاط). أما احتساب النطاق فيعتمد على نشاط «نطاقات» الرسمي المنشور في دليل وزارة الموارد البشرية (41 نشاطاً)، إذ لا تنشر الوزارة جدول الربط بين النشاط الاقتصادي ونشاط نطاقات.",
     saudis: "سعوديون نشطون", expats: "مقيمون نشطون", total: "إجمالي العمالة النشطة", pct: "نسبة التوطين",
     currentBand: "النطاق الحالي",
     formulaNote: "تُحتسب حدود النطاقات بمعادلة «نطاقات المطور»: الحد = م × لوغ(إجمالي العمالة) + ث — حيث يختلف (م، ث) حسب النشاط. النتيجة الرسمية المعتمدة تظهر على منصة قوى.",
@@ -36,6 +40,9 @@ export default function Nitaqat() {
     title: "Nitaqat (Saudization)", subtitle: "Compute your band using the official Developed-Nitaqat formula from the 2026 MHRSD procedural guide",
     activityLabel: "Official activity (code)",
     activityHint: "Search by code or name — from the 41 activities approved by the Ministry of Labor.",
+    isicLabel: "Official economic activity (National ISIC4 guide — Ministry of Commerce)",
+    isicHint: "Search by code or name — 2,800+ official activities.",
+    isicNote: "Your economic activity comes from the official National ISIC4 guide (2,800 activities). The band calculation uses the official Nitaqat activity published in the MHRSD guide (41 activities), because the ministry does not publish the mapping table between the two.",
     saudis: "Active Saudis", expats: "Active expats", total: "Total active workforce", pct: "Saudization %",
     currentBand: "Current band",
     formulaNote: "Band limits use the Developed-Nitaqat formula: Limit = m × ln(total headcount) + c — where (m, c) vary by activity. The official result appears on the Qiwa platform.",
@@ -90,6 +97,20 @@ export default function Nitaqat() {
     } catch (_) {} finally { setSavingActivity(false); }
   };
 
+  const onIsicChange = async ({ code, name, group }) => {
+    if (!org?.id) return;
+    setSavingActivity(true);
+    try {
+      const updated = await base44.entities.Organization.update(org.id, {
+        isic_activity_code: code,
+        isic_activity_name: name,
+        isic_activity_group: group,
+      });
+      setOrg({ ...org, ...updated, isic_activity_code: code, isic_activity_name: name, isic_activity_group: group });
+      toast({ title: t.saved });
+    } catch (_) {} finally { setSavingActivity(false); }
+  };
+
   const th = result.thresholds;
   const bandBars = [
     { name: isAr ? "أحمر" : "Red", from: 0, to: th.green_low, color: BAND_META.red.color },
@@ -108,21 +129,35 @@ export default function Nitaqat() {
       {/* Activity selector */}
       <div className="bg-white rounded-2xl border border-border p-5 mb-6">
         <div className="flex flex-col sm:flex-row sm:items-center gap-3">
-          <div className="flex-1">
-            <div className="text-xs font-medium text-muted-foreground mb-1.5 flex items-center gap-1.5">
-              <Settings2 size={14} /> {t.activityLabel}
+          <div className="flex-1 space-y-4">
+            <div>
+              <div className="text-xs font-medium text-muted-foreground mb-1.5 flex items-center gap-1.5">
+                <Building2 size={14} /> {t.isicLabel}
+              </div>
+              <NitaqatIsicSelect
+                code={org?.isic_activity_code}
+                name={org?.isic_activity_name}
+                group={org?.isic_activity_group}
+                onChange={onIsicChange}
+              />
             </div>
-            <NitaqatActivitySelect value={activityCode} onChange={onActivityChange} placeholder={t.activityHint} />
+            <div>
+              <div className="text-xs font-medium text-muted-foreground mb-1.5 flex items-center gap-1.5">
+                <Settings2 size={14} /> {t.activityLabel}
+              </div>
+              <NitaqatActivitySelect value={activityCode} onChange={onActivityChange} placeholder={t.activityHint} />
+            </div>
           </div>
           <div className="text-xs text-muted-foreground sm:max-w-xs leading-relaxed">
-            {t.activityHint}
+            {t.isicHint}
           </div>
         </div>
         <div className="flex items-start gap-2 mt-3 rounded-xl bg-violet-50 border border-violet-200 p-3">
           <Info size={16} className="text-violet-600 shrink-0 mt-0.5" />
           <div className="text-xs text-violet-800 leading-relaxed">{t.formulaNote}</div>
         </div>
-        <p className="text-[11px] text-amber-700 mt-2 leading-relaxed">⚠ {t.provNote}</p>
+        <p className="text-[11px] text-muted-foreground mt-2 leading-relaxed">{t.isicNote}</p>
+        <p className="text-[11px] text-amber-700 mt-1 leading-relaxed">⚠ {t.provNote}</p>
       </div>
 
       <div className="bg-white rounded-2xl border border-border p-5 mb-6">
