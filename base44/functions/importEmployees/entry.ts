@@ -140,6 +140,7 @@ export default async function (req) {
         || String(tt.contact_email || '').trim().toLowerCase() === meEmail
     );
     const myUnified = String(myTenant?.unified_number || '').trim();
+    if (!myUnified) return Response.json({ error: 'الحساب غير مرتبط بمنشأة' }, { status: 400 });
 
     const body = await req.json().catch(() => ({}));
     const records = Array.isArray(body.records) ? body.records : null;
@@ -168,10 +169,12 @@ export default async function (req) {
       return nb;
     }
 
-    const orgs = await base44.asServiceRole.entities.Organization.list("-created_date", 1);
+    // إعدادات منشأة العميل نفسها فقط
+    const orgs = await base44.asServiceRole.entities.Organization.filter({ unified_number: myUnified }, "-created_date", 1);
     const annualDays = Number(orgs[0]?.annual_leave_days) || 21;
 
-    const existing = await base44.asServiceRole.entities.Employee.list('-created_date', 5000);
+    // موظفو منشأة العميل فقط — لا مطابقة ولا ربط بأرقام موظفين من منشأة أخرى
+    const existing = await base44.asServiceRole.entities.Employee.filter({ unified_number: myUnified }, '-created_date', 5000);
     const byNumber = new Set();
     for (const e of existing) if (e.employee_number) byNumber.add(String(e.employee_number).trim());
 
@@ -292,7 +295,7 @@ export default async function (req) {
 
       const needLink = toCreate.filter((r) => r.manager_employee_number);
       if (needLink.length) {
-        const allEmps = await base44.asServiceRole.entities.Employee.list('-created_date', 5000);
+        const allEmps = await base44.asServiceRole.entities.Employee.filter({ unified_number: myUnified }, '-created_date', 5000);
         const numToId = new Map();
         for (const e of allEmps) if (e.employee_number) numToId.set(String(e.employee_number).trim(), e.id);
         const updates = [];

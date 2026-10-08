@@ -43,6 +43,16 @@ export default async function (req) {
     if (!user) return Response.json({ error: 'Unauthorized' }, { status: 401 });
     if (user.role !== 'admin') return Response.json({ error: 'Forbidden' }, { status: 403 });
 
+    // منشأة العميل الحالية — لا يُطابق أو يُحدَّث إلا موظفو منشأته
+    const meEmail = String(user.email || '').trim().toLowerCase();
+    const myTenants = await base44.asServiceRole.entities.Tenant.filter({}, undefined, 100);
+    const myTenant = (myTenants || []).find(
+      (tt: any) => String(tt.admin_email || '').trim().toLowerCase() === meEmail
+        || String(tt.contact_email || '').trim().toLowerCase() === meEmail
+    );
+    const myUnified = String(myTenant?.unified_number || '').trim();
+    if (!myUnified) return Response.json({ error: 'الحساب غير مرتبط بمنشأة' }, { status: 400 });
+
     const body = await req.json().catch(() => ({}));
     const fileUrl = String(body.file_url || '').trim();
     if (!fileUrl) return Response.json({ error: 'ملف مطلوب' }, { status: 400 });
@@ -79,7 +89,8 @@ export default async function (req) {
 
     const records = raw.map(normalizeRecord).filter((r) => r.date);
 
-    const employees = await base44.asServiceRole.entities.Employee.list('-created_date', 1000);
+    // موظفو منشأة العميل فقط — فلا يُنسب بصمة موظف إلى رقم وظيفي مشابه في منشأة أخرى
+    const employees = await base44.asServiceRole.entities.Employee.filter({ unified_number: myUnified }, '-created_date', 1000);
     const byNumber = {};
     const byNational = {};
     for (const e of employees) {
@@ -111,10 +122,11 @@ export default async function (req) {
     const dateSet = new Set(dates);
     let existing = [];
     if (records.length) {
+      const empIds = employees.map((e) => e.id);
       try {
-        existing = await base44.asServiceRole.entities.Attendance.list('-date', 5000);
+        existing = await base44.asServiceRole.entities.Attendance.filter({ employee_id: { $in: empIds } }, '-date', 5000);
       } catch (_e) {
-        existing = await base44.asServiceRole.entities.Attendance.list('-created_date', 5000);
+        existing = await base44.asServiceRole.entities.Attendance.filter({ employee_id: { $in: empIds } }, '-created_date', 5000);
       }
     }
     const keyOf = (id, d) => `${id}|${d}`;

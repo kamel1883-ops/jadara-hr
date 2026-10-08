@@ -82,7 +82,11 @@ export default async function (req: Request): Promise<Response> {
     // جلب وقت بداية الدوام من إعدادات المنشأة لحساب مدة التأخير
     let workStart = "";
     try {
-      const orgs: any[] = await base44.asServiceRole.entities.Organization.list("-created_date", 1);
+      // إعدادات منشأة الموظف نفسه فقط (بمطابقة رقمها الموحّد) — لا إعدادات أي منشأة أخرى
+      const empUnified = String(emp?.unified_number || "").trim();
+      const orgs: any[] = empUnified
+        ? await base44.asServiceRole.entities.Organization.filter({ unified_number: empUnified }, "-created_date", 5)
+        : [];
       workStart = String(orgs[0]?.work_start_time || "");
     } catch {}
 

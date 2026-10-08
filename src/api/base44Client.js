@@ -1,6 +1,7 @@
 import { createClient } from '@base44/sdk';
 import { appParams } from '@/lib/app-params';
 import { getPortalEntities, getPortalAuth } from '@/lib/portalEntityBridge';
+import { installTenantScope, scopedEntities } from '@/lib/tenantScope';
 
 const { appId, token, functionsVersion, appBaseUrl } = appParams;
 
@@ -18,8 +19,11 @@ const client = createClient({
 // إلى جسر البوابة (portalData) بدل مسار Base44 المحمي — فتعمل شاشات لوحة الشركات كما هي.
 export const base44 = new Proxy(client, {
   get(target, prop) {
-    if (prop === 'entities') return getPortalEntities() || target.entities;
+    // بيانات المنشآت معزولة بالرقم الموحّد: كل كيان تشغيلي يمر عبر طبقة العزل قبل القراءة أو الكتابة
+    if (prop === 'entities') return getPortalEntities() || scopedEntities(target.entities);
     if (prop === 'auth') return getPortalAuth() || target.auth;
     return target[prop];
   },
 });
+
+installTenantScope(client);
