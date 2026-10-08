@@ -32,6 +32,22 @@ const EMPLOYEE_KEYED = {
   Warning: ["employee_id"],
 };
 
+// الكيانات العامة للمنشأة (ملفاتها ومستنداتها: فروع، هيكل تنظيمي، مركبات، تراخيص،
+// وظائف، متقدمون، استبيانات، خطط القوى العاملة، قرارات إدارية) — تُقيَّد بالرقم الموحّد.
+const COMPANY_SCOPED = new Set([
+  "Branch", "OrgUnit", "Vehicle", "License", "Job", "JobApplication",
+  "Survey", "SurveyResponse", "WorkforcePlan", "AdminDecision",
+]);
+
+// قراءة سجل عام بمعرّفه (صفحة الوظيفة المفتوحة للجميع) — مسموحة بلا جلسة منشأة
+const PUBLIC_GET = new Set(["Job"]);
+
+// نطاق يُشتق من السجل الأصل عند الإنشاء من صفحة عامة (متقدم على وظيفة، رد استبيان)
+const PARENT_OF = {
+  JobApplication: { parent: "Job", key: "job_id" },
+  SurveyResponse: { parent: "Survey", key: "survey_id" },
+};
+
 let rawClient = null;
 let ctxPromise = null;
 
@@ -224,6 +240,89 @@ function scopedEmployee(api) {
   };
 }
 
+// كيان عام للمنشأة: قراءة بالرقم الموحّد، ووسم تلقائي بالسجل الجديد
+function companyScopedEntity(name, api) {
+  const scope = async () => {
+    const ctx = await tenantContext();
+    return ctx.unified ? { unified_number: ctx.unified } : null;
+  };
+  const stamp = async (data = {}) => {
+    const ctx = await tenantContext();
+    if (ctx.unified) return { ...data, unified_number: ctx.unified };
+    const p = PARENT_OF[name];
+    if (p && data[p.key]) {
+      const parent = await rawClient.entities[p.parent].get(data[p.key]).catch(() => null);
+      const un = String(parent?.unified_number || "").trim();
+      if (un) return { ...data, unified_number: un };
+    }
+    return data;
+  };
+  return {
+    async filter(query = {}, a, b) {
+      const s = await scope();
+      const legacy = typeof a === "string";
+      if (!s) return legacy ? [] : emptyPage();
+      const merged = { ...query, ...s };
+      if (legacy) return api.filter(merged, a, b);
+      return a === undefined ? api.filter(merged) : api.filter(merged, a);
+    },
+    async list(a, b) {
+      const s = await scope();
+      const legacy = typeof a === "string";
+      if (!s) return legacy ? [] : emptyPage();
+      if (legacy) return api.filter(s, a, b);
+      return a === undefined ? api.filter(s) : api.filter(s, { limit: 200, ...a });
+    },
+    async count(query = {}) {
+      const s = await scope();
+      return s ? api.count({ ...query, ...s }) : 0;
+    },
+    async aggregate(params = {}) {
+      const s = await scope();
+      if (!s) return { rows: [], truncated: false };
+      return api.aggregate({ ...params, query: { ...(params.query || {}), ...s } });
+    },
+    async get(id) {
+      const s = await scope();
+      if (!s) return PUBLIC_GET.has(name) ? api.get(id).catch(() => null) : null;
+      const rec = await api.get(id).catch(() => null);
+      return rec && String(rec.unified_number || "") === s.unified_number ? rec : null;
+    },
+    async create(data) {
+      return api.create(await stamp(data));
+    },
+    async bulkCreate(rows = []) {
+      const out = [];
+      for (const r of rows) out.push(await stamp(r));
+      return api.bulkCreate(out);
+    },
+    async update(id, data = {}) {
+      const s = await scope();
+      const patch = { ...data };
+      if (patch.unified_number !== undefined && s) patch.unified_number = s.unified_number;
+      return api.update(id, patch);
+    },
+    bulkUpdate: (rows) => api.bulkUpdate(rows),
+    async updateMany(query, update) {
+      const s = await scope();
+      if (!s) return { updated: 0 };
+      return api.updateMany({ ...query, ...s }, update);
+    },
+    delete: (id) => api.delete(id),
+    async deleteMany(query = {}) {
+      const s = await scope();
+      if (!s) return { deleted: 0 };
+      return api.deleteMany({ ...query, ...s });
+    },
+    subscribe(cb) {
+      return api.subscribe(async (event) => {
+        const s = await scope();
+        if (s && String(event?.data?.unified_number || "") === s.unified_number) cb(event);
+      });
+    },
+  };
+}
+
 // تُغلَّف كل نداءات الكيانات في الواجهة عبر هذه الطبقة
 export function scopedEntities(entities) {
   if (!entities) return entities;
@@ -231,6 +330,7 @@ export function scopedEntities(entities) {
     get(target, prop) {
       const api = target[prop];
       if (prop === "Employee") return scopedEmployee(api);
+      if (typeof prop === "string" && COMPANY_SCOPED.has(prop) && api) return companyScopedEntity(prop, api);
       const keys = typeof prop === "string" ? EMPLOYEE_KEYED[prop] : null;
       if (!keys || !api) return api;
       return scopedEntity(keys, api);
