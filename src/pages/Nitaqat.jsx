@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from "react";
 import { base44 } from "@/api/base44Client";
+import { getCurrentOrgContext, invalidateCurrentOrg } from "@/lib/currentOrg";
 import PageHeader from "@/components/PageHeader";
 import { Button } from "@/components/ui/button";
 import { Users, UserCheck, Globe2, Settings2, TrendingUp, AlertTriangle, ShieldCheck, Info, UserX, Building2 } from "lucide-react";
@@ -60,13 +61,16 @@ export default function Nitaqat() {
   const [counts, setCounts] = useState({ saudis: 0, expats: 0 });
   const [loading, setLoading] = useState(true);
   const [savingActivity, setSavingActivity] = useState(false);
+  const [tenantUnified, setTenantUnified] = useState("");
 
   useEffect(() => {
     (async () => {
       let activityCode = "10";
       try {
-        const list = await base44.entities.Organization.list("-created_date", 1);
-        if (list && list[0]) { setOrg(list[0]); activityCode = list[0].nitaqat_activity || "10"; }
+        // نشاط منشأة العميل نفسه فقط (بمطابقة الرقم الموحّد لمنشأته)
+        const { org: current, unified } = await getCurrentOrgContext();
+        setTenantUnified(unified);
+        if (current) { setOrg(current); activityCode = current.nitaqat_activity || "10"; }
       } catch (_) {}
       try {
         const emps = await base44.entities.Employee.list("-created_date", 1000);
@@ -87,29 +91,27 @@ export default function Nitaqat() {
   const result = computeNitaqat(counts.saudis, counts.expats, activityCode);
   const need = saudisNeededForSafe(result);
 
-  const onActivityChange = async (code) => {
-    if (!org?.id) return;
+  // يحفظ حقول النشاط على سجل إعدادات منشأة العميل، ويُنشئ السجل مربوطاً برقم منشأته إن لم يوجد
+  const saveActivity = async (fields) => {
     setSavingActivity(true);
     try {
-      const updated = await base44.entities.Organization.update(org.id, { nitaqat_activity: code });
-      setOrg({ ...org, ...updated, nitaqat_activity: code });
+      const payload = tenantUnified ? { ...fields, unified_number: tenantUnified } : fields;
+      const updated = org?.id
+        ? await base44.entities.Organization.update(org.id, payload)
+        : await base44.entities.Organization.create(payload);
+      setOrg({ ...(org || {}), ...updated, ...fields });
+      invalidateCurrentOrg();
       toast({ title: t.saved });
     } catch (_) {} finally { setSavingActivity(false); }
   };
 
-  const onIsicChange = async ({ code, name, group }) => {
-    if (!org?.id) return;
-    setSavingActivity(true);
-    try {
-      const updated = await base44.entities.Organization.update(org.id, {
-        isic_activity_code: code,
-        isic_activity_name: name,
-        isic_activity_group: group,
-      });
-      setOrg({ ...org, ...updated, isic_activity_code: code, isic_activity_name: name, isic_activity_group: group });
-      toast({ title: t.saved });
-    } catch (_) {} finally { setSavingActivity(false); }
-  };
+  const onActivityChange = (code) => saveActivity({ nitaqat_activity: code });
+
+  const onIsicChange = ({ code, name, group }) => saveActivity({
+    isic_activity_code: code,
+    isic_activity_name: name,
+    isic_activity_group: group,
+  });
 
   const th = result.thresholds;
   const bandBars = [

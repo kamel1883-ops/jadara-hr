@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from "react";
 import { base44 } from "@/api/base44Client";
+import { listCurrentOrg } from "@/lib/currentOrg";
 import PageHeader from "@/components/PageHeader";
 import { Button } from "@/components/ui/button";
 import {
@@ -45,7 +46,7 @@ export default function OrgStructure() {
     setLoading(true);
     const [list, orgs] = await Promise.all([
       base44.entities.Employee.list("-created_date", 1000),
-      base44.entities.Organization.list("-created_date", 5).catch(() => []),
+      listCurrentOrg().catch(() => []),
     ]);
     setEmployees(list);
     setOrg((orgs && orgs[0]) || null);

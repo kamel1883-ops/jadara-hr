@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from "react";
 import { base44 } from "@/api/base44Client";
+import { getCurrentOrgContext, invalidateCurrentOrg, ORG_DEFAULTS } from "@/lib/currentOrg";
 import PageHeader from "@/components/PageHeader";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -23,19 +24,7 @@ const DAY_AR = ["الأحد", "الاثنين", "الثلاثاء", "الأرب�
 const DAY_EN = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
 const DEFAULT_WORK_DAYS = "0,1,2,3,4,6"; // السبت–الخميس (الجمعة فقط إجازة)
 
-const empty = {
-  name: "", industry: "", nitaqat_activity: "10", contact_name: "", contact_phone: "", unified_number: "", contact_email: "",
-  vat_number: "", city: "", country: "المملكة العربية السعودية",
-  logo_url: "",
-  annual_leave_days: 21, ticket_policy: "yearly",
-  eos_basis: "gross",
-  gosi_saudi_employee_rate: 9.75, gosi_saudi_employer_rate: 9.75, gosi_expat_employer_rate: 2,
-  work_week_hours: 48, work_week_days: 6, late_grace_minutes: 15,
-  work_days: DEFAULT_WORK_DAYS,
-  work_start_time: "08:00", work_end_time: "17:00", work_hours_per_day: 9,
-  absence_deduction_type: "monthly_divided",
-  workplace_lat: "", workplace_lng: "", workplace_radius: 50,
-};
+const empty = { ...ORG_DEFAULTS, work_days: DEFAULT_WORK_DAYS };
 
 export default function SettingsPage() {
   const { lang } = useI18n();
@@ -43,7 +32,7 @@ export default function SettingsPage() {
   const t = isAr ? {
     title: "إعدادات المنشأة", subtitle: "بيانات المنشأة والسياسات المواردية", loading: "جارٍ التحميل...",
     secOrg: "بيانات المنشأة", secOrgNote: "مجلوبة من طلب عرض السعر / التفعيل — يمكنك تعديلها وستُحفظ لمنشأتك.",
-    secSub: "بيانات الاشتراك", subCount: "عدد الموظفين", subTier: "الشريحة", subPrice: "السعر السنوي للباقة (ر.س)", subStatus: "الحالة",
+    secSub: "بيانات الاشتراك — من عقد منشأتك", subCount: "عدد الموظفين المتعاقد عليه", subTier: "الشريحة", subPrice: "السعر السنوي للباقة (ر.س)", subStatus: "الحالة",
     name: "اسم المنشأة", industry: "القطاع / النشاط", responsible: "اسم الشخص المسؤول",
     nitaqatActivity: "النشاط لحساب نطاقات التوطين",
     nitaqatNote: "اختر النشاط المعتمد لدى مكتب العمل (من قائمة نطاقات المطور الـ41) بالبحث برمز النشاط أو باسمه، لتُحتسب نسبة التوطين وفق معادلة نطاقات المطور الرسمية.",
@@ -73,7 +62,7 @@ export default function SettingsPage() {
   } : {
     title: "Organization settings", subtitle: "Organization data and HR policies", loading: "Loading...",
     secOrg: "Organization data", secOrgNote: "Pulled from your quote / activation request — edit to save them to your organization.",
-    secSub: "Subscription data", subCount: "Employees count", subTier: "Tier", subPrice: "Annual package price (SAR)", subStatus: "Status",
+    secSub: "Subscription data (from your contract)", subCount: "Contracted employees", subTier: "Tier", subPrice: "Annual package price (SAR)", subStatus: "Status",
     name: "Organization name", industry: "Sector / Activity", responsible: "Responsible person",
     nitaqatActivity: "Activity for Nitaqat calculation",
     nitaqatNote: "Pick the official MHRSD activity (one of the 41 Developed-Nitaqat activities) by searching its code or name, so Saudization is computed with the official Nitaqat Mutawar formula.",
@@ -106,6 +95,7 @@ export default function SettingsPage() {
   const [saving, setSaving] = useState(false);
   const [loading, setLoading] = useState(true);
   const [subInfo, setSubInfo] = useState(null);
+  const [tenantUnified, setTenantUnified] = useState("");
   const [uploading, setUploading] = useState(false);
   const [avatarUrl, setAvatarUrl] = useState("");
   const [avatarUploading, setAvatarUploading] = useState(false);
@@ -116,40 +106,29 @@ export default function SettingsPage() {
 
   useEffect(() => {
     (async () => {
-      let orgData = empty;
-      try {
-        const list = await base44.entities.Organization.list("-created_date", 1);
-        if (list && list[0]) orgData = { ...empty, ...list[0], nitaqat_activity: normalizeActivity(list[0].nitaqat_activity) };
-      } catch (_) {}
-      // بيانات الاشتراك تُجلب دائماً من المنشأة (Tenant) — تُعرض للعميل للقراءة فقط
-      try {
-        const res = await base44.functions.invoke("getMyTenant");
-        const tt = res?.data?.tenant;
-        if (tt) {
-          setSubInfo({
-            employee_count: tt.employee_count || 0,
-            pricing_tier: tt.pricing_tier || '',
-            quoted_amount: tt.quoted_amount || 0,
-            status: tt.status || '',
-          });
-          // تعبئة قبلية ببيانات المنشأة فقط إن لم تُحفظ بعد
-          if (!orgData.name) {
-            orgData = {
-              ...orgData,
-              name: tt.name || orgData.name,
-              industry: tt.industry || orgData.industry,
-              contact_name: tt.contact_name || orgData.contact_name,
-              contact_phone: tt.contact_phone || orgData.contact_phone,
-              unified_number: tt.unified_number || orgData.unified_number,
-              contact_email: tt.contact_email || orgData.contact_email,
-              vat_number: tt.vat_number || orgData.vat_number,
-              city: tt.city || orgData.city,
-              country: tt.country || orgData.country,
-            };
-          }
-        }
-      } catch (_) {}
-      setOrg(orgData);
+      // سجل إعدادات منشأة العميل نفسه فقط (بمطابقة الرقم الموحّد لمنشأته) — لا بيانات أي منشأة أخرى.
+      const { tenant, unified, org } = await getCurrentOrgContext();
+      const merged = { ...empty };
+      // تعبئة تعريفية من سجل منشأة العميل، وسجل إعداداتها المحفوظ يتقدّم عليها
+      if (tenant) {
+        Object.entries({
+          name: tenant.name, industry: tenant.industry, city: tenant.city,
+          contact_name: tenant.contact_name, contact_phone: tenant.contact_phone,
+          unified_number: tenant.unified_number, contact_email: tenant.contact_email,
+          vat_number: tenant.vat_number, country: tenant.country,
+        }).forEach(([k, v]) => { if (v) merged[k] = v; });
+      }
+      if (org) Object.entries(org).forEach(([k, v]) => { if (v !== undefined && v !== null && v !== "") merged[k] = v; });
+      merged.nitaqat_activity = normalizeActivity(merged.nitaqat_activity);
+      setTenantUnified(unified);
+      // بيانات الاشتراك: عقد منشأة العميل نفسها — تُعرض للقراءة فقط
+      setSubInfo(tenant ? {
+        employee_count: tenant.employee_count || 0,
+        pricing_tier: tenant.pricing_tier || "",
+        quoted_amount: tenant.quoted_amount || 0,
+        status: tenant.status || "",
+      } : null);
+      setOrg(merged);
       setLoading(false);
     })();
   }, []);
@@ -201,10 +180,13 @@ export default function SettingsPage() {
     setSaving(true);
     try {
       const payload = { ...org, nitaqat_activity: normalizeActivity(org.nitaqat_activity) };
+      // ربط سجل الإعدادات بمنشأة العميل — يمنع تداخل السجلات بين الشركات
+      payload.unified_number = String(payload.unified_number || "").trim() || tenantUnified;
       payload.workplace_lat = payload.workplace_lat === "" || payload.workplace_lat === null ? null : Number(payload.workplace_lat);
       payload.workplace_lng = payload.workplace_lng === "" || payload.workplace_lng === null ? null : Number(payload.workplace_lng);
       if (org.id) { await base44.entities.Organization.update(org.id, payload); }
       else { const created = await base44.entities.Organization.create(payload); setOrg({ ...org, ...created }); }
+      invalidateCurrentOrg();
     } finally { setSaving(false); }
   };
 

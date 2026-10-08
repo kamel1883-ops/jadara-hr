@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from "react";
 import { base44 } from "@/api/base44Client";
+import { listCurrentOrg } from "@/lib/currentOrg";
 import PageHeader from "@/components/PageHeader";
 import EmployeeForm from "@/components/EmployeeForm";
 import EmployeeImport from "@/components/EmployeeImport";
@@ -73,7 +74,7 @@ export default function Employees() {
   const load = async () => {
     const [data, orgs, tenantRes] = await Promise.all([
       base44.entities.Employee.list("-created_date", 500),
-      base44.entities.Organization.list("-created_date", 1),
+      listCurrentOrg(),
       base44.functions.invoke("getMyTenant", {}).catch(() => null),
     ]);
     const reverted = await revertExpiredLeaves(data);

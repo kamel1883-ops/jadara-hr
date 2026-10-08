@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from "react";
 import { Link } from "react-router-dom";
 import { base44 } from "@/api/base44Client";
+import { listCurrentOrg } from "@/lib/currentOrg";
 import StatCard from "@/components/StatCard";
 import PageHeader from "@/components/PageHeader";
 import {
@@ -56,7 +57,7 @@ export default function Dashboard() {
       base44.entities.Vehicle.list("-created_date", 500),
     ]);
     try {
-      const olist = await base44.entities.Organization.list("-created_date", 1);
+      const olist = await listCurrentOrg();
       if (olist && olist[0]) setOrg(olist[0]);
     } catch (_) {}
     const activePay = await base44.entities.Payroll.filter({ status: "paid" }, "-created_date", 100);

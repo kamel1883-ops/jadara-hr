@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useMemo, useRef } from "react";
 import { base44 } from "@/api/base44Client";
+import { listCurrentOrg } from "@/lib/currentOrg";
 import { useI18n } from "@/lib/i18n";
 import { cn } from "@/lib/utils";
 import { formatCurrency } from "@/lib/hr";
@@ -138,7 +139,7 @@ export default function ReportsPanel({ employees, attendance }) {
         base44.entities.ExitInterview.list("-interview_date", 1000).catch(() => []),
         base44.entities.Survey.list("-created_date", 500).catch(() => []),
         base44.entities.SurveyResponse.list("-submitted_date", 1000).catch(() => []),
-        base44.entities.Organization.list("-created_date", 1).catch(() => []),
+        listCurrentOrg().catch(() => []),
         base44.entities.Payroll.filter({ status: "paid" }, "-created_date", 2000).catch(() => []),
         base44.entities.PlatformSubscription.list("-created_date", 500).catch(() => []),
       ]);

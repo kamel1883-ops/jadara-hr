@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from "react";
 import { base44 } from "@/api/base44Client";
+import { listCurrentOrg } from "@/lib/currentOrg";
 
 // مستند الوصف الوظيفي — يُستخدم للمشاهدة والطباعة PDF في ملف الموظف ونموذج الموظف
 // الترويسة: شعار المنشأة أعلى اليمين، وشعار جداره أعلى اليسار.
@@ -9,7 +10,7 @@ export default function JobDescriptionDoc({ employee, text, isAr = true }) {
 
   useEffect(() => {
     let alive = true;
-    base44.entities.Organization.list("-created_date", 1)
+    listCurrentOrg()
       .then((r) => { if (alive) setOrg(r?.[0] || null); })
       .catch(() => {});
     return () => { alive = false; };

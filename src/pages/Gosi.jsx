@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from "react";
 import { Link } from "react-router-dom";
 import { base44 } from "@/api/base44Client";
+import { listCurrentOrg } from "@/lib/currentOrg";
 import PageHeader from "@/components/PageHeader";
 import StatCard from "@/components/StatCard";
 import { Button } from "@/components/ui/button";
@@ -66,7 +67,7 @@ export default function Gosi() {
     const emps = await base44.entities.Employee.filter({ status: "active" }, "-created_date", 500);
     const sensMap = await enrichEmployeesBatch(emps);
     setEmployees(emps.map((e) => (e.emp_ref ? { ...e, ...sensMap[e.emp_ref] } : e)));
-    const orgs = await base44.entities.Organization.list("-created_date", 1);
+    const orgs = await listCurrentOrg();
     setOrg(orgs[0]);
     const recs = await base44.entities.GosiRecord.filter({ month, year }, "-created_date", 1000);
     setRecords(recs);

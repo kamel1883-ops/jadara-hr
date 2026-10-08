@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from "react";
 import { base44 } from "@/api/base44Client";
+import { listCurrentOrg } from "@/lib/currentOrg";
 import PageHeader from "@/components/PageHeader";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -47,7 +48,7 @@ export default function Attendance() {
   useEffect(() => {
     (async () => {
       try {
-        const list = await base44.entities.Organization.list("-created_date", 1);
+        const list = await listCurrentOrg();
         setOrg(list?.[0] || null);
       } catch {}
     })();

@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from "react";
 import { base44 } from "@/api/base44Client";
+import { listCurrentOrg } from "@/lib/currentOrg";
 import PageHeader from "@/components/PageHeader";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -132,7 +133,7 @@ export default function Approvals() {
       base44.entities.LoanRequest.list("-created_date", 500),
       base44.entities.BusinessTrip.list("-created_date", 500),
       base44.entities.Employee.list("-created_date", 500),
-      base44.entities.Organization.list("-created_date", 1),
+      listCurrentOrg(),
     ]);
     // جلب النصوص الحسّاسة من الخزنة (سبب الإجازة / غرض الرحلة / الملاحظات) ودمجها للعرض
     const [lvEnriched, trEnriched] = await Promise.all([

@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from "react";
 import { base44 } from "@/api/base44Client";
+import { listCurrentOrg } from "@/lib/currentOrg";
 import PageHeader from "@/components/PageHeader";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -84,7 +85,7 @@ export default function Equipment() {
       base44.entities.EquipmentRequest.list("-created_date", 500),
       base44.entities.Equipment.list("-created_date", 500),
       base44.entities.Employee.list("-created_date", 500),
-      base44.entities.Organization.list("-created_date", 1),
+      listCurrentOrg(),
     ]);
     // جلب بيانات العهدة الحسّاسة (البيان/السريال/الحالة/ملاحظات الإرجاع) من الخزنة للعرض والطباعة
     const enrichedC = await enrichRecordsWithVault(c, VAULT_MODULES.equipment, "equip_ref", ["item_label", "custom_type", "serial_number", "condition_note", "return_note", "notes", "cost"]);

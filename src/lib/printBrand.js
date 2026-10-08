@@ -1,6 +1,7 @@
 // هوية الطباعة الموحّدة: شعار المنشأة + اسمها أعلى اليمين، وشعار جداره (التاج الذهبي) أعلى اليسار.
 // تستخدمها جميع أدوات الطباعة (employeePrint / sectionPrint ...) لإدراج ترويسة هوية واحدة على كل مستند.
 import { base44 } from "@/api/base44Client";
+import { listCurrentOrg } from "@/lib/currentOrg";
 
 const AMP = String.fromCharCode(38);
 const SEMI = String.fromCharCode(59);
@@ -20,7 +21,7 @@ export async function fetchOrg() {
   if (_orgFetched) return _orgCache;
   _orgFetched = true;
   try {
-    const r = await base44.entities.Organization.list("-created_date", 1);
+    const r = await listCurrentOrg();
     _orgCache = (r && r[0]) || null;
   } catch (e) { _orgCache = null; }
   // تخزين الشعار مسبقًا في ذاكرة المتصفح ليظهر فورًا في كل المستندات دون تأخير.

@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from "react";
 import { base44 } from "@/api/base44Client";
+import { listCurrentOrg } from "@/lib/currentOrg";
 import PageHeader from "@/components/PageHeader";
 import SettlementSheet from "@/components/SettlementSheet";
 import { Button } from "@/components/ui/button";
@@ -99,7 +100,7 @@ export default function EndOfService() {
     setLoading(true);
     const [emps, orgs, sets] = await Promise.all([
       base44.entities.Employee.list("-created_date", 500),
-      base44.entities.Organization.list("-created_date", 1),
+      listCurrentOrg(),
       base44.entities.Settlement.list("-created_date", 50),
     ]);
     setEmployees(emps.filter((e) => e.role_level !== "owner"));

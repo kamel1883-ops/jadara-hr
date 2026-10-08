@@ -3,6 +3,7 @@ import { flushSync } from "react-dom";
 import { createRoot } from "react-dom/client";
 import { Link } from "react-router-dom";
 import { base44 } from "@/api/base44Client";
+import { listCurrentOrg } from "@/lib/currentOrg";
 import PageHeader from "@/components/PageHeader";
 import StatCard from "@/components/StatCard";
 import { Button } from "@/components/ui/button";
@@ -89,7 +90,7 @@ export default function Payroll() {
     setPayrolls(data);
     const emps = await base44.entities.Employee.filter({ status: "active" }, "-created_date", 500);
     setEmployees(await enrichEmps(emps));
-    const orgs = await base44.entities.Organization.list("-created_date", 1);
+    const orgs = await listCurrentOrg();
     setOrg(orgs[0]);
     setLoading(false);
   };
@@ -107,7 +108,7 @@ export default function Payroll() {
     const endDate = `${year}-${mm}-${String(endDay).padStart(2, "0")}`;
     const attRecords = await base44.entities.Attendance.filter({ date: { $gte: startDate, $lte: endDate } }, "-created_date", 2000);
     // أيام العمل الرسمية المعتمدة بالمنشأة (0=الأحد ... 6=السبت). الأيام خارجها = إجازة أسبوعية لا تُحسب.
-    const orgFresh = (org && org.work_days) ? org : ((await base44.entities.Organization.list("-created_date", 1))[0] || {});
+    const orgFresh = (org && org.work_days) ? org : ((await listCurrentOrg())[0] || {});
     const workDaysSet = computeWorkDaysSet(orgFresh.work_days);
     const workDaysInMonth = computeWorkDaysInMonth(year, month, workDaysSet);
     const workHoursPerDay = Number(orgFresh.work_hours_per_day) || 0;

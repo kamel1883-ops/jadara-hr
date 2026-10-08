@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useCallback } from "react";
 import { base44 } from "@/api/base44Client";
+import { listCurrentOrg } from "@/lib/currentOrg";
 import PageHeader from "@/components/PageHeader";
 import DecisionFormDialog from "@/components/decisions/DecisionFormDialog";
 import { Button } from "@/components/ui/button";
@@ -52,7 +53,7 @@ export default function Decisions() {
       const [list, emps, orgs] = await Promise.all([
         base44.entities.AdminDecision.list("-issued_date", 500),
         base44.entities.Employee.list("-created_date", 2000),
-        base44.entities.Organization.list("-created_date", 1),
+        listCurrentOrg(),
       ]);
       setRows(list || []);
       setEmployees(emps || []);

@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from "react";
 import { createPortal } from "react-dom";
 import { base44 } from "@/api/base44Client";
+import { listCurrentOrg } from "@/lib/currentOrg";
 import PageHeader from "@/components/PageHeader";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -95,7 +96,7 @@ export default function Recruitment() {
         base44.entities.JobApplication.filter({ status: "hired" }, "-hired_date", 500),
         base44.entities.TrialEvaluation.list("-created_date", 500),
         base44.entities.Employee.list("-created_date", 1000),
-        base44.entities.Organization.list("-created_date", 1),
+        listCurrentOrg(),
       ]);
       setJobs(j || []);
       setEmployees(emps || []);

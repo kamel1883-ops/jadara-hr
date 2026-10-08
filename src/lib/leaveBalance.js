@@ -1,4 +1,5 @@
 import { base44 } from "@/api/base44Client";
+import { listCurrentOrg } from "@/lib/currentOrg";
 
 // الفرق بالأشهر الكاملة بين تاريخين (أو 0)
 export function monthDiff(fromISO, toISO) {
@@ -51,7 +52,7 @@ export function computeLeaveEntitlement(hireDate, org, asOf = new Date(), annual
 
 export async function getOrgOnce() {
   try {
-    const orgs = await base44.entities.Organization.list("-created_date", 1);
+    const orgs = await listCurrentOrg();
     return orgs[0] || null;
   } catch {
     return null;

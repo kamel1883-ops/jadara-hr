@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from "react";
 import { base44 } from "@/api/base44Client";
+import { listCurrentOrg } from "@/lib/currentOrg";
 import PageHeader from "@/components/PageHeader";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -64,7 +65,7 @@ export default function Complaints() {
     const [list, emps, orgs] = await Promise.all([
       base44.entities.Complaint.list("-created_date", 500),
       base44.entities.Employee.list("-created_date", 500),
-      base44.entities.Organization.list("-created_date", 1),
+      listCurrentOrg(),
     ]);
     // جلب النصوص الحسّاسة من الخزنة (الوصف/الحل/الملاحظات) ودمجها للعرض
     const enriched = await enrichRecordsWithVault(list, VAULT_MODULES.complaints, "complaint_ref", ["description", "hr_resolution", "manager_note", "hr_note", "notes"]);

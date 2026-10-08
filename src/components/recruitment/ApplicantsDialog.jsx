@@ -5,6 +5,7 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
 import { base44 } from "@/api/base44Client";
+import { listCurrentOrg } from "@/lib/currentOrg";
 import { useToast } from "@/components/ui/use-toast";
 import { useI18n } from "@/lib/i18n";
 import { renderToPdfBlob, uploadPdfBlob } from "@/lib/pdfDocs";
@@ -103,7 +104,7 @@ export default function ApplicantsDialog({ open, onOpenChange, job, onHired, onE
     try {
       const today = new Date().toISOString().slice(0, 10);
       let org = null;
-      try { const orgs = await base44.entities.Organization.list("-created_date", 1); org = orgs[0] || null; } catch {}
+      try { const orgs = await listCurrentOrg(); org = orgs[0] || null; } catch {}
 
       let docUrl = "";
       try {

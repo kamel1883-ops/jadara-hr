@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from "react";
 import { base44 } from "@/api/base44Client";
+import { listCurrentOrg } from "@/lib/currentOrg";
 import { Button } from "@/components/ui/button";
 import { Printer } from "lucide-react";
 import BrandHeader from "@/components/docs/BrandHeader";
@@ -13,7 +14,7 @@ export default function DelegationDocument({ delegation, onClose }) {
     : { title: "Vehicle delegation document", close: "Close", print: "Print / PDF" };
   const [org, setOrg] = useState(null);
   useEffect(() => {
-    base44.entities.Organization.list().then((d) => setOrg(d[0] || null)).catch(() => {});
+    listCurrentOrg().then((d) => setOrg(d[0] || null)).catch(() => {});
   }, []);
 
   const company = org?.name || "";
