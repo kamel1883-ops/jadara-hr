@@ -149,22 +149,29 @@ export default async function (req) {
       return Response.json({ error: 'لا توجد بيانات للاستيراد' }, { status: 400 });
     }
 
-    // تجهيز الفروع: الفرع الرئيسي افتراضياً، وإنشاء أي فرع جديد مذكور
-    const branches = await base44.asServiceRole.entities.Branch.list('-created_date', 500);
-    let mainBranch = branches.find((b) => b.is_main) || branches[0];
-    if (!mainBranch) {
-      mainBranch = await base44.asServiceRole.entities.Branch.create({ name: 'الفرع الرئيسي', is_main: true });
-    }
+    // تجهيز الفروع: فروع هذه المنشأة فقط (بالرقم الموحّد) — لا يظهر أي فرع لمنشأة أخرى.
+    // كل فرع مذكور في ملف الاستيراد يُنشأ فعلياً في «إدارة الفروع» ليُضبط له الموقع/البصمة.
+    const branches = await base44.asServiceRole.entities.Branch.filter({ unified_number: myUnified }, '-created_date', 5000);
     const branchMap = new Map();
     for (const b of branches) branchMap.set(lower(b.name), b);
-    branchMap.set(lower(mainBranch.name), mainBranch);
+    let mainBranch = branches.find((b) => b.is_main) || branches[0] || null;
+    if (mainBranch) branchMap.set(lower(mainBranch.name), mainBranch);
+
+    // أسماء الفروع الواردة في الملف (إن وُجدت) — إن لم يحتوِ الملف على فروع لا ننشئ شيئاً
+    const fileBranchNames = [...new Set(
+      records.map((row) => String(row?.branch_name ?? row?.['الفرع'] ?? '').trim()).filter(Boolean)
+    )];
+    if (!mainBranch && fileBranchNames.length) {
+      mainBranch = await base44.asServiceRole.entities.Branch.create({ name: 'الفرع الرئيسي', is_main: true, unified_number: myUnified });
+      branchMap.set(lower(mainBranch.name), mainBranch);
+    }
 
     async function resolveBranch(name) {
       const n = String(name ?? '').trim();
       if (!n) return mainBranch;
       const key = lower(n);
       if (branchMap.has(key)) return branchMap.get(key);
-      const nb = await base44.asServiceRole.entities.Branch.create({ name: n, is_main: false });
+      const nb = await base44.asServiceRole.entities.Branch.create({ name: n, is_main: false, unified_number: myUnified });
       branchMap.set(key, nb);
       return nb;
     }
@@ -231,8 +238,8 @@ export default async function (req) {
         r.contract_end_date = `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
       }
       const br = await resolveBranch(r.branch_name);
-      r.branch_id = br.id;
-      r.branch_name = br.name;
+      if (br) { r.branch_id = br.id; r.branch_name = br.name; }
+      else r.branch_name = r.branch_name || '';
       r.prior_used_leave = r.leave_used || r.prior_used_leave || 0;
       const empChoice = r.annual_leave_entitlement === 30 ? 30 : 21;
       const ent = (r.leave_total_entitled && r.leave_total_entitled > 0)
