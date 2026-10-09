@@ -22,7 +22,6 @@ const EMPLOYEE_KEYED = {
   Incentive: ["employee_id"],
   LeaveRequest: ["employee_id"],
   LoanRequest: ["employee_id"],
-  Notification: ["employee_id"],
   Payroll: ["employee_id"],
   Performance: ["employee_id"],
   Settlement: ["employee_id"],
@@ -36,7 +35,7 @@ const EMPLOYEE_KEYED = {
 // وظائف، متقدمون، استبيانات، خطط القوى العاملة، قرارات إدارية) — تُقيَّد بالرقم الموحّد.
 const COMPANY_SCOPED = new Set([
   "Branch", "OrgUnit", "Vehicle", "License", "Job", "JobApplication",
-  "Survey", "SurveyResponse", "WorkforcePlan", "AdminDecision",
+  "Survey", "SurveyResponse", "WorkforcePlan", "AdminDecision", "TrialEvaluation",
 ]);
 
 // قراءة سجل عام بمعرّفه (صفحة الوظيفة المفتوحة للجميع) — مسموحة بلا جلسة منشأة
@@ -68,18 +67,25 @@ async function tenantContext() {
 
 async function loadTenantContext() {
   try {
+    // حساب المستخدم الحالي — لإشعاراته الخاصة (معتمد البوابة مثلاً)
+    let userId = "";
+    try {
+      const me = await rawClient.auth.me();
+      userId = String(me?.id || "");
+    } catch (_) {}
+
     const res = await rawClient.functions.invoke("getMyTenant", {});
     const unified = String(res?.data?.tenant?.unified_number || "").trim();
-    if (!unified) return { unified: "", employeeIds: [] };
+    if (!unified) return { unified: "", userId, employeeIds: [] };
     const page = await rawClient.entities.Employee.filter(
       { unified_number: unified },
       { fields: ["id"], limit: 1000 }
     );
     const items = page?.items || (Array.isArray(page) ? page : []);
-    return { unified, employeeIds: items.map((e) => e.id).filter(Boolean) };
+    return { unified, userId, employeeIds: items.map((e) => e.id).filter(Boolean) };
   } catch (_) {
     // عند تعذّر تحديد المنشأة لا تُعرض أي بيانات تشغيلية (الأمان أولاً)
-    return { unified: "", employeeIds: [] };
+    return { unified: "", userId: "", employeeIds: [] };
   }
 }
 
@@ -323,6 +329,84 @@ function companyScopedEntity(name, api) {
   };
 }
 
+// الإشعارات: إشعارات المستخدم نفسه + إشعارات موظفي منشأته + إشعارات منشأته — ولا شيء غيرها
+function scopedNotification(api) {
+  const scope = async () => {
+    const ctx = await tenantContext();
+    const parts = [];
+    if (ctx.unified) parts.push({ unified_number: ctx.unified });
+    if (ctx.userId) parts.push({ user_id: ctx.userId });
+    if (ctx.employeeIds.length) parts.push({ employee_id: { $in: ctx.employeeIds } });
+    if (!parts.length) return null;
+    return parts.length === 1 ? parts[0] : { $or: parts };
+  };
+  const mine = async (rec) => {
+    if (!rec) return false;
+    const ctx = await tenantContext();
+    if (ctx.userId && String(rec.user_id || "") === ctx.userId) return true;
+    if (ctx.unified && String(rec.unified_number || "") === ctx.unified) return true;
+    return ctx.employeeIds.some((id) => String(rec.employee_id || "") === id);
+  };
+  const stamp = async (data = {}) => {
+    const ctx = await tenantContext();
+    return ctx.unified ? { ...data, unified_number: ctx.unified } : data;
+  };
+  return {
+    async filter(query = {}, a, b) {
+      const s = await scope();
+      const legacy = typeof a === "string";
+      if (!s) return legacy ? [] : emptyPage();
+      const merged = { ...query, ...s };
+      if (legacy) return api.filter(merged, a, b);
+      return a === undefined ? api.filter(merged) : api.filter(merged, a);
+    },
+    async list(a, b) {
+      const s = await scope();
+      const legacy = typeof a === "string";
+      if (!s) return legacy ? [] : emptyPage();
+      if (legacy) return api.filter(s, a, b);
+      return a === undefined ? api.filter(s) : api.filter(s, { limit: 200, ...a });
+    },
+    async count(query = {}) {
+      const s = await scope();
+      return s ? api.count({ ...query, ...s }) : 0;
+    },
+    async aggregate(params = {}) {
+      const s = await scope();
+      if (!s) return { rows: [], truncated: false };
+      return api.aggregate({ ...params, query: { ...(params.query || {}), ...s } });
+    },
+    async get(id) {
+      const rec = await api.get(id).catch(() => null);
+      return (await mine(rec)) ? rec : null;
+    },
+    async create(data) {
+      return api.create(await stamp(data));
+    },
+    async bulkCreate(rows = []) {
+      const out = [];
+      for (const r of rows) out.push(await stamp(r));
+      return api.bulkCreate(out);
+    },
+    update: (id, data) => api.update(id, data),
+    bulkUpdate: (rows) => api.bulkUpdate(rows),
+    async updateMany(query, update) {
+      const s = await scope();
+      if (!s) return { updated: 0 };
+      return api.updateMany({ ...query, ...s }, update);
+    },
+    delete: (id) => api.delete(id),
+    async deleteMany(query = {}) {
+      const s = await scope();
+      if (!s) return { deleted: 0 };
+      return api.deleteMany({ ...query, ...s });
+    },
+    subscribe(cb) {
+      return api.subscribe(async (event) => { if (await mine(event?.data)) cb(event); });
+    },
+  };
+}
+
 // تُغلَّف كل نداءات الكيانات في الواجهة عبر هذه الطبقة
 export function scopedEntities(entities) {
   if (!entities) return entities;
@@ -330,6 +414,7 @@ export function scopedEntities(entities) {
     get(target, prop) {
       const api = target[prop];
       if (prop === "Employee") return scopedEmployee(api);
+      if (prop === "Notification" && api) return scopedNotification(api);
       if (typeof prop === "string" && COMPANY_SCOPED.has(prop) && api) return companyScopedEntity(prop, api);
       const keys = typeof prop === "string" ? EMPLOYEE_KEYED[prop] : null;
       if (!keys || !api) return api;
