@@ -11,12 +11,8 @@ import Time24Input from "@/components/ui/time24";
 import { Loader2, Building2, Save, Crosshair, Wallet, Upload, UserCircle, Info } from "lucide-react";
 import { useI18n } from "@/lib/i18n";
 import WorkplaceMapPicker from "@/components/settings/WorkplaceMapPicker";
-import NitaqatActivitySelect from "@/components/NitaqatActivitySelect";
-import { NITAQAT_ACTIVITIES } from "@/lib/nitaqat";
+import NitaqatIsicSelect from "@/components/NitaqatIsicSelect";
 import { cn } from "@/lib/utils";
-
-const VALID_CODES = new Set(NITAQAT_ACTIVITIES.map((a) => a.code));
-const normalizeActivity = (v) => (v && VALID_CODES.has(String(v)) ? String(v) : "10");
 
 // ترتيب الأسبوع السعودي: السبت → الجمعة (أرقام getDay: 6=السبت ... 5=الجمعة)
 const WEEK_ORDER = [6, 0, 1, 2, 3, 4, 5];
@@ -34,9 +30,9 @@ export default function SettingsPage() {
     secOrg: "بيانات المنشأة", secOrgNote: "مجلوبة من طلب عرض السعر / التفعيل — يمكنك تعديلها وستُحفظ لمنشأتك.",
     secSub: "بيانات الاشتراك — من عقد منشأتك", subCount: "عدد الموظفين المتعاقد عليه", subTier: "الشريحة", subPrice: "السعر السنوي للباقة (ر.س)", subStatus: "الحالة",
     name: "اسم المنشأة", industry: "القطاع / النشاط", responsible: "اسم الشخص المسؤول",
-    nitaqatActivity: "النشاط لحساب نطاقات التوطين",
-    nitaqatNote: "اختر النشاط المعتمد لدى مكتب العمل (من قائمة نطاقات المطور الـ41) بالبحث برمز النشاط أو باسمه، لتُحتسب نسبة التوطين وفق معادلة نطاقات المطور الرسمية.",
-    nitaqatHint: "يُحتسب النطاق من العمالة النشطة فقط (سعوديين ومقيمين)، والنتيجة الرسمية على منصة قوى.",
+    nitaqatActivity: "نشاط المنشأة في نطاقات",
+    nitaqatNote: "اختر النشاط الرئيسي، ثم النشاط التفصيلي الذي يندرج تحته. النطاق يُحسب من هذا النشاط وعدد السعوديين وعدد الوافدين في المنشأة.",
+    nitaqatHint: "القائمة هي دليل الأنشطة الاقتصادية. كل نشاط تفصيلي له معادلة التوطين الخاصة به.",
     nitaqatLink: "عرض النطاقات",
     phone: "الهاتف", unified: "الرقم الوطني الموحد للمنشآت (10 خانات تبدأ بـ7)", email: "البريد الإلكتروني",
     vat: "الرقم الضريبي", city: "المدينة",
@@ -64,9 +60,9 @@ export default function SettingsPage() {
     secOrg: "Organization data", secOrgNote: "Pulled from your quote / activation request — edit to save them to your organization.",
     secSub: "Subscription data (from your contract)", subCount: "Contracted employees", subTier: "Tier", subPrice: "Annual package price (SAR)", subStatus: "Status",
     name: "Organization name", industry: "Sector / Activity", responsible: "Responsible person",
-    nitaqatActivity: "Activity for Nitaqat calculation",
-    nitaqatNote: "Pick the official MHRSD activity (one of the 41 Developed-Nitaqat activities) by searching its code or name, so Saudization is computed with the official Nitaqat Mutawar formula.",
-    nitaqatHint: "The band is computed from active workforce only (Saudis & expats); the official result is on the Qiwa platform.",
+    nitaqatActivity: "Establishment activity for Nitaqat",
+    nitaqatNote: "Choose the main activity, then the detailed activity under it. The band uses that activity plus the establishment's Saudi and expat counts.",
+    nitaqatHint: "The list is the economic-activity guide. Each detailed activity has its own Saudization formula.",
     nitaqatLink: "View Nitaqat",
     phone: "Phone", unified: "National Unified Number (10 digits, starts with 7)", email: "Email",
     vat: "VAT number", city: "City",
@@ -119,7 +115,6 @@ export default function SettingsPage() {
         }).forEach(([k, v]) => { if (v) merged[k] = v; });
       }
       if (org) Object.entries(org).forEach(([k, v]) => { if (v !== undefined && v !== null && v !== "") merged[k] = v; });
-      merged.nitaqat_activity = normalizeActivity(merged.nitaqat_activity);
       setTenantUnified(unified);
       // بيانات الاشتراك: عقد منشأة العميل نفسها — تُعرض للقراءة فقط
       setSubInfo(tenant ? {
@@ -179,7 +174,7 @@ export default function SettingsPage() {
   const save = async () => {
     setSaving(true);
     try {
-      const payload = { ...org, nitaqat_activity: normalizeActivity(org.nitaqat_activity) };
+      const payload = { ...org };
       // ربط سجل الإعدادات بمنشأة العميل — يمنع تداخل السجلات بين الشركات
       payload.unified_number = String(payload.unified_number || "").trim() || tenantUnified;
       payload.workplace_lat = payload.workplace_lat === "" || payload.workplace_lat === null ? null : Number(payload.workplace_lat);
@@ -211,9 +206,19 @@ export default function SettingsPage() {
           <div className="grid grid-cols-2 gap-4">
             <Field label={t.name}><Input value={org.name} onChange={(e) => set("name", e.target.value)} /></Field>
             <Field label={t.industry}><Input value={org.industry} onChange={(e) => set("industry", e.target.value)} /></Field>
-            <Field label={t.nitaqatActivity}>
-              <NitaqatActivitySelect value={org.nitaqat_activity || "10"} onChange={(v) => set("nitaqat_activity", v)} placeholder={t.nitaqatActivity} />
-            </Field>
+            <div className="col-span-2">
+              <div className="text-sm font-medium mb-2">{t.nitaqatActivity}</div>
+              <NitaqatIsicSelect
+                code={org.isic_activity_code}
+                group={org.isic_activity_group}
+                onChange={({ code, name, group }) => setOrg((o) => ({
+                  ...o,
+                  isic_activity_code: code,
+                  isic_activity_name: name,
+                  isic_activity_group: group,
+                }))}
+              />
+            </div>
             <Field label={t.city}><Input value={org.city} onChange={(e) => set("city", e.target.value)} /></Field>
             <Field label={t.responsible}><Input value={org.contact_name} onChange={(e) => set("contact_name", e.target.value)} /></Field>
             <Field label={t.phone}><Input value={org.contact_phone} onChange={(e) => set("contact_phone", e.target.value)} dir="ltr" /></Field>

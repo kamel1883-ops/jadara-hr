@@ -14,7 +14,7 @@ import { expirySeverity, daysUntil } from "@/lib/eos";
 import { useI18n } from "@/lib/i18n";
 import PullToRefresh from "@/components/PullToRefresh";
 import { RadialBarChart, RadialBar, PolarAngleAxis, ResponsiveContainer } from "recharts";
-import { computeNitaqat } from "@/lib/nitaqat";
+import { computeNitaqat, findActivity, loadNitaqatCatalog } from "@/lib/nitaqat";
 
 export default function Dashboard() {
   const { lang } = useI18n();
@@ -201,14 +201,17 @@ function MiniStat({ icon: Icon, label, value, tint }) {
 function EmptyRow({ text }) { return <div className="text-center text-sm text-muted-foreground py-6">{text}</div>; }
 
 function NitaqatWidget({ employees, org, isAr, t }) {
+  const [catalog, setCatalog] = useState(null);
+  useEffect(() => { loadNitaqatCatalog().then(setCatalog).catch(() => {}); }, []);
   const active = employees.filter((e) => e.status !== "terminated" && e.status !== "resigned");
   const saudis = active.filter((e) => e.is_saudi).length;
   const expats = active.filter((e) => !e.is_saudi).length;
-  const result = computeNitaqat(saudis, expats, org?.nitaqat_activity || "10");
+  const activity = findActivity(catalog, org?.isic_activity_code);
+  const result = computeNitaqat(saudis, expats, activity);
   const labels = isAr
-    ? { h: "النطاقات (نسبة التوطين)", view: "عرض النطاقات", set: "حدّد النشاط من الإعدادات لنتائج أدق", band: "النطاق الحالي", saudis: "سعوديون", expats: "مقيمون" }
-    : { h: "Nitaqat (Saudization)", view: "View Nitaqat", set: "Set activity in settings for accuracy", band: "Current band", saudis: "Saudis", expats: "Expat" };
-  const gaugeData = [{ name: labels.h, value: result.saudizationPct, fill: result.band.color }];
+    ? { h: "النطاقات (نسبة التوطين)", view: "عرض النطاقات", set: "اختر النشاط الرئيسي ثم النشاط التفصيلي", band: "النطاق الحالي", saudis: "سعوديون", expats: "وافدون" }
+    : { h: "Nitaqat (Saudization)", view: "View Nitaqat", set: "Choose the main activity, then the detailed activity", band: "Current band", saudis: "Saudis", expats: "Expats" };
+  const gaugeData = [{ name: labels.h, value: result.saudizationPct, fill: result.band?.color || "#94a3b8" }];
   return (
     <div className="bg-white rounded-2xl border border-border p-5 mb-6">
       <div className="flex items-center justify-between mb-3">
@@ -225,15 +228,17 @@ function NitaqatWidget({ employees, org, isAr, t }) {
               </RadialBarChart>
             </ResponsiveContainer>
             <div className="absolute inset-0 flex flex-col items-center justify-end pb-1">
-              <div className="text-2xl font-extrabold tabular-nums" style={{ color: result.band.color }}>{result.saudizationPct}%</div>
+              <div className="text-2xl font-extrabold tabular-nums" style={{ color: result.band?.color || "#64748b" }}>{result.band ? `${result.saudizationPct}%` : "—"}</div>
             </div>
           </div>
         </div>
         <div className="text-center">
           <div className="text-xs text-muted-foreground mb-1">{labels.band}</div>
           <div className="inline-flex items-center justify-center px-6 py-2 rounded-2xl border-2 font-extrabold text-lg"
-            style={{ borderColor: result.band.ring, background: result.band.bg, color: result.band.color }}>
-            {isAr ? result.band.ar : result.band.en}
+            style={result.band
+              ? { borderColor: result.band.ring, background: result.band.bg, color: result.band.color }
+              : { borderColor: "#e2e8f0", background: "#f8fafc", color: "#64748b" }}>
+            {result.band ? (isAr ? result.band.ar : result.band.en) : "—"}
           </div>
         </div>
         <div className="grid grid-cols-2 gap-2 text-center">
@@ -241,7 +246,7 @@ function NitaqatWidget({ employees, org, isAr, t }) {
           <div className="rounded-xl bg-sky-50 py-2"><div className="text-xl font-bold text-sky-700 tabular-nums">{expats}</div><div className="text-[11px] text-muted-foreground">{labels.expats}</div></div>
         </div>
       </div>
-      {!org?.nitaqat_activity && <p className="text-[11px] text-amber-600 text-center mt-3">⚠ {labels.set}</p>}
+      {!activity && <p className="text-[11px] text-amber-600 text-center mt-3">{labels.set}</p>}
     </div>
   );
 }
