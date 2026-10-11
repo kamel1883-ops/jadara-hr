@@ -17,10 +17,59 @@
  */
 import { createClientFromRequest } from "npm:@base44/sdk@0.8.44";
 import {
-  storeEmployee, storeEmployeesBulk, getEmployee, updateEmployee, deleteEmployee,
+  storeEmployee, storeEmployeesBulk, getEmployeesBatch, updateEmployeeInCompany, deleteEmployee,
   storePayroll, getPayroll, storeDocument, getDocumentLink, buildDownloadUrl,
   storeRecord, storeRecordsBulk, getRecord, updateRecord, deleteRecord,
 } from "../../shared/vaultClient.ts";
+
+function asList(page: any): any[] {
+  if (Array.isArray(page)) return page;
+  if (Array.isArray(page?.items)) return page.items;
+  return [];
+}
+
+/**
+ * مفاتيح الخزنة الخاصة بمنشأة المستخدم فقط.
+ * السجلات القديمة حُفظت تحت user.id، وبعض الاستيراد تحت معرّف المنشأة.
+ * القراءة تبحث في كل هذه المفاتيح حتى تظهر الهوية لمنشأة العميل نفسها
+ * ولو دخل موظف آخر من نفس المنشأة.
+ */
+async function resolveCompanyTenantKeys(base44: any, user: any): Promise<string[]> {
+  const keys: string[] = [];
+  const push = (value: any) => {
+    const v = String(value || "").trim();
+    if (v && !keys.includes(v)) keys.push(v);
+  };
+  push(user?.id);
+  try {
+    const email = String(user?.email || "").trim().toLowerCase();
+    const tenants = asList(await base44.asServiceRole.entities.Tenant.filter({}));
+    const norm = (x: any) => String(x || "").trim().toLowerCase();
+    let t = tenants.find((x: any) => norm(x.contact_email) === email || norm(x.admin_email) === email);
+    if (!t) t = tenants.find((x: any) => String(x.admin_user_id || "") === String(user?.id || ""));
+    if (!t) {
+      let emp: any = null;
+      try {
+        emp = asList(await base44.asServiceRole.entities.Employee.filter({ user_id: user.id }))[0] || null;
+      } catch { /* لا سجل موظف */ }
+      if (!emp && user?.email) {
+        try {
+          emp = asList(await base44.asServiceRole.entities.Employee.filter({ email: user.email }))[0] || null;
+        } catch { /* لا سجل بالبريد */ }
+      }
+      const un = String(emp?.unified_number || "").trim();
+      if (un) t = tenants.find((x: any) => String(x.unified_number || "").trim() === un);
+    }
+    if (t) {
+      push(t.unified_number);
+      push(t.admin_user_id);
+      push(t.id);
+    }
+  } catch (e: any) {
+    console.error("[vaultProxy] tenant resolve:", e?.message || e);
+  }
+  return keys;
+}
 
 export default async function (req: Request): Promise<Response> {
   try {
@@ -29,10 +78,11 @@ export default async function (req: Request): Promise<Response> {
     if (!user) return Response.json({ error: "unauthorized" }, { status: 401 });
 
     const body = await req.json();
-    const { action, tenantId, ...rest } = body;
+    const { action, tenantId: _ignoredTenant, ...rest } = body;
     if (!action) return Response.json({ error: "action_required" }, { status: 400 });
-    // نستخدم معرّف المستخدم كـ tenant افتراضياً إن لم يُمرّر
-    const tenant = tenantId || user.id;
+    // مفتاح الكتابة الافتراضي يبقى حساب المستخدم الذي أنشأ السجل،
+    // حتى تبقى السجلات الجديدة في نفس قسم الخزنة الذي تبحث فيه القراءة أولاً.
+    const tenant = user.id;
 
     let result;
     switch (action) {
@@ -45,11 +95,18 @@ export default async function (req: Request): Promise<Response> {
         break;
       case "getEmployee":
         if (!rest.empRef) return Response.json({ error: "empRef_required" }, { status: 400 });
-        result = await getEmployee(tenant, rest.empRef);
+        {
+          const map = await getEmployeesBatch(await resolveCompanyTenantKeys(base44, user), [rest.empRef]);
+          result = map[rest.empRef] || null;
+        }
+        break;
+      case "getEmployees":
+        if (!Array.isArray(rest.empRefs)) return Response.json({ error: "empRefs_required" }, { status: 400 });
+        result = { byRef: await getEmployeesBatch(await resolveCompanyTenantKeys(base44, user), rest.empRefs) };
         break;
       case "updateEmployee":
         if (!rest.empRef) return Response.json({ error: "empRef_required" }, { status: 400 });
-        result = await updateEmployee(tenant, rest.empRef, rest.sensitiveData || rest);
+        result = await updateEmployeeInCompany(await resolveCompanyTenantKeys(base44, user), rest.empRef, rest.sensitiveData || rest);
         break;
       case "deleteEmployee":
         if (!rest.empRef) return Response.json({ error: "empRef_required" }, { status: 400 });

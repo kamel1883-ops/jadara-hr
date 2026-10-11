@@ -22,18 +22,33 @@ function pickSensitive(obj) {
 }
 
 /**
+ * يفك تغليف Axios وvaultProxy حتى يصل لكائن القيم أو { byRef }.
+ * يتوقف عند أول مستوى يحمل حقلاً حساساً حتى لا يبتلع كائناً متداخلاً بالخطأ.
+ */
+export function unwrapVaultPayload(res) {
+  let cur = res;
+  for (let i = 0; i < 3; i++) {
+    if (!cur || typeof cur !== "object") return {};
+    if (cur.byRef || cur.national_id || cur.birth_date || cur.emp_ref || cur.phone || cur.passport_number) return cur;
+    if (cur.data && typeof cur.data === "object") { cur = cur.data; continue; }
+    return cur;
+  }
+  return cur && typeof cur === "object" ? cur : {};
+}
+
+/**
  * يجلب البيانات الحساسة من الخزنة عبر emp_ref ويدمجها في كائن الموظف.
  * إن لم يوجد emp_ref أو فشلت الخزنة، يعيد الموظف كما هو (النمط القديم).
+ * لا تُكتب القيم الراجعة إلى Base44 — تبقى في ذاكرة الشاشة للعرض فقط.
  */
 export async function enrichEmployee(employee) {
   if (!employee || !employee.emp_ref) return employee;
   try {
     const res = await base44.functions.invoke("vaultProxy", { action: "getEmployee", empRef: employee.emp_ref });
-    // vaultProxy يعيد { ok, data } عبر Axios → res.data = { ok, data }
-    const data = res?.data?.data || res?.data || {};
+    const data = unwrapVaultPayload(res);
     return { ...employee, ...pickSensitive(data) };
   } catch (e) {
-    // الخزنة غير مُهيّأة — استخدم الحقول المحلية
+    // الخزنة غير مُهيّأة أو السجل غير موجود — أبقِ الحقول المحلية
     return employee;
   }
 }
@@ -46,26 +61,52 @@ export async function fetchSensitiveByRef(empRef) {
   if (!empRef) return {};
   try {
     const res = await base44.functions.invoke("vaultProxy", { action: "getEmployee", empRef });
-    const data = res?.data?.data || res?.data || {};
-    return pickSensitive(data);
+    return pickSensitive(unwrapVaultPayload(res));
   } catch (e) {
     return {};
   }
 }
 
 /**
- * يجلب البيانات الحساسة لمجموعة موظفين دفعة واحدة (للقوائم/المستندات).
+ * يجلب البيانات الحساسة لمجموعة موظفين في نداء واحد (للقوائم).
  * يعيد خريطة emp_ref → قيم حساسة. يتجاهل من لا يملكون emp_ref.
+ * النداء الواحد يمنع فتح دالة سحابية لكل موظف، وهو ما كان يؤخر القائمة ثم يُسقط الحقول.
  */
 export async function enrichEmployeesBatch(employees) {
   const withRef = (employees || []).filter((e) => e && e.emp_ref);
   if (withRef.length === 0) return {};
-  const map = {};
-  await Promise.all(withRef.map(async (e) => {
-    const enriched = await enrichEmployee(e);
-    map[e.emp_ref] = pickSensitive(enriched);
-  }));
-  return map;
+  const empRefs = [...new Set(withRef.map((e) => e.emp_ref))];
+  try {
+    const res = await base44.functions.invoke("vaultProxy", { action: "getEmployees", empRefs });
+    const payload = unwrapVaultPayload(res);
+    const byRef = payload.byRef && typeof payload.byRef === "object" ? payload.byRef : {};
+    const map = {};
+    for (const ref of empRefs) map[ref] = pickSensitive(byRef[ref]);
+    return map;
+  } catch (e) {
+    const status = e?.response?.status;
+    const code = e?.response?.data?.error;
+    // دالة قديمة لم تُنشر بعد: ارجع للجلب الفردي. أي فشل آخر لا يُعاد كعاصفة طلبات.
+    if (status === 400 && (code === "unknown_action" || code === "action_required")) {
+      const map = {};
+      await Promise.all(withRef.map(async (emp) => {
+        const enriched = await enrichEmployee(emp);
+        map[emp.emp_ref] = pickSensitive(enriched);
+      }));
+      return map;
+    }
+    return {};
+  }
+}
+
+/** يدمج خريطة الخزنة في قائمة العرض دون المساس بالسجل الأصلي في Base44 */
+export function applySensitiveMap(employees, map) {
+  if (!map) return employees || [];
+  return (employees || []).map((e) => {
+    const extra = e?.emp_ref ? map[e.emp_ref] : null;
+    if (!extra || !Object.keys(extra).length) return e;
+    return { ...e, ...extra };
+  });
 }
 
 /**
@@ -75,7 +116,8 @@ export function useEnrichedEmployee(employee) {
   const [enriched, setEnriched] = useState(employee);
   useEffect(() => {
     let active = true;
-    if (!employee || !employee.emp_ref) { setEnriched(employee); return; }
+    setEnriched(employee);
+    if (!employee || !employee.emp_ref) return;
     enrichEmployee(employee).then((e) => { if (active) setEnriched(e); });
     return () => { active = false; };
   }, [employee?.id, employee?.emp_ref]);

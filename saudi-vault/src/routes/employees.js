@@ -69,6 +69,42 @@ router.post('/bulk', async (req, res, next) => {
 });
 
 /**
+ * POST /api/vault/employees/lookup
+ * جلب دفعة واحدة بعدة رموز ومستأجرين — استعلام واحد بدل طلب لكل موظف.
+ * يُستخدم للعرض فقط. المستأجرون المسموحون يحددهم vaultProxy لحساب المستخدم.
+ */
+router.post('/lookup', async (req, res, next) => {
+  try {
+    const refs = Array.isArray(req.body?.refs)
+      ? [...new Set(req.body.refs.map((r) => String(r || '').trim()).filter(Boolean))].slice(0, 500)
+      : [];
+    const tenantIds = Array.isArray(req.body?.tenant_ids)
+      ? [...new Set(req.body.tenant_ids.map((r) => String(r || '').trim()).filter(Boolean))].slice(0, 8)
+      : [];
+    const headerTenant = String(req.headers['x-tenant-id'] || '').trim();
+    if (headerTenant && !tenantIds.includes(headerTenant)) tenantIds.push(headerTenant);
+    if (!refs.length || !tenantIds.length) return res.status(400).json({ error: 'refs_required' });
+    const { rows } = await query(
+      'SELECT * FROM vault_employees WHERE emp_ref = ANY($1::text[]) AND tenant_id = ANY($2::text[])',
+      [refs, tenantIds]
+    );
+    const employees = {};
+    for (const r of rows) {
+      const out = { emp_ref: r.emp_ref };
+      for (const f of SENSITIVE_FIELDS) {
+        const enc = r[`${f}_enc`];
+        if (enc !== null && enc !== undefined) {
+          const plain = decrypt(enc);
+          if (plain !== null && plain !== '') out[f] = plain;
+        }
+      }
+      employees[r.emp_ref] = out;
+    }
+    res.json({ employees });
+  } catch (e) { next(e); }
+});
+
+/**
  * GET /api/vault/employees/:empRef
  * يعيد القيم الحساسة مفكوك التشفير — للعرض في الواجهة فقط، لا تُخزّن في Base44
  */

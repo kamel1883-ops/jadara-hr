@@ -42,20 +42,31 @@ function headers(apiKey, tenantId, extra = {}) {
 }
 
 /** استدعاء موحّد مع معالجة أخطاء نظيفة لا تُسجّل الحمولة */
-async function callVault(path, tenantId, options = {}) {
+async function callVault(path, tenantId, options: { timeoutMs?: number; method?: string; body?: string; headers?: Record<string, string> } = {}) {
   const { apiKey, baseUrl } = getVaultConfig();
-  const res = await fetch(`${baseUrl}${path}`, {
-    ...options,
-    headers: headers(apiKey, tenantId, options.headers),
-  });
-  const text = await res.text();
-  let body;
-  try { body = text ? JSON.parse(text) : null; } catch { body = { raw: text }; }
-  if (!res.ok) {
-    // لا نُسجّل الحمولة — قد تحوي قيماً حساسة
-    throw new Error(`vault_error: ${res.status} ${path}`);
+  const { timeoutMs = 20000, ...fetchOptions } = options;
+  const ctrl = new AbortController();
+  const timer = setTimeout(() => ctrl.abort(), timeoutMs);
+  try {
+    const res = await fetch(`${baseUrl}${path}`, {
+      ...fetchOptions,
+      signal: ctrl.signal,
+      headers: headers(apiKey, tenantId, fetchOptions.headers),
+    });
+    const text = await res.text();
+    let body;
+    try { body = text ? JSON.parse(text) : null; } catch { body = { raw: text }; }
+    if (!res.ok) {
+      // لا نُسجّل الحمولة — قد تحوي قيماً حساسة
+      throw new Error(`vault_error: ${res.status} ${path}`);
+    }
+    return body;
+  } catch (e: any) {
+    if (e?.name === "AbortError") throw new Error(`vault_error: timeout ${path}`);
+    throw e;
+  } finally {
+    clearTimeout(timer);
   }
-  return body;
 }
 
 // ============================================================
@@ -94,7 +105,76 @@ export async function storeEmployeesBulk(tenantId, rows) {
 
 /** يسترجع القيم الحساسة المفكوكة — للعرض في الواجهة فقط، لا تُخزّن */
 export async function getEmployee(tenantId, empRef) {
-  return callVault(`/api/vault/employees/${empRef}`, tenantId, { method: "GET" });
+  return callVault(`/api/vault/employees/${encodeURIComponent(empRef)}`, tenantId, { method: "GET", timeoutMs: 8000 });
+}
+
+async function mapPool(items, limit, fn) {
+  const out = new Array(items.length);
+  let cursor = 0;
+  const workers = Array.from({ length: Math.min(limit, items.length) }, async () => {
+    while (cursor < items.length) {
+      const idx = cursor++;
+      out[idx] = await fn(items[idx]);
+    }
+  });
+  await Promise.all(workers);
+  return out;
+}
+
+/**
+ * يجلب عدة موظفين دفعة واحدة.
+ * يجرّب استعلام lookup الواحد أولاً، وإن لم يكن منشوراً على الخزنة بعد
+ * يرجع لطلبات فردية محدودة التوازي حتى لا يختنق مجمع الاتصالات.
+ * يبحث في كل مفاتيح المستأجر الخاصة بالمنشأة (حساب المستخدم، رقمها الموحّد، سجل المنشأة)
+ * لأن السجلات القديمة حُفظت تحت أكثر من مفتاح.
+ */
+export async function getEmployeesBatch(tenantIds, empRefs) {
+  const ids = [...new Set((tenantIds || []).map((t) => String(t || "").trim()).filter(Boolean))].slice(0, 8);
+  const refs = [...new Set((empRefs || []).map((r) => String(r || "").trim()).filter(Boolean))].slice(0, 500);
+  const found = {};
+  if (!ids.length || !refs.length) return found;
+  try {
+    const body = await callVault("/api/vault/employees/lookup", ids[0], {
+      method: "POST",
+      body: JSON.stringify({ refs, tenant_ids: ids }),
+      timeoutMs: 8000,
+    });
+    const employees = body?.employees;
+    if (employees && typeof employees === "object") return employees;
+  } catch {
+    // مسار lookup غير منشور بعد على السيرفر السعودي — نكمل بالطلبات الفردية
+  }
+  let pending = refs;
+  for (const tenant of ids) {
+    if (!pending.length) break;
+    const missed = [];
+    await mapPool(pending, 8, async (ref) => {
+      try {
+        const row = await getEmployee(tenant, ref);
+        if (row && typeof row === "object") found[ref] = row;
+        else missed.push(ref);
+      } catch {
+        missed.push(ref);
+      }
+    });
+    pending = missed;
+  }
+  return found;
+}
+
+/** يحدّث السجل تحت المستأجر الذي يملكه فعلاً، لا تحت مفتاح الحساب الحالي فقط */
+export async function updateEmployeeInCompany(tenantIds, empRef, sensitiveData) {
+  const ids = [...new Set((tenantIds || []).map((t) => String(t || "").trim()).filter(Boolean))].slice(0, 8);
+  let lastError = null;
+  for (const tenant of ids) {
+    try {
+      return await updateEmployee(tenant, empRef, sensitiveData);
+    } catch (e: any) {
+      lastError = e;
+      if (!String(e?.message || "").includes("404")) throw e;
+    }
+  }
+  throw lastError || new Error("vault_error: 404");
 }
 
 /** يحدّث قيماً حساسة موجودة */

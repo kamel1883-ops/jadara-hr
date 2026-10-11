@@ -100,13 +100,16 @@ export default function EmployeeForm({ open, onClose, onSaved, employee, unified
   const [branches, setBranches] = useState([]);
   const [org, setOrg] = useState(null);
 
-  // جلب الحقول الحساسة من الخزنة السعودية عند التحرير (وضع احتياطي للنمط القديم)
+  // الحقول المحلية تظهر فوراً، ثم تُملأ الهوية والميلاد من الخزنة.
+  // الاعتماد على المعرّف والمرجع فقط حتى لا يُلغى الطلب عند إعادة رسم القائمة.
   useEffect(() => {
     if (!employee) { setForm(empty); return; }
+    setForm({ ...empty, ...employee });
+    if (!open || !employee.emp_ref) return;
     let active = true;
     enrichEmployee(employee).then((e) => { if (active) setForm({ ...empty, ...e }); });
     return () => { active = false; };
-  }, [employee, open]);
+  }, [employee?.id, employee?.emp_ref, open]);
   useEffect(() => {
     base44.entities.Employee.list("-created_date", 500).then((list) => setAllEmployees(list));
     base44.entities.Branch.list("-is_main", 500).then((list) => setBranches(list));

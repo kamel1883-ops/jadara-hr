@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import { base44 } from "@/api/base44Client";
 import { listCurrentOrg } from "@/lib/currentOrg";
 import PageHeader from "@/components/PageHeader";
@@ -13,7 +13,7 @@ import { Input } from "@/components/ui/input";
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
-import { Plus, Search, Pencil, Trash2, Users, Network, Upload, GitBranch, Plane, FileText, UserX, Printer } from "lucide-react";
+import { Plus, Search, Pencil, Users, Network, Upload, GitBranch, Plane, FileText, UserX, Printer } from "lucide-react";
 import { Link } from "react-router-dom";
 import { cn } from "@/lib/utils";
 import { formatCurrency, statusEmployeeLabel } from "@/lib/hr";
@@ -22,6 +22,7 @@ import { ROLE_LABELS, ROLE_ORDER, ROLE_STYLES, roleLabel } from "@/lib/orgTree";
 import { reasonMeta } from "@/lib/eos";
 import { printEmployeeList } from "@/lib/employeePrint";
 import { revertExpiredLeaves } from "@/lib/leaveBalance";
+import { enrichEmployeesBatch, applySensitiveMap } from "@/lib/vaultSensitive";
 import PullToRefresh from "@/components/PullToRefresh";
 
 const isInactive = (e) => e.status === "terminated" || e.status === "resigned";
@@ -70,32 +71,42 @@ export default function Employees() {
   const [termOpen, setTermOpen] = useState(false);
   const [termEmp, setTermEmp] = useState(null);
   const [myUnified, setMyUnified] = useState("");
+  const loadSeq = useRef(0);
 
   const load = async () => {
+    const seq = ++loadSeq.current;
     const [data, orgs, tenantRes] = await Promise.all([
       base44.entities.Employee.list("-created_date", 500),
       listCurrentOrg(),
       base44.functions.invoke("getMyTenant", {}).catch(() => null),
     ]);
+    if (seq !== loadSeq.current) return;
     const reverted = await revertExpiredLeaves(data);
-    setEmployees(reverted.length ? data.map((e) => reverted.includes(e.id) ? { ...e, status: "active" } : e) : data);
+    if (seq !== loadSeq.current) return;
+    const rows = reverted.length ? data.map((e) => reverted.includes(e.id) ? { ...e, status: "active" } : e) : data;
+    setEmployees(rows);
     setOrg(orgs[0] || null);
     const td = tenantRes?.data || tenantRes;
     setMyUnified(String(td?.tenant?.unified_number || "").trim());
-    // تعبئة رجعية آمنة: أي موظف أنشأه هذا المسؤول (created_by_id) ويفتقد الرقم الموحّد
-    // يُربط برقم منشأته الحالية — يضمن ظهوره في عداد بوابة المالك النشط.
+    setLoading(false);
+    // الهوية وتاريخ الميلاد والجوال في الخزنة السعودية. طلب واحد للقائمة كلها، للعرض فقط.
+    const sensPromise = enrichEmployeesBatch(rows);
+    // تعبئة رجعية آمنة: أي موظف أنشأه هذا المسؤول ويفتقد الرقم الموحّد يُربط بمنشأته.
     const meId = (await base44.auth.me().catch(() => null))?.id;
     const un = String(td?.tenant?.unified_number || "").trim();
-    const orphans = (data || []).filter((e) => !e.unified_number && e.created_by_id === meId);
+    const orphans = (rows || []).filter((e) => !e.unified_number && e.created_by_id === meId);
     if (orphans.length && un) {
       try {
         await base44.entities.Employee.bulkUpdate(orphans.map((e) => ({ id: e.id, unified_number: un })));
+        if (seq !== loadSeq.current) return;
         setEmployees((cur) => cur.map((e) => (orphans.find((o) => o.id === e.id) ? { ...e, unified_number: un } : e)));
       } catch {}
     }
-    setLoading(false);
+    const sensMap = await sensPromise;
+    if (seq !== loadSeq.current) return;
+    setEmployees((cur) => applySensitiveMap(cur, sensMap));
   };
-  useEffect(() => { load(); }, [editTarget, formOpen, branchOpen]);
+  useEffect(() => { load(); }, []);
 
   const departments = Array.from(new Set(employees.map((e) => e.department).filter(Boolean)));
   const branchNames = Array.from(new Set(employees.map((e) => e.branch_name).filter(Boolean)));
