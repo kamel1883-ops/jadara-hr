@@ -91,6 +91,61 @@ async function loadTenantContext() {
 
 const emptyPage = () => ({ items: [], next_cursor: null, has_more: false });
 
+function asRows(page) {
+  if (Array.isArray(page)) return page;
+  if (Array.isArray(page?.items)) return page.items;
+  return [];
+}
+
+let idSnap = null;
+let idSnapAt = 0;
+
+/** هوية قديمة ما زالت محفوظة على راتب أو تأمينات أو حضور، للعرض فقط إذا الخزنة لم تُرجعها */
+async function nationalIdSnapshots() {
+  if (idSnap && Date.now() - idSnapAt < 30000) return idSnap;
+  const map = new Map();
+  const take = (page) => {
+    for (const r of asRows(page)) {
+      const id = String(r?.employee_id || "").trim();
+      const nid = String(r?.national_id || "").trim();
+      if (id && nid && !map.has(id)) map.set(id, nid);
+    }
+  };
+  const sources = ["Payroll", "GosiRecord", "Attendance", "Settlement", "Warning"];
+  for (const name of sources) {
+    try {
+      const api = rawClient?.entities?.[name];
+      if (api?.list) take(await api.list("-created_date", 500));
+    } catch { /* السجل غير متاح */ }
+  }
+  idSnap = map;
+  idSnapAt = Date.now();
+  return map;
+}
+
+async function overlayVault(result) {
+  const rows = asRows(result);
+  if (!rows.some((r) => r?.emp_ref)) return result;
+  try {
+    const { mergeVaultRows } = await import("./vaultSensitive");
+    let merged = await mergeVaultRows(rows);
+    const missing = merged.filter((e) => e?.full_name && e?.id && !String(e.national_id || "").trim());
+    if (missing.length) {
+      const snaps = await nationalIdSnapshots();
+      if (snaps.size) {
+        merged = merged.map((e) => (
+          e?.full_name && e?.id && !String(e.national_id || "").trim() && snaps.has(e.id)
+            ? { ...e, national_id: snaps.get(e.id) }
+            : e
+        ));
+      }
+    }
+    return Array.isArray(result) ? merged : { ...result, items: merged };
+  } catch {
+    return result;
+  }
+}
+
 function employeeScope(keys, ctx) {
   if (!ctx.unified) return null;
   if (keys.length === 1) return { [keys[0]]: { $in: ctx.employeeIds } };
@@ -109,15 +164,15 @@ function scopedEntity(keys, api) {
       const legacy = typeof a === "string";
       if (!s) return legacy ? [] : emptyPage();
       const merged = { ...query, ...s };
-      if (legacy) return api.filter(merged, a, b);
-      return a === undefined ? api.filter(merged) : api.filter(merged, a);
+      const result = legacy ? await api.filter(merged, a, b) : (a === undefined ? await api.filter(merged) : await api.filter(merged, a));
+      return overlayVault(result);
     },
     async list(a, b) {
       const s = await scope();
       const legacy = typeof a === "string";
       if (!s) return legacy ? [] : emptyPage();
-      if (legacy) return api.filter(s, a, b);
-      return a === undefined ? api.filter(s) : api.filter(s, { limit: 200, ...a });
+      const result = legacy ? await api.filter(s, a, b) : (a === undefined ? await api.filter(s) : await api.filter(s, { limit: 200, ...a }));
+      return overlayVault(result);
     },
     async count(query = {}) {
       const s = await scope();
@@ -132,7 +187,9 @@ function scopedEntity(keys, api) {
       const ctx = await tenantContext();
       if (!ctx.unified) return null;
       const rec = await api.get(id).catch(() => null);
-      return belongsToTenant(rec, keys, ctx) ? rec : null;
+      if (!belongsToTenant(rec, keys, ctx)) return null;
+      const [one] = asRows(await overlayVault([rec]));
+      return one || rec;
     },
     create: (data) => api.create(data),
     bulkCreate: (rows) => api.bulkCreate(rows),
@@ -173,15 +230,17 @@ function scopedEmployee(api) {
       const legacy = typeof a === "string";
       if (!u) return legacy ? [] : emptyPage();
       const merged = { ...query, unified_number: u };
-      if (legacy) return api.filter(merged, a, b);
-      return a === undefined ? api.filter(merged) : api.filter(merged, a);
+      const result = legacy ? await api.filter(merged, a, b) : (a === undefined ? await api.filter(merged) : await api.filter(merged, a));
+      return overlayVault(result);
     },
     async list(a, b) {
       const u = await unified();
       const legacy = typeof a === "string";
       if (!u) return legacy ? [] : emptyPage();
-      if (legacy) return api.filter({ unified_number: u }, a, b);
-      return a === undefined ? api.filter({ unified_number: u }) : api.filter({ unified_number: u }, { limit: 200, ...a });
+      const result = legacy
+        ? await api.filter({ unified_number: u }, a, b)
+        : (a === undefined ? await api.filter({ unified_number: u }) : await api.filter({ unified_number: u }, { limit: 200, ...a }));
+      return overlayVault(result);
     },
     async count(query = {}) {
       const u = await unified();
@@ -196,7 +255,9 @@ function scopedEmployee(api) {
       const u = await unified();
       if (!u) return null;
       const rec = await api.get(id).catch(() => null);
-      return rec && String(rec.unified_number || "") === u ? rec : null;
+      if (!rec || String(rec.unified_number || "") !== u) return null;
+      const [one] = asRows(await overlayVault([rec]));
+      return one || rec;
     },
     async create(data = {}) {
       const u = await needTenant();

@@ -81,6 +81,12 @@ export async function tenantKeysForRead(base44: any, user: any, empRefs: string[
     };
     if (unified) addRows(await base44.asServiceRole.entities.Employee.filter({ unified_number: unified }));
     if (user?.id) addRows(await base44.asServiceRole.entities.Employee.filter({ created_by_id: user.id }));
+    // موظف بلا رقم موحّد لا يظهر في فلتر المنشأة، ومفتاح خزنته هو حساب من أنشأه.
+    for (const ref of [...want].slice(0, 80)) {
+      try {
+        addRows(await base44.asServiceRole.entities.Employee.filter({ emp_ref: ref }));
+      } catch { /* البحث بالرمز غير متاح */ }
+    }
     for (const e of rows) {
       const un = String(e.unified_number || "").trim();
       if (unified && un && un !== unified) continue;

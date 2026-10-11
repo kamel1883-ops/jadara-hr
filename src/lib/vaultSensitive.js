@@ -84,18 +84,18 @@ export async function enrichEmployeesBatch(employees) {
     for (const ref of empRefs) map[ref] = pickSensitive(byRef[ref]);
     return map;
   } catch (e) {
-    const status = e?.response?.status;
-    const code = e?.response?.data?.error;
-    // دالة قديمة لم تُنشر بعد: ارجع للجلب الفردي. أي فشل آخر لا يُعاد كعاصفة طلبات.
-    if (status === 400 && (code === "unknown_action" || code === "action_required")) {
-      const map = {};
-      await Promise.all(withRef.map(async (emp) => {
+    // الدفعة فشلت أو الدالة المنشورة لا تعرفها بعد: جلب فردي محدود، لا تُترك الشاشة فاضية.
+    const map = {};
+    const queue = withRef.slice();
+    const workers = Array.from({ length: Math.min(4, queue.length) }, async () => {
+      while (queue.length) {
+        const emp = queue.shift();
         const enriched = await enrichEmployee(emp);
         map[emp.emp_ref] = pickSensitive(enriched);
-      }));
-      return map;
-    }
-    return {};
+      }
+    });
+    await Promise.all(workers);
+    return map;
   }
 }
 
@@ -106,6 +106,27 @@ export function applySensitiveMap(employees, map) {
     const extra = e?.emp_ref ? map[e.emp_ref] : null;
     if (!extra || !Object.keys(extra).length) return e;
     return { ...e, ...extra };
+  });
+}
+
+/**
+ * يملأ الحقول الحساسة الفارغة من الخزنة لأي صف يحمل emp_ref:
+ * موظف، راتب، تأمينات، حضور، مخالصة، إنذار. لا يكتب شيئاً إلى Base44،
+ * ولا يستبدل قيمة موجودة أصلاً في الصف.
+ */
+export async function mergeVaultRows(rows) {
+  if (!Array.isArray(rows) || !rows.some((r) => r?.emp_ref)) return rows || [];
+  const map = await enrichEmployeesBatch(rows);
+  return (rows || []).map((row) => {
+    const extra = row?.emp_ref ? map[row.emp_ref] : null;
+    if (!extra) return row;
+    const patch = {};
+    for (const [k, v] of Object.entries(extra)) {
+      if (v === undefined || v === null || String(v).trim() === "") continue;
+      if (row[k] !== undefined && row[k] !== null && String(row[k]).trim() !== "") continue;
+      patch[k] = v;
+    }
+    return Object.keys(patch).length ? { ...row, ...patch } : row;
   });
 }
 
