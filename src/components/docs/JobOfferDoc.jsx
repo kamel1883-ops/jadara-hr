@@ -2,48 +2,50 @@ import React from "react";
 import BrandHeader from "@/components/docs/BrandHeader";
 import { genDateBoth } from "@/lib/printDate";
 
-export function contractYearsLabel(years, isAr) {
+export function contractYearsLabel(years) {
   const y = Math.max(1, parseInt(years, 10) || 1);
-  if (!isAr) return y === 1 ? "1 year" : y + " years";
   if (y === 1) return "سنة واحدة";
   if (y === 2) return "سنتان";
   if (y >= 3 && y <= 10) return y + " سنوات";
   return y + " سنة";
 }
 
-export default function JobOfferDoc({ applicant, job, org, companyName, years, body, isAr = true }) {
-  const today = genDateBoth(isAr);
-  const duration = contractYearsLabel(years, isAr);
-  const establishment = org?.name || companyName || "";
-  const company = companyName || "";
-  const showCompany = company && company !== establishment;
+function money(n) {
+  const x = Number(n);
+  if (!Number.isFinite(x)) return "—";
+  return x.toLocaleString() + " ريال";
+}
+
+function leaveLabel(days) {
+  return (Number(days) === 30 ? "30" : "21") + " يوماً في السنة";
+}
+
+// نفس ترويسة بقية مستندات جداره: شعار المنشأة واسمها يميناً، وشعار جداره يساراً.
+export default function JobOfferDoc({ applicant, job, org, years, basicSalary, housingAllowance, transportAllowance, annualLeaveDays, body, extras }) {
+  const today = genDateBoth(true);
   const rows = [
-    [isAr ? "الاسم" : "Name", applicant?.full_name || "—"],
-    [isAr ? "المسمى الوظيفي" : "Job title", job?.title || applicant?.job_title || "—"],
-    ...(job?.department ? [[isAr ? "الإدارة" : "Department", job.department]] : []),
-    [isAr ? "مدة العقد" : "Contract length", duration],
+    ["الاسم الكامل", applicant?.full_name || "—"],
+    ["المسمى الوظيفي", job?.title || applicant?.job_title || "—"],
+    ["الإدارة", job?.department || org?.name || "—"],
+    ["مدة العرض الوظيفي", contractYearsLabel(years)],
+    ["الراتب الأساسي", money(basicSalary)],
+    ["بدل السكن", money(housingAllowance)],
+    ["بدل المواصلات", money(transportAllowance)],
+    ["الإجازة السنوية", leaveLabel(annualLeaveDays)],
+    ["التأمين الطبي", "تأمين طبي إلزامي داخل المملكة العربية السعودية"],
   ];
 
   return (
-    <div dir={isAr ? "rtl" : "ltr"} style={{ fontFamily: "Tajawal, IBM Plex Sans Arabic, sans-serif", padding: "44px", color: "#0f172a", width: "794px", background: "#fff" }}>
+    <div dir="rtl" style={{ fontFamily: "Tajawal, IBM Plex Sans Arabic, sans-serif", padding: "44px", color: "#0f172a", width: "794px", background: "#fff" }}>
       <BrandHeader org={org} />
-      {showCompany ? (
-        <div style={{ fontSize: "13px", marginTop: "-8px", marginBottom: "14px", textAlign: isAr ? "right" : "left" }}>
-          {(isAr ? "الشركة" : "Company") + ": " + company}
-        </div>
-      ) : null}
 
-      <h1 style={{ fontSize: "21px", fontWeight: 800, textAlign: "center", marginBottom: "8px", color: "#0f172a" }}>
-        {isAr ? "عرض وظيفي" : "Job offer"}
-      </h1>
-      <div style={{ fontSize: "12px", color: "#64748b", textAlign: "center", marginBottom: "18px" }}>
-        {isAr ? "هذا عرض وظيفي للتحميل والإرسال، وليس قرار تعيين" : "This is a job offer to download and send, not a hiring decision"}
-      </div>
-      <div style={{ fontSize: "14px", color: "#334155", marginBottom: "14px" }}>
-        {(isAr ? "تاريخ العرض" : "Offer date") + ": " + today}
-      </div>
+      <h1 style={{ fontSize: "21px", fontWeight: 800, textAlign: "center", marginBottom: "22px", color: "#0f172a" }}>عرض وظيفي</h1>
 
-      <table style={{ width: "100%", fontSize: "14px", marginBottom: "18px", borderCollapse: "collapse" }}>
+      <div style={{ fontSize: "14px", color: "#334155", marginBottom: "14px" }}>تاريخ العرض: {today}</div>
+
+      <p style={{ fontSize: "14px", lineHeight: 2, marginBottom: "14px" }}>تتقدم المنشأة بهذا العرض الوظيفي للمرشح الآتي بيانه، وفق البنود التي اعتمدها مسؤول الموارد البشرية:</p>
+
+      <table style={{ width: "100%", fontSize: "14px", marginBottom: "22px", borderCollapse: "collapse" }}>
         <tbody>
           {rows.map(([label, value]) => (
             <tr key={label}>
@@ -55,26 +57,28 @@ export default function JobOfferDoc({ applicant, job, org, companyName, years, b
       </table>
 
       <div style={{ fontSize: "14px", lineHeight: 2, whiteSpace: "pre-wrap", color: "#1e293b" }}>{body || ""}</div>
+
+      {String(extras || "").trim() ? (
+        <div style={{ marginTop: "18px" }}>
+          <div style={{ fontSize: "14px", fontWeight: 700, marginBottom: "6px" }}>بنود إضافية</div>
+          <div style={{ fontSize: "14px", lineHeight: 2, whiteSpace: "pre-wrap", color: "#1e293b" }}>{String(extras).trim()}</div>
+        </div>
+      ) : null}
+
       <div style={{ fontSize: "13px", lineHeight: 2, marginTop: "18px", color: "#334155" }}>
-        {isAr ? "يرجى الرد على هذا العرض عبر البريد الإلكتروني." : "Please reply to this offer by email."}
+        يرجى الرد على هذا العرض عبر البريد الإلكتروني.
       </div>
 
       <div style={{ display: "flex", justifyContent: "space-between", marginTop: "56px", fontSize: "13px" }}>
         <div style={{ textAlign: "center" }}>
-          <div style={{ borderTop: "1px solid #94a3b8", paddingTop: "8px", width: "210px", color: "#334155" }}>
-            {isAr ? "المرسل إليه" : "Candidate"}
-          </div>
+          <div style={{ borderTop: "1px solid #94a3b8", paddingTop: "8px", width: "210px", color: "#334155" }}>المرسل إليه</div>
         </div>
         <div style={{ textAlign: "center" }}>
-          <div style={{ borderTop: "1px solid #94a3b8", paddingTop: "8px", width: "210px", color: "#334155" }}>
-            {establishment || (isAr ? "المنشأة" : "Establishment")}
-          </div>
+          <div style={{ borderTop: "1px solid #94a3b8", paddingTop: "8px", width: "210px", color: "#334155" }}>{org?.name || "المنشأة"}</div>
         </div>
       </div>
 
-      <div style={{ marginTop: "30px", fontSize: "11px", color: "#94a3b8", textAlign: "center" }}>
-        {(isAr ? "تم إنشاء هذا المستند عبر منصة جداره" : "Generated by Jadara") + " | " + today}
-      </div>
+      <div style={{ marginTop: "30px", fontSize: "11px", color: "#94a3b8", textAlign: "center" }}>تم إنشاء هذا المستند عبر منصة جداره | {today}</div>
     </div>
   );
 }
