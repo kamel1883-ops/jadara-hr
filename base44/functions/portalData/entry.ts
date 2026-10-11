@@ -7,6 +7,9 @@ import {
 import { notifyApproverForStatus } from "../../shared/approverNotify.ts";
 import { getDocumentLinkInCompany, buildDownloadUrl } from "../../shared/vaultClient.ts";
 import { tenantKeysForEmployee } from "../../shared/vaultIdentity.ts";
+import {
+  loadCompanyBag, organizationForEmployee, inCompany, canWrite, stampCompany, scopeQuery, filterPayload,
+} from "../../shared/companyScope.ts";
 
 // وصلة بيانات بوابة المالك/الموظف: تتحقق من رمز الجلسة الموقّع ثم ترد/تنشئ
 // بيانات الموظف (طلباته، حضوره، إنذاراته) وإنشاء طلبات إجازة/سلفة/انتداب وبصمة الحضور،
@@ -49,9 +52,31 @@ export default async function (req) {
     // لا تُشتق من Employee.role_level القابل للتعديل لمنع التصعيد.
     const isOwner = isOwnerSession;
 
+    let companyMemo: Promise<any> | null = null;
+    const companyBag = () => {
+      if (isOwnerSession) return Promise.resolve({ unified: "", ids: new Set<string>(), employees: [] as any[] });
+      if (!companyMemo) companyMemo = loadCompanyBag(base44, emp);
+      return companyMemo;
+    };
+    const sessionOrg = async () => {
+      if (isOwnerSession) {
+        try {
+          const orgs = await base44.asServiceRole.entities.Organization.list("-created_date", 1);
+          return orgs?.[0] || null;
+        } catch { return null; }
+      }
+      try { return await organizationForEmployee(base44, emp); } catch { return null; }
+    };
+    const rowsOfCompany = async (rows: any[]) => {
+      if (isOwnerSession) return rows || [];
+      const bag = await companyBag();
+      if (!bag.unified) return [];
+      return (rows || []).filter((r) => bag.ids.has(String(r?.employee_id || "")));
+    };
+
     if (action === "fetch") {
-      const [orgs, leaves, loans, attendance, trips, warnings, performances, allPlans, settlements, allDecisions, allIncentives, notifications, equipmentReqs, complaints] = await Promise.all([
-        base44.asServiceRole.entities.Organization.list("-created_date", 1),
+      const [orgRow, leaves, loans, attendance, trips, warnings, performances, allPlans, settlements, allDecisions, allIncentives, notifications, equipmentReqs, complaints] = await Promise.all([
+        sessionOrg(),
         base44.asServiceRole.entities.LeaveRequest.filter({ employee_id: employeeId }, "-created_date", 200),
         base44.asServiceRole.entities.LoanRequest.filter({ employee_id: employeeId }, "-created_date", 200),
         base44.asServiceRole.entities.Attendance.filter({ employee_id: employeeId }, "-date", 10),
@@ -69,9 +94,17 @@ export default async function (req) {
         base44.asServiceRole.entities.Complaint.filter({ employee_id: employeeId }, "-created_date", 200),
       ]);
       // القرارات والحوار — تظهر للموظف وفق نطاق الإرسال (الكل / قسمه / سجل فرد خاص به)
+      const bagForFetch = isOwnerSession ? null : await companyBag();
+      const sameCompanyRecord = (rec: any) => {
+        if (isOwnerSession) return true;
+        if (!bagForFetch?.unified) return false;
+        const recUn = String(rec?.unified_number || "").trim();
+        if (recUn) return recUn === bagForFetch.unified;
+        return bagForFetch.ids.has(String(rec?.employee_id || ""));
+      };
       const matchesTarget = (rec: any) => {
-        if (!rec) return false;
-        if (rec.target === "all") return true;
+        if (!rec || !sameCompanyRecord(rec)) return false;
+        if (rec.target === "all") return !!String(rec.unified_number || "").trim();
         if (rec.target === "department") return !!rec.department && !!emp?.department && rec.department === emp.department;
         if (rec.target === "employee") return String(rec.employee_id || "") === String(employeeId);
         return false;
@@ -87,21 +120,30 @@ export default async function (req) {
         if (p?.status === "draft" || p?.status === "cancelled") return false;
         let ids: any[] = [];
         try { ids = JSON.parse(p.employee_ids || "[]"); if (!Array.isArray(ids)) ids = []; } catch { ids = []; }
-        if (ids.includes(sid)) return true;
-        if (p.employee_id === sid) return true;
-        if (p?.scope === "department" && p.department && emp?.department && p.department === emp.department) return true;
-        return false;
+        const linked = [p.employee_id, ...ids].map((x: any) => String(x || "")).filter(Boolean);
+        if (!isOwnerSession) {
+          const tied = sameCompanyRecord(p) || (!!bagForFetch?.unified && linked.some((id: string) => bagForFetch.ids.has(id)));
+          if (!tied) return false;
+        }
+        if (ids.includes(sid) || p.employee_id === sid) return true;
+        return p?.scope === "department" && p.department && emp?.department && p.department === emp.department && sameCompanyRecord(p);
       });
       // مخالصات نهاية الخدمة المكتملة/المصروفة فقط (لإطلاع الموظف على مستحقاته المحفوظة)
       const paidSettlements = (settlements || []).filter((s: any) => s?.status === "completed");
       let branch: any = null;
       if (!isOwnerSession && emp?.branch_id) {
         try { branch = await base44.asServiceRole.entities.Branch.get(emp.branch_id); } catch { branch = null; }
+        const branchUn = String(branch?.unified_number || "").trim();
+        const myUn = String(emp?.unified_number || "").trim();
+        if (branch && branchUn && myUn && branchUn !== myUn) branch = null;
       }
+      const publicEmployee = { ...(emp || {}) };
+      delete publicEmployee.portal_password_hash;
+      delete publicEmployee.portal_password_salt;
       return Response.json({
         ok: true,
-        employee: emp,
-        org: orgs?.[0] || null,
+        employee: publicEmployee,
+        org: orgRow || null,
         branch,
         leaves, loans, attendance, trips, warnings,
         reviews, trainings,
@@ -730,8 +772,7 @@ export default async function (req) {
       // فقط ضمن النطاق المحدد (بالأمتار) ويُرفَض إذا تجاوزه — مصدر القرار هو الخادم.
       const sentLat = Number(body.lat), sentLng = Number(body.lng), sentAcc = Number(body.accuracy || 0);
       const hasCoords = isFinite(sentLat) && isFinite(sentLng) && sentLat !== 0 && sentLng !== 0;
-      let orgForWp: any = null;
-      try { const orgsWp: any[] = await base44.asServiceRole.entities.Organization.list("-created_date", 1); orgForWp = orgsWp[0] || null; } catch {}
+      const orgForWp: any = await sessionOrg();
       let wpLat: number | null = null, wpLng: number | null = null, wpRadius = 50;
       if (branchLat != null && branchLat !== "" && branchLng != null && branchLng !== "") {
         wpLat = Number(branchLat); wpLng = Number(branchLng); wpRadius = Number(branchRadius) || Number(orgForWp?.workplace_radius) || 50;
@@ -749,8 +790,7 @@ export default async function (req) {
       // تحديد حالة الحضور: إذا وصل الموظف بعد وقت الدوام + هامش التسامح → "late"، وإلا → "present"
       let arrivalStatus = "present";
       try {
-        const orgs: any[] = await base44.asServiceRole.entities.Organization.list("-created_date", 1);
-        const org = orgs[0] || {};
+        const org = orgForWp || {};
         const workStart = String(org.work_start_time || "").trim();
         const graceMinutes = Number(org.late_grace_minutes) || 0;
         if (workStart && checkIn) {
@@ -858,9 +898,12 @@ export default async function (req) {
       if (!emp?.manager_id) return { manager_id: null, manager_name: "" };
       try {
         const mgr = await base44.asServiceRole.entities.Employee.get(emp.manager_id);
+        const myUn = String(emp?.unified_number || "").trim();
+        const mgrUn = String(mgr?.unified_number || "").trim();
+        if (!mgr || (myUn && mgrUn && myUn !== mgrUn)) return { manager_id: null, manager_name: "" };
         return { manager_id: mgr?.id || emp.manager_id, manager_name: mgr?.full_name || "" };
       } catch {
-        return { manager_id: emp.manager_id, manager_name: "" };
+        return { manager_id: null, manager_name: "" };
       }
     };
 
@@ -993,6 +1036,13 @@ export default async function (req) {
     const ack = async (entity: "AdminDecision" | "Incentive", id: string) => {
       const rec: any = await base44.asServiceRole.entities[entity].get(id);
       if (!rec) return Response.json({ ok: false, error: "not_found" }, { status: 404 });
+      if (!isOwnerSession) {
+        const bag = await companyBag();
+        const visible = inCompany(entity, rec, bag) || (
+          entity === "Incentive" && bag.ids.has(String(rec.employee_id || ""))
+        );
+        if (!visible) return Response.json({ ok: false, error: "forbidden" }, { status: 403 });
+      }
       let log: any[] = [];
       try { const p = JSON.parse(rec.acknowledged_log || "[]"); if (Array.isArray(p)) log = p; } catch {}
       if (!log.find((x) => String(x.employee_id || "") === String(employeeId))) {
@@ -1027,14 +1077,19 @@ export default async function (req) {
     if (action === "payroll_list") {
       if (!canPayroll) return Response.json({ ok: false, error: "forbidden" }, { status: 403 });
       const month = Number(body.month), year = Number(body.year);
-      const [orgs, emps, pays] = await Promise.all([
-        base44.asServiceRole.entities.Organization.list("-created_date", 1),
-        base44.asServiceRole.entities.Employee.filter({ status: "active" }, "-created_date", 500),
+      const bag = isOwnerSession ? null : await companyBag();
+      const empQuery = !isOwnerSession
+        ? (bag?.unified ? { status: "active", unified_number: bag.unified } : { id: "__outside_company__" })
+        : { status: "active" };
+      const [orgRow, emps, pays] = await Promise.all([
+        sessionOrg(),
+        base44.asServiceRole.entities.Employee.filter(empQuery, "-created_date", 500),
         !month || !year
           ? Promise.resolve([] as any[])
           : base44.asServiceRole.entities.Payroll.filter({ month, year }, "-created_date", 1000),
       ]);
-      return Response.json({ ok: true, org: orgs?.[0] || null, employees: emps || [], payrolls: pays || [] });
+      const payrolls = await rowsOfCompany(pays || []);
+      return Response.json({ ok: true, org: orgRow || null, employees: emps || [], payrolls });
     }
 
     if (action === "payroll_generate") {
@@ -1043,13 +1098,19 @@ export default async function (req) {
       if (!month || !year) return Response.json({ ok: false, error: "missing" }, { status: 400 });
       const mm = String(month).padStart(2, "0");
       const endDay = String(new Date(year, month, 0).getDate()).padStart(2, "0");
-      const [orgs, activeEmps, existingPays, attRecords] = await Promise.all([
-        base44.asServiceRole.entities.Organization.list("-created_date", 1),
-        base44.asServiceRole.entities.Employee.filter({ status: "active" }, "-created_date", 500),
+      const bag = isOwnerSession ? null : await companyBag();
+      const empQuery = !isOwnerSession
+        ? (bag?.unified ? { status: "active", unified_number: bag.unified } : { id: "__outside_company__" })
+        : { status: "active" };
+      const [orgRow, activeEmps, existingPaysAll, attRecordsAll] = await Promise.all([
+        sessionOrg(),
+        base44.asServiceRole.entities.Employee.filter(empQuery, "-created_date", 500),
         base44.asServiceRole.entities.Payroll.filter({ month, year }, "-created_date", 1000),
         base44.asServiceRole.entities.Attendance.filter({ date: { $gte: `${year}-${mm}-01`, $lte: `${year}-${mm}-${endDay}` } }, "-created_date", 2000),
       ]);
-      const orgFresh: any = orgs?.[0] || {};
+      const existingPays = await rowsOfCompany(existingPaysAll || []);
+      const attRecords = await rowsOfCompany(attRecordsAll || []);
+      const orgFresh: any = orgRow || {};
       const workDaysSet = computeWorkDaysSet(orgFresh.work_days);
       const workDaysInMonth = computeWorkDaysInMonth(year, month, workDaysSet);
       const workHoursPerDay = Number(orgFresh.work_hours_per_day) || 0;
@@ -1121,10 +1182,13 @@ export default async function (req) {
       for (const f of fields) if (body[f] !== undefined) payload[f] = body[f];
       if (!Object.keys(payload).length) return Response.json({ ok: false, error: "missing" }, { status: 400 });
       const p: any = await base44.asServiceRole.entities.Payroll.get(id);
+      if (!isOwnerSession) {
+        const bag = await companyBag();
+        if (!bag.ids.has(String(p?.employee_id || ""))) return Response.json({ ok: false, error: "forbidden" }, { status: 403 });
+      }
       const next: any = { ...p, ...payload };
       const gross = Number(next.gross_salary) || ((Number(next.base_salary)||0)+(Number(next.housing_allowance)||0)+(Number(next.transport_allowance)||0)+(Number(next.other_allowances)||0));
-      const orgs = await base44.asServiceRole.entities.Organization.list("-created_date", 1);
-      const o: any = orgs?.[0] || {};
+      const o: any = (await sessionOrg()) || {};
       const wdh = computeWorkDaysInMonth(Number(next.year), Number(next.month), computeWorkDaysSet(o.work_days));
       const whp = Number(o.work_hours_per_day) || 0;
       const absent_deduction = computeAbsentDeduction(gross, next.absent_days, next.absent_hours, wdh, whp);
@@ -1140,7 +1204,7 @@ export default async function (req) {
       if (!canPayroll) return Response.json({ ok: false, error: "forbidden" }, { status: 403 });
       const month = Number(body.month), year = Number(body.year);
       if (!month || !year) return Response.json({ ok: false, error: "missing" }, { status: 400 });
-      const pays: any[] = await base44.asServiceRole.entities.Payroll.filter({ month, year }, "-created_date", 1000);
+      const pays: any[] = await rowsOfCompany(await base44.asServiceRole.entities.Payroll.filter({ month, year }, "-created_date", 1000));
       const prep = preparerIdentity();
       const updates = (pays || [])
         .filter((p) => p.status === "draft" && p.include_in_payroll !== false)
@@ -1153,7 +1217,7 @@ export default async function (req) {
       if (!canPayroll) return Response.json({ ok: false, error: "forbidden" }, { status: 403 });
       const month = Number(body.month), year = Number(body.year);
       if (!month || !year) return Response.json({ ok: false, error: "missing" }, { status: 400 });
-      const pays: any[] = await base44.asServiceRole.entities.Payroll.filter({ month, year }, "-created_date", 1000);
+      const pays: any[] = await rowsOfCompany(await base44.asServiceRole.entities.Payroll.filter({ month, year }, "-created_date", 1000));
       const today = todayISO();
       const prepPay = preparerIdentity();
       const updates = (pays || [])
@@ -1167,7 +1231,7 @@ export default async function (req) {
       if (!canPayroll) return Response.json({ ok: false, error: "forbidden" }, { status: 403 });
       const month = Number(body.month), year = Number(body.year);
       if (!month || !year) return Response.json({ ok: false, error: "missing" }, { status: 400 });
-      const pays: any[] = await base44.asServiceRole.entities.Payroll.filter({ month, year }, "-created_date", 1000);
+      const pays: any[] = await rowsOfCompany(await base44.asServiceRole.entities.Payroll.filter({ month, year }, "-created_date", 1000));
       const prepRe = preparerIdentity();
       const updates = (pays || [])
         .filter((p) => p.status === "paid")
@@ -1185,11 +1249,15 @@ export default async function (req) {
 
     if (action === "recruitment_hires_mine") {
       if (!canRecruit) return Response.json({ ok: false, error: "forbidden" }, { status: 403 });
-      const [hires, orgs] = await Promise.all([
-        base44.asServiceRole.entities.Employee.filter({ hired_by_employee_id: String(emp?.id || "") }, "-created_date", 200),
-        base44.asServiceRole.entities.Organization.list("-created_date", 1),
+      const bag = isOwnerSession ? null : await companyBag();
+      const hireQuery = bag?.unified
+        ? { hired_by_employee_id: String(emp?.id || ""), unified_number: bag.unified }
+        : { hired_by_employee_id: String(emp?.id || "") };
+      const [hires, orgRow] = await Promise.all([
+        base44.asServiceRole.entities.Employee.filter(hireQuery, "-created_date", 200),
+        sessionOrg(),
       ]);
-      return Response.json({ ok: true, hires: hires || [], org: orgs?.[0] || null, preparer: hirePreparer() });
+      return Response.json({ ok: true, hires: hires || [], org: orgRow || null, preparer: hirePreparer() });
     }
 
     if (action === "recruitment_create") {
@@ -1197,12 +1265,10 @@ export default async function (req) {
       const b = body || {};
       const required = ["full_name", "department", "position", "hire_date", "base_salary"];
       for (const f of required) if (!b[f] && b[f] !== 0) return Response.json({ ok: false, error: "missing: " + f }, { status: 400 });
-      const [orgs, allEmps] = await Promise.all([
-        base44.asServiceRole.entities.Organization.list("-created_date", 1),
-        base44.asServiceRole.entities.Employee.list("-created_date", 1),
-      ]);
-      const orgFresh: any = orgs?.[0] || {};
-      const empNumber = String(b.employee_number || "").trim() || `EMP-${String((allEmps?.length || 0) + 1).padStart(4, "0")}`;
+      const bag = isOwnerSession ? null : await companyBag();
+      if (!isOwnerSession && !bag?.unified) return Response.json({ ok: false, error: "forbidden" }, { status: 403 });
+      const orgFresh: any = (await sessionOrg()) || {};
+      const empNumber = String(b.employee_number || "").trim() || `EMP-${String((bag?.employees?.length || 0) + 1).padStart(4, "0")}`;
       const base = Number(b.base_salary) || 0;
       const housing = Number(b.housing_allowance) || 0;
       const transport = Number(b.transport_allowance) || 0;
@@ -1229,15 +1295,20 @@ export default async function (req) {
     // ====== إدارة التوظيف الكاملة — بوابة الموظف المُفوّض (وظائف/متقدمون/مقابلات/تعيين/تجربة) ======
     if (action === "recruit_list") {
       if (!canRecruit) return Response.json({ ok: false, error: "forbidden" }, { status: 403 });
-      const [jobs, apps, evals, orgs] = await Promise.all([
+      const bag = isOwnerSession ? null : await companyBag();
+      const [jobs, apps, evals, orgRow] = await Promise.all([
         base44.asServiceRole.entities.Job.list("-created_date", 300),
         base44.asServiceRole.entities.JobApplication.list("-created_date", 1000),
         base44.asServiceRole.entities.TrialEvaluation.list("-created_date", 500),
-        base44.asServiceRole.entities.Organization.list("-created_date", 1),
+        sessionOrg(),
       ]);
+      const keep = (entity: string, rows: any[]) => isOwnerSession ? (rows || []) : (rows || []).filter((r) => inCompany(entity, r, bag));
       return Response.json({
-        ok: true, jobs: jobs || [], applications: apps || [], evaluations: evals || [],
-        org: orgs?.[0] || null, preparer: hirePreparer(),
+        ok: true,
+        jobs: keep("Job", jobs),
+        applications: keep("JobApplication", apps),
+        evaluations: keep("TrialEvaluation", evals),
+        org: orgRow || null, preparer: hirePreparer(),
       });
     }
 
@@ -1261,7 +1332,14 @@ export default async function (req) {
       if (!payload.title) return Response.json({ ok: false, error: "missing" }, { status: 400 });
       const id = String(body.id || "");
       if (payload.status === "closed") payload.closed_date = todayISO();
+      const bag = isOwnerSession ? null : await companyBag();
+      if (!isOwnerSession && !bag?.unified) return Response.json({ ok: false, error: "forbidden" }, { status: 403 });
+      if (!isOwnerSession) payload.unified_number = bag.unified;
       if (id) {
+        if (!isOwnerSession) {
+          const existing = await base44.asServiceRole.entities.Job.get(id).catch(() => null);
+          if (!inCompany("Job", existing, bag)) return Response.json({ ok: false, error: "forbidden" }, { status: 403 });
+        }
         await base44.asServiceRole.entities.Job.update(id, payload);
         return Response.json({ ok: true, id });
       }
@@ -1273,6 +1351,11 @@ export default async function (req) {
       if (!canRecruit) return Response.json({ ok: false, error: "forbidden" }, { status: 403 });
       const id = String(body.id || "");
       if (!id) return Response.json({ ok: false, error: "missing" }, { status: 400 });
+      if (!isOwnerSession) {
+        const bag = await companyBag();
+        const existing = await base44.asServiceRole.entities.Job.get(id).catch(() => null);
+        if (!inCompany("Job", existing, bag)) return Response.json({ ok: false, error: "forbidden" }, { status: 403 });
+      }
       await base44.asServiceRole.entities.Job.delete(id);
       return Response.json({ ok: true });
     }
@@ -1289,6 +1372,12 @@ export default async function (req) {
       if (s.interview_notes !== undefined) payload.interview_notes = String(s.interview_notes || "").slice(0, 3000);
       if (s.reject_reason !== undefined) payload.reject_reason = String(s.reject_reason || "").slice(0, 1000);
       if (!Object.keys(payload).length) return Response.json({ ok: false, error: "missing" }, { status: 400 });
+      if (!isOwnerSession) {
+        const bag = await companyBag();
+        const existing = await base44.asServiceRole.entities.JobApplication.get(id).catch(() => null);
+        if (!inCompany("JobApplication", existing, bag)) return Response.json({ ok: false, error: "forbidden" }, { status: 403 });
+        payload.unified_number = bag.unified;
+      }
       await base44.asServiceRole.entities.JobApplication.update(id, payload);
       return Response.json({ ok: true });
     }
@@ -1300,18 +1389,17 @@ export default async function (req) {
       if (!applicationId) return Response.json({ ok: false, error: "missing" }, { status: 400 });
       const app: any = await base44.asServiceRole.entities.JobApplication.get(applicationId);
       if (!app) return Response.json({ ok: false, error: "not_found" }, { status: 404 });
+      const bag = isOwnerSession ? null : await companyBag();
+      if (!isOwnerSession && !inCompany("JobApplication", app, bag)) return Response.json({ ok: false, error: "forbidden" }, { status: 403 });
       const job: any = app.job_id ? await base44.asServiceRole.entities.Job.get(app.job_id).catch(() => null) : null;
+      if (!isOwnerSession && job && !inCompany("Job", job, bag)) return Response.json({ ok: false, error: "forbidden" }, { status: 403 });
       const s = body.payload || {};
-      const [orgs, allEmps] = await Promise.all([
-        base44.asServiceRole.entities.Organization.list("-created_date", 1),
-        base44.asServiceRole.entities.Employee.list("-created_date", 1),
-      ]);
-      const orgFresh: any = orgs?.[0] || {};
+      const orgFresh: any = (await sessionOrg()) || {};
       const prep = hirePreparer();
       const hireDate = String(s.hire_date || "").slice(0, 10) || todayISO();
       const created: any = await base44.asServiceRole.entities.Employee.create({
         full_name: app.full_name,
-        employee_number: String(s.employee_number || "").trim() || `EMP-${String((allEmps?.length || 0) + 1).padStart(4, "0")}`,
+        employee_number: String(s.employee_number || "").trim() || `EMP-${String((bag?.employees?.length || 0) + 1).padStart(4, "0")}`,
         national_id: String(s.national_id || "").slice(0, 40),
         email: app.email || "", nationality: app.nationality || "",
         is_saudi: !!s.is_saudi, phone: app.phone || "",
@@ -1369,9 +1457,17 @@ export default async function (req) {
         notes: String(s.notes || "").slice(0, 2000),
       };
       if (!payload.employee_name) return Response.json({ ok: false, error: "missing" }, { status: 400 });
+      const bag = isOwnerSession ? null : await companyBag();
+      if (!isOwnerSession && !bag?.unified) return Response.json({ ok: false, error: "forbidden" }, { status: 403 });
+      if (!isOwnerSession) payload.unified_number = bag.unified;
       const id = String(body.id || "");
-      if (id) await base44.asServiceRole.entities.TrialEvaluation.update(id, payload);
-      else await base44.asServiceRole.entities.TrialEvaluation.create(payload);
+      if (id) {
+        if (!isOwnerSession) {
+          const existing = await base44.asServiceRole.entities.TrialEvaluation.get(id).catch(() => null);
+          if (!inCompany("TrialEvaluation", existing, bag)) return Response.json({ ok: false, error: "forbidden" }, { status: 403 });
+        }
+        await base44.asServiceRole.entities.TrialEvaluation.update(id, payload);
+      } else await base44.asServiceRole.entities.TrialEvaluation.create(payload);
       return Response.json({ ok: true });
     }
 
@@ -1407,12 +1503,16 @@ export default async function (req) {
       const cfg = DELEGATED_MAP[key];
       if (!cfg) return Response.json({ ok: false, error: "unknown_section" }, { status: 400 });
       if (!parsePerms(emp?.permissions).includes(cfg.perm)) return Response.json({ ok: false, error: "forbidden" }, { status: 403 });
-      const [orgs, emps, records] = await Promise.all([
-        base44.asServiceRole.entities.Organization.list("-created_date", 1),
-        base44.asServiceRole.entities.Employee.list("-created_date", 500),
+      const bag = isOwnerSession ? null : await companyBag();
+      const [orgRow, emps, records] = await Promise.all([
+        sessionOrg(),
+        isOwnerSession
+          ? base44.asServiceRole.entities.Employee.list("-created_date", 500)
+          : Promise.resolve(bag?.employees || []),
         (base44.asServiceRole.entities as any)[cfg.entity].list("-created_date", 500),
       ]);
-      return Response.json({ ok: true, org: orgs?.[0] || null, employees: emps || [], records: records || [], preparer: { name: emp?.full_name || "", id: String(emp?.national_id || "") } });
+      const visible = isOwnerSession ? (records || []) : (records || []).filter((r: any) => inCompany(cfg.entity, r, bag));
+      return Response.json({ ok: true, org: orgRow || null, employees: emps || [], records: visible, preparer: { name: emp?.full_name || "", id: String(emp?.national_id || "") } });
     }
 
     if (action === "delegated_create") {
@@ -1428,6 +1528,11 @@ export default async function (req) {
       payload[cfg.nameField] = cfg.idField === "created_by_id" && pNid ? `${pName} — ${pNid}` : pName;
       if (cfg.idField !== "created_by_id")
         payload[cfg.idField] = cfg.idIsEmployeeId ? String(emp?.id || "") : pNid;
+      const bag = isOwnerSession ? null : await companyBag();
+      if (!isOwnerSession) {
+        if (!bag?.unified || !canWrite(cfg.entity, payload, bag)) return Response.json({ ok: false, error: "forbidden" }, { status: 403 });
+        Object.assign(payload, stampCompany(cfg.entity, payload, bag));
+      }
       if (cfg.numberField && cfg.numberPrefix && !payload[cfg.numberField]) {
         const all = await (base44.asServiceRole.entities as any)[cfg.entity].list("-created_date", 1);
         payload[cfg.numberField] = `${cfg.numberPrefix}-${String((all?.length || 0) + 1).padStart(4, "0")}`;
@@ -1443,7 +1548,11 @@ export default async function (req) {
       if (!parsePerms(emp?.permissions).includes(cfg.perm)) return Response.json({ ok: false, error: "forbidden" }, { status: 403 });
       const id = String(body.id || "");
       if (!id) return Response.json({ ok: false, error: "missing" }, { status: 400 });
-      await (base44.asServiceRole.entities as any)[cfg.entity].update(id, { ...(body.payload || {}) });
+      const bag = isOwnerSession ? null : await companyBag();
+      const existing = await (base44.asServiceRole.entities as any)[cfg.entity].get(id).catch(() => null);
+      if (!isOwnerSession && !inCompany(cfg.entity, existing, bag)) return Response.json({ ok: false, error: "forbidden" }, { status: 403 });
+      const patch = isOwnerSession ? { ...(body.payload || {}) } : stampCompany(cfg.entity, { ...(body.payload || {}) }, bag);
+      await (base44.asServiceRole.entities as any)[cfg.entity].update(id, patch);
       return Response.json({ ok: true });
     }
 
@@ -1454,6 +1563,11 @@ export default async function (req) {
       if (!parsePerms(emp?.permissions).includes(cfg.perm)) return Response.json({ ok: false, error: "forbidden" }, { status: 403 });
       const id = String(body.id || "");
       if (!id) return Response.json({ ok: false, error: "missing" }, { status: 400 });
+      if (!isOwnerSession) {
+        const bag = await companyBag();
+        const existing = await (base44.asServiceRole.entities as any)[cfg.entity].get(id).catch(() => null);
+        if (!inCompany(cfg.entity, existing, bag)) return Response.json({ ok: false, error: "forbidden" }, { status: 403 });
+      }
       await (base44.asServiceRole.entities as any)[cfg.entity].delete(id);
       return Response.json({ ok: true });
     }
@@ -1468,7 +1582,12 @@ export default async function (req) {
         base44.asServiceRole.entities.Warning.list("-created_date", 500),
         base44.asServiceRole.entities.Incentive.list("-created_date", 500),
       ]);
-      const e = emps || [];
+      const bag = isOwnerSession ? null : await companyBag();
+      const e = isOwnerSession ? (emps || []) : (emps || []).filter((x: any) => inCompany("Employee", x, bag));
+      const attsC = isOwnerSession ? (atts || []) : (atts || []).filter((x: any) => inCompany("Attendance", x, bag));
+      const paysC = isOwnerSession ? (pays || []) : (pays || []).filter((x: any) => inCompany("Payroll", x, bag));
+      const warnsC = isOwnerSession ? (warns || []) : (warns || []).filter((x: any) => inCompany("Warning", x, bag));
+      const incsC = isOwnerSession ? (incs || []) : (incs || []).filter((x: any) => inCompany("Incentive", x, bag));
       const byDept: Record<string, number> = {};
       e.forEach((x: any) => { const d = x.department || "بدون إدارة"; byDept[d] = (byDept[d] || 0) + 1; });
       return Response.json({ ok: true, stats: {
@@ -1480,10 +1599,10 @@ export default async function (req) {
         expat: e.filter((x: any) => !x.is_saudi).length,
         departments: Object.keys(byDept).length,
         byDept,
-        attendanceRecords: (atts || []).length,
-        payrollRecords: (pays || []).length,
-        warnings: (warns || []).length,
-        incentives: (incs || []).length,
+        attendanceRecords: attsC.length,
+        payrollRecords: paysC.length,
+        warnings: warnsC.length,
+        incentives: incsC.length,
       }});
     }
 
@@ -1494,7 +1613,10 @@ export default async function (req) {
       if (!parsePerms(emp?.permissions).includes("import-attendance")) return Response.json({ ok: false, error: "forbidden" }, { status: 403 });
       const records = Array.isArray(body.records) ? body.records : [];
       if (!records.length) return Response.json({ ok: false, error: "empty" }, { status: 400 });
-      const emps = await base44.asServiceRole.entities.Employee.list("-created_date", 2000);
+      const bag = isOwnerSession ? null : await companyBag();
+      const emps = isOwnerSession
+        ? await base44.asServiceRole.entities.Employee.list("-created_date", 2000)
+        : (bag?.employees || []);
       const byNum: Record<string, any> = {};
       (emps || []).forEach((x: any) => { if (x.employee_number) byNum[String(x.employee_number).trim()] = x; });
       const pname = emp?.full_name || "موظف الموارد البشرية";
@@ -1518,8 +1640,10 @@ export default async function (req) {
     // ====== قائمة المركبات (لمنتجب منتقي المركبة في قسم «fleet») ======
     if (action === "delegated_vehicles") {
       if (!parsePerms(emp?.permissions).includes("fleet")) return Response.json({ ok: false, error: "forbidden" }, { status: 403 });
+      const bag = isOwnerSession ? null : await companyBag();
       const vehicles = await base44.asServiceRole.entities.Vehicle.list("-created_date", 500);
-      return Response.json({ ok: true, vehicles: vehicles || [] });
+      const visible = isOwnerSession ? (vehicles || []) : (vehicles || []).filter((v: any) => inCompany("Vehicle", v, bag));
+      return Response.json({ ok: true, vehicles: visible });
     }
 
     // ====== جسر البيانات العام — يفتح صفحات لوحة الشركات كما هي للموظف المُفوّض ======
@@ -1577,7 +1701,7 @@ export default async function (req) {
           out.prepared_by_name = pName; out.prepared_by_id = pNid;
           if (isCreate) {
             out.hired_by_name = pNid ? `${pName} — ${pNid}` : pName; out.hired_by_employee_id = String(emp?.id || "");
-            if (!out.unified_number) out.unified_number = String(emp?.unified_number || "");
+            out.unified_number = String(emp?.unified_number || "");
           }
         } else if (entity === "Incentive" || entity === "AdminDecision" || entity === "VehicleDelegation") {
           out.created_by_name = pNid ? `${pName} — ${pNid}` : pName;
@@ -1607,7 +1731,47 @@ export default async function (req) {
           callArgs = [args[0], upd];
         }
       }
+      if (!isOwnerSession) {
+        const bag = await companyBag();
+        if (!bag.unified) return Response.json({ ok: false, error: "forbidden" }, { status: 403 });
+        const owned = async (id: string) => {
+          try { return await target.get(id); } catch { return null; }
+        };
+        if (op === "create") {
+          const row = stampCompany(entity, callArgs[0], bag);
+          if (!canWrite(entity, row, bag)) return Response.json({ ok: false, error: "forbidden" }, { status: 403 });
+          callArgs = [row];
+        } else if (op === "bulkCreate") {
+          const rows = (callArgs[0] || []).map((r: any) => stampCompany(entity, r, bag));
+          if (rows.some((r: any) => !canWrite(entity, r, bag))) return Response.json({ ok: false, error: "forbidden" }, { status: 403 });
+          callArgs = [rows];
+        } else if (op === "update" || op === "delete") {
+          const existing = await owned(String(callArgs[0] || ""));
+          if (!inCompany(entity, existing, bag)) return Response.json({ ok: false, error: "forbidden" }, { status: 403 });
+          if (op === "update") {
+            const next = stampCompany(entity, callArgs[1], bag);
+            if (!inCompany(entity, { ...existing, ...next }, bag)) return Response.json({ ok: false, error: "forbidden" }, { status: 403 });
+            callArgs = [callArgs[0], next];
+          }
+        } else if (op === "bulkUpdate") {
+          const nextRows = [];
+          for (const row of callArgs[0] || []) {
+            const existing = await owned(String(row?.id || ""));
+            if (!inCompany(entity, existing, bag)) return Response.json({ ok: false, error: "forbidden" }, { status: 403 });
+            const next = stampCompany(entity, row, bag);
+            if (!inCompany(entity, { ...existing, ...next }, bag)) return Response.json({ ok: false, error: "forbidden" }, { status: 403 });
+            nextRows.push(next);
+          }
+          callArgs = [nextRows];
+        } else if (op === "updateMany" || op === "deleteMany") {
+          callArgs = [scopeQuery(entity, callArgs[0], bag), callArgs[1]];
+        }
+      }
       const result = await target[op](...callArgs);
+      if (!isOwnerSession && READ_OPS.has(op)) {
+        const bag = await companyBag();
+        return Response.json({ ok: true, result: filterPayload(entity, result ?? null, bag) });
+      }
       return Response.json({ ok: true, result: result ?? null });
     }
 

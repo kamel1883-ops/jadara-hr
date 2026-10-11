@@ -135,23 +135,47 @@ export function preferPortalEmployee(all: any[]) {
     || null;
 }
 
-async function companyVaultKeys(base44: any): Promise<string[]> {
+function digitsOnly(value: any) {
+  const arabic = "٠١٢٣٤٥٦٧٨٩";
+  return String(value || "")
+    .replace(/[٠-٩]/g, (d) => String(arabic.indexOf(d)))
+    .replace(/\D/g, "");
+}
+
+function sameId(row: any, nidDigits: string, birth: string) {
+  const a = digitsOnly(row?.national_id);
+  if (!a || a !== nidDigits) return false;
+  if (birth && day(row?.birth_date) !== birth) return false;
+  return true;
+}
+
+/** مفاتيح خزنة منشأة واحدة: من أنشأ موظفيها، ثم سجل تلك المنشأة فقط */
+async function keysForCompany(base44: any, unified: string, creators: string[]) {
   const keys: string[] = [];
+  for (const c of creators) pushKey(keys, c);
+  if (!unified) return keys.slice(0, 24);
+  pushKey(keys, unified);
   try {
-    const tenants = asList(await base44.asServiceRole.entities.Tenant.filter({}));
+    const tenants = asList(await base44.asServiceRole.entities.Tenant.filter({ unified_number: unified }));
     for (const t of tenants) {
       pushKey(keys, t.id);
       pushKey(keys, t.admin_user_id);
       pushKey(keys, t.unified_number);
     }
-  } catch { /* لا سجلات منشآت */ }
-  return keys;
+  } catch { /* لا سجل منشأة */ }
+  return keys.slice(0, 24);
 }
 
-function sameId(row: any, nid: string, birth: string) {
-  if (String(row?.national_id || "").trim() !== nid) return false;
-  if (birth && day(row?.birth_date) !== birth) return false;
-  return true;
+function groupByCompany(vaulted: any[]) {
+  const groups = new Map<string, { unified: string; rows: any[] }>();
+  for (const e of vaulted) {
+    const unified = String(e.unified_number || "").trim();
+    const creator = String(e.created_by_id || "").trim();
+    const key = unified || `creator:${creator || e.id}`;
+    if (!groups.has(key)) groups.set(key, { unified, rows: [] });
+    groups.get(key)!.rows.push(e);
+  }
+  return [...groups.values()];
 }
 
 /**
@@ -159,12 +183,18 @@ function sameId(row: any, nid: string, birth: string) {
  * المسار المحلي أولاً (من لم تُعزل هويته بعد)، ثم الخزنة عبر emp_ref.
  */
 export async function findEmployeesByNationalId(base44: any, nationalId: string, birthDate = "") {
-  const nid = String(nationalId || "").trim();
+  const nidRaw = String(nationalId || "").trim();
+  const nidDigits = digitsOnly(nidRaw);
   const birth = day(birthDate);
-  if (!nid) return [];
+  if (!nidDigits) return [];
 
-  const local = asList(await base44.asServiceRole.entities.Employee.filter({ national_id: nid }));
-  const localHit = birth ? local.filter((e) => day(e.birth_date) === birth) : local;
+  let local = asList(await base44.asServiceRole.entities.Employee.filter({ national_id: nidRaw }));
+  if (!local.length && nidDigits !== nidRaw) {
+    try {
+      local = asList(await base44.asServiceRole.entities.Employee.filter({ national_id: nidDigits }));
+    } catch { local = []; }
+  }
+  const localHit = local.filter((e) => digitsOnly(e.national_id) === nidDigits && (!birth || day(e.birth_date) === birth));
   if (localHit.length) return sortNewest(localHit);
 
   let employees: any[] = [];
@@ -176,38 +206,51 @@ export async function findEmployeesByNationalId(base44: any, nationalId: string,
   const vaulted = employees.filter((e) => e?.emp_ref && !String(e.national_id || "").trim());
   if (!vaulted.length) return [];
 
+  // البحث أولاً تحت حساب من أنشأ كل موظف. لا تُمرَّر مفاتيح كل المنشآت دفعة واحدة
+  // حتى لا يسقط مفتاح المنشئ، ولا يُمسح خزنة عميل آخر عند كل محاولة دخول.
   const creators = [...new Set(vaulted.map((e) => String(e.created_by_id || "").trim()).filter(Boolean))];
-  const tenantIds = await companyVaultKeys(base44);
-  const allKeys = [...creators, ...tenantIds];
   const matchedRefs = new Set<string>();
   let findMissing = false;
-  for (let i = 0; i < Math.max(allKeys.length, 1) && !findMissing; i += 64) {
-    const chunk = allKeys.slice(i, i + 64);
-    const found = await findEmpRefsByNationalId(chunk, nid, birth);
+  for (let i = 0; i < creators.length && !findMissing; i += 64) {
+    const found = await findEmpRefsByNationalId(creators.slice(i, i + 64), nidDigits, birth);
     if (found === null) {
       findMissing = true;
       break;
     }
     for (const ref of found) matchedRefs.add(String(ref));
   }
-  if (!findMissing) return sortNewest(vaulted.filter((e) => matchedRefs.has(String(e.emp_ref))));
-
-  const groups = new Map<string, any[]>();
-  for (const e of vaulted) {
-    const creator = String(e.created_by_id || "").trim() || tenantIds[0] || "";
-    if (!creator) continue;
-    if (!groups.has(creator)) groups.set(creator, []);
-    groups.get(creator).push(e);
+  if (!findMissing && matchedRefs.size) {
+    return sortNewest(vaulted.filter((e) => matchedRefs.has(String(e.emp_ref))));
   }
+
+  const groups = groupByCompany(vaulted);
+  if (!findMissing) {
+    for (const g of groups) {
+      const extra = (await keysForCompany(base44, g.unified, [])).filter((k) => !creators.includes(k));
+      if (!extra.length) continue;
+      const found = await findEmpRefsByNationalId(extra, nidDigits, birth);
+      if (found === null) {
+        findMissing = true;
+        break;
+      }
+      for (const ref of found) matchedRefs.add(String(ref));
+    }
+    if (!findMissing) return sortNewest(vaulted.filter((e) => matchedRefs.has(String(e.emp_ref))));
+  }
+
   const hits: any[] = [];
-  for (const [creator, group] of groups) {
-    const searchKeys = [creator, ...tenantIds].filter(Boolean);
-    const refs = group.map((e) => e.emp_ref);
+  for (const g of groups) {
+    const groupCreators = [...new Set(g.rows.map((e) => String(e.created_by_id || "").trim()).filter(Boolean))];
+    const searchKeys = await keysForCompany(base44, g.unified, groupCreators);
+    if (!searchKeys.length) continue;
+    const refs = g.rows.map((e) => e.emp_ref);
     for (let i = 0; i < refs.length; i += 80) {
-      const map = await getEmployeesBatch(searchKeys, refs.slice(i, i + 80));
-      for (const e of group) {
+      const slice = refs.slice(i, i + 80);
+      const map = await getEmployeesBatch(searchKeys, slice);
+      for (const e of g.rows) {
+        if (!slice.includes(e.emp_ref)) continue;
         const row = map?.[e.emp_ref];
-        if (row && sameId(row, nid, birth)) hits.push(e);
+        if (row && sameId(row, nidDigits, birth)) hits.push(e);
       }
     }
   }

@@ -1,5 +1,6 @@
 import { createClientFromRequest } from "npm:@base44/sdk@0.8.40";
 import { verifyToken } from "../../shared/portalToken.ts";
+import { organizationForEmployee } from "../../shared/companyScope.ts";
 
 // يعيد طابور الموافقات للموظف — يدعم وضعين:
 // 1) بوابة موظف عبر رمز جلسة موقع (portal_token + portal_employee_id).
@@ -57,12 +58,9 @@ export default async function (req) {
     const myUn = String(myEmp.unified_number || "").trim();
     const sameTenant = (rec) => !!myUn && idToUn.get(rec.employee_id) === myUn;
 
-    // المنشأة المرتبطة بالمنسّقة الموحدة للمعتمد — لإظهار الشعار والاسم على المستندات المطبوعة.
-    const allOrgs = await base44.asServiceRole.entities.Organization.list("-created_date", 200);
-    const myOrg = (allOrgs || []).find((o) => {
-      const u = String(o.unified_number || "").trim();
-      return !!u && u === myUn;
-    }) || (allOrgs || [])[0] || null;
+    // منشأة المعتمد نفسه فقط — لا آخر منشأة سُجّلت في المنصة.
+    let myOrg = null;
+    try { myOrg = await organizationForEmployee(base44, { ...myEmp, unified_number: myUn || myEmp.unified_number }); } catch { myOrg = null; }
 
     const idToNat = new Map();
     const idToName = new Map();
@@ -76,7 +74,11 @@ export default async function (req) {
     }));
 
     if (myEmp.is_approver_manager) {
-      const subs = (allEmployees || []).filter((e) => e.manager_id === myEmp.id);
+      const subs = (allEmployees || []).filter((e) => {
+        if (e.manager_id !== myEmp.id) return false;
+        const un = String(e.unified_number || "").trim();
+        return myUn ? un === myUn : !un;
+      });
       const subIds = new Set(subs.map((s) => s.id));
       const mgrPending = ["pending_manager", "pending"];
       const [allLeaves, allLoans, allTrips, allEquip, allComplaints] = await Promise.all([

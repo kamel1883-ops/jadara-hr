@@ -112,7 +112,8 @@ router.post('/find', async (req, res, next) => {
   try {
     const nationalId = String(req.body?.national_id || '').trim();
     const birth = String(req.body?.birth_date || '').trim().slice(0, 10);
-    if (!nationalId) return res.status(400).json({ error: 'national_id_required' });
+    const want = nationalId.replace(/[٠-٩]/g, (d) => String('٠١٢٣٤٥٦٧٨٩'.indexOf(d))).replace(/\D/g, '');
+    if (!want) return res.status(400).json({ error: 'national_id_required' });
     const tenantIds = Array.isArray(req.body?.tenant_ids)
       ? [...new Set(req.body.tenant_ids.map((r) => String(r || '').trim()).filter(Boolean))].slice(0, 64)
       : [];
@@ -121,8 +122,8 @@ router.post('/find', async (req, res, next) => {
       : await query('SELECT emp_ref, national_id_enc, birth_date_enc FROM vault_employees');
     const matches = [];
     for (const r of rows) {
-      const id = String(decrypt(r.national_id_enc) || '').trim();
-      if (id !== nationalId) continue;
+      const id = String(decrypt(r.national_id_enc) || '').replace(/[٠-٩]/g, (d) => String('٠١٢٣٤٥٦٧٨٩'.indexOf(d))).replace(/\D/g, '');
+      if (id !== want) continue;
       if (birth) {
         const b = String(decrypt(r.birth_date_enc) || '').slice(0, 10);
         if (b !== birth) continue;

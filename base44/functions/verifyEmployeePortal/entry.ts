@@ -3,6 +3,7 @@ import { signToken } from "../../shared/portalToken.ts";
 import { verifyTurnstile, createRateLimiter } from "../../shared/turnstile.ts";
 import { verifyPassword } from "../../shared/ownerAuth.ts";
 import { findEmployeesByNationalId, preferPortalEmployee } from "../../shared/vaultIdentity.ts";
+import { organizationForEmployee } from "../../shared/companyScope.ts";
 
 // بوابة الموظف الذاتية — دخول برقم الإقامة + كلمة المرور + كابتشا.
 // تاريخ الميلاد لم يعد يُستخدم للدخول بل للتسجيل الأول لمرة واحدة (registerEmployeePortal).
@@ -52,10 +53,7 @@ export default async function (req) {
     const token = await signToken(emp.id, ttl);
 
     let org = null;
-    try {
-      const orgs = await base44.asServiceRole.entities.Organization.list("-created_date", 1);
-      org = orgs?.[0] || null;
-    } catch {}
+    try { org = await organizationForEmployee(base44, emp); } catch { org = null; }
 
     return Response.json({
       ok: true,
@@ -67,12 +65,13 @@ export default async function (req) {
         employee_number: emp.employee_number,
         position: emp.position,
         department: emp.department,
+        unified_number: emp.unified_number || "",
         role_level: emp.role_level || "employee",
         is_approver_manager: !!emp.is_approver_manager,
         is_approver_finance: !!emp.is_approver_finance,
         is_approver_hr: !!emp.is_approver_hr,
       },
-      org: org ? { name: org.name, logo_url: org.logo_url } : null,
+      org: org ? { name: org.name, logo_url: org.logo_url, unified_number: org.unified_number || emp.unified_number || "" } : null,
     });
   } catch (error) {
     return Response.json({ ok: false, error: error.message }, { status: 500 });
