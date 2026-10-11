@@ -79,7 +79,7 @@ router.post('/lookup', async (req, res, next) => {
       ? [...new Set(req.body.refs.map((r) => String(r || '').trim()).filter(Boolean))].slice(0, 500)
       : [];
     const tenantIds = Array.isArray(req.body?.tenant_ids)
-      ? [...new Set(req.body.tenant_ids.map((r) => String(r || '').trim()).filter(Boolean))].slice(0, 8)
+      ? [...new Set(req.body.tenant_ids.map((r) => String(r || '').trim()).filter(Boolean))].slice(0, 24)
       : [];
     const headerTenant = String(req.headers['x-tenant-id'] || '').trim();
     if (headerTenant && !tenantIds.includes(headerTenant)) tenantIds.push(headerTenant);
@@ -101,6 +101,35 @@ router.post('/lookup', async (req, res, next) => {
       employees[r.emp_ref] = out;
     }
     res.json({ employees });
+  } catch (e) { next(e); }
+});
+
+/**
+ * POST /api/vault/employees/find
+ * يطابق رقم الهوية (وتاريخ الميلاد اختيارياً) داخل المملكة ويعيد emp_ref فقط.
+ */
+router.post('/find', async (req, res, next) => {
+  try {
+    const nationalId = String(req.body?.national_id || '').trim();
+    const birth = String(req.body?.birth_date || '').trim().slice(0, 10);
+    if (!nationalId) return res.status(400).json({ error: 'national_id_required' });
+    const tenantIds = Array.isArray(req.body?.tenant_ids)
+      ? [...new Set(req.body.tenant_ids.map((r) => String(r || '').trim()).filter(Boolean))].slice(0, 64)
+      : [];
+    const { rows } = tenantIds.length
+      ? await query('SELECT emp_ref, national_id_enc, birth_date_enc FROM vault_employees WHERE tenant_id = ANY($1::text[])', [tenantIds])
+      : await query('SELECT emp_ref, national_id_enc, birth_date_enc FROM vault_employees');
+    const matches = [];
+    for (const r of rows) {
+      const id = String(decrypt(r.national_id_enc) || '').trim();
+      if (id !== nationalId) continue;
+      if (birth) {
+        const b = String(decrypt(r.birth_date_enc) || '').slice(0, 10);
+        if (b !== birth) continue;
+      }
+      matches.push({ emp_ref: r.emp_ref });
+    }
+    res.json({ matches });
   } catch (e) { next(e); }
 });
 

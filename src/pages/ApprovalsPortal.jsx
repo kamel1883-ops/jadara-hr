@@ -15,6 +15,7 @@ import { badge } from "@/lib/approvals";
 import { usePortalI18n, usePortalT, portalDir } from "@/lib/portalI18n";
 import ManagerAttendanceSection from "@/components/portal/ManagerAttendanceSection";
 import SettlementSheet from "@/components/SettlementSheet";
+import { StoredDocButton } from "@/components/VaultDocLink";
 
 export default function ApprovalsPortal({ portalSession }) {
   const { lang } = usePortalI18n();
@@ -123,10 +124,10 @@ export default function ApprovalsPortal({ portalSession }) {
           </div>
         </div>
         <div className="flex items-center gap-2 shrink-0 flex-wrap justify-end">
-          {actions.map((a, i) => a.href ? (
-            <a key={i} href={a.href} target="_blank" rel="noreferrer" className={cn("inline-flex items-center gap-1 h-8 px-3 rounded-md text-xs font-medium", a.cls)}>
+          {actions.map((a, i) => a.doc ? (
+            <StoredDocButton key={i} value={a.doc} className={cn("inline-flex items-center gap-1 h-8 px-3 rounded-md text-xs font-medium", a.cls)}>
               <Download size={14} /> {a.label}
-            </a>
+            </StoredDocButton>
           ) : (
             <Button key={i} size="sm" onClick={a.onClick} disabled={a.busyKey ? busy === a.busyKey : busy}
               className={cn("h-8 text-xs gap-1", a.cls)}>
@@ -248,16 +249,16 @@ export default function ApprovalsPortal({ portalSession }) {
 
         {(() => {
           const docBtn = (url, label) => url ? (
-            <a href={url} target="_blank" rel="noopener noreferrer"
+            <StoredDocButton value={url}
               className="inline-flex items-center gap-1.5 text-xs px-2.5 py-1.5 rounded-lg bg-violet-700 text-white hover:bg-violet-800 whitespace-nowrap">
               <Download size={13} /> {label}
-            </a>
+            </StoredDocButton>
           ) : null;
           const proofBtn = (url) => url ? (
-            <a href={url} target="_blank" rel="noopener noreferrer"
+            <StoredDocButton value={url}
               className="inline-flex items-center gap-1.5 text-xs px-2.5 py-1.5 rounded-lg bg-blue-600 text-white hover:bg-blue-700 whitespace-nowrap">
               <Download size={13} /> {isAr ? "إثبات التحويل" : "Transfer proof"}
-            </a>
+            </StoredDocButton>
           ) : null;
           const rows = [
             ...(data?.leaveHistory || []).map((r) => ({
@@ -359,27 +360,27 @@ export default function ApprovalsPortal({ portalSession }) {
   const leaveActions = (r) => {
     const a = [{ label: t.pay, cls: "bg-blue-600 hover:bg-blue-700", onClick: () => openFinance("leaves", r) },
                { label: t.reject, cls: "bg-rose-50 text-rose-600 hover:bg-rose-100", onClick: () => openReject("leaves", r) }];
-    if (r.settlement_pdf_url) a.push({ label: t.settlement, cls: "bg-slate-100 text-slate-700 hover:bg-slate-200", href: r.settlement_pdf_url });
-    if (r.finance_proof_url) a.push({ label: t.finProof, cls: "bg-slate-100 text-slate-700 hover:bg-slate-200", href: r.finance_proof_url });
+    if (r.settlement_pdf_url) a.push({ label: t.settlement, cls: "bg-slate-100 text-slate-700 hover:bg-slate-200", doc: r.settlement_pdf_url });
+    if (r.finance_proof_url) a.push({ label: t.finProof, cls: "bg-slate-100 text-slate-700 hover:bg-slate-200", doc: r.finance_proof_url });
     return a;
   };
   const loanActions = (r) => {
     const a = [{ label: t.pay, cls: "bg-blue-600 hover:bg-blue-700", onClick: () => openFinance("loans", r) },
                { label: t.reject, cls: "bg-rose-50 text-rose-600 hover:bg-rose-100", onClick: () => openReject("loans", r) }];
-    if (r.statement_pdf_url) a.push({ label: t.statement, cls: "bg-slate-100 text-slate-700 hover:bg-slate-200", href: r.statement_pdf_url });
+    if (r.statement_pdf_url) a.push({ label: t.statement, cls: "bg-slate-100 text-slate-700 hover:bg-slate-200", doc: r.statement_pdf_url });
     return a;
   };
   const tripActions = (r) => {
     const a = [{ label: t.pay, cls: "bg-blue-600 hover:bg-blue-700", onClick: () => openFinance("trips", r) },
                { label: t.reject, cls: "bg-rose-50 text-rose-600 hover:bg-rose-100", onClick: () => openReject("trips", r) }];
-    if (r.approval_pdf_url) a.push({ label: t.tripDoc, cls: "bg-slate-100 text-slate-700 hover:bg-slate-200", href: r.approval_pdf_url });
+    if (r.approval_pdf_url) a.push({ label: t.tripDoc, cls: "bg-slate-100 text-slate-700 hover:bg-slate-200", doc: r.approval_pdf_url });
     return a;
   };
   const settlementActions = (r) => {
     const a = [{ label: isAr ? "معاينة/طباعة المخالصة" : "View/Print settlement", cls: "bg-emerald-50 text-emerald-700 hover:bg-emerald-100", onClick: () => printSet(r) },
                { label: t.pay, cls: "bg-blue-600 hover:bg-blue-700", onClick: () => openFinance("settlements", r) },
                { label: t.reject, cls: "bg-rose-50 text-rose-600 hover:bg-rose-100", onClick: () => openReject("settlements", r) }];
-    if (r.finance_proof_url) a.push({ label: t.finProof, cls: "bg-slate-100 text-slate-700 hover:bg-slate-200", href: r.finance_proof_url });
+    if (r.finance_proof_url) a.push({ label: t.finProof, cls: "bg-slate-100 text-slate-700 hover:bg-slate-200", doc: r.finance_proof_url });
     return a;
   };
 
@@ -448,10 +449,10 @@ export default function ApprovalsPortal({ portalSession }) {
                     </div>
                   </div>
                   <div className="flex items-center gap-2 shrink-0 flex-wrap justify-end">
-                    {settlementActions(r).map((a, i) => a.href ? (
-                      <a key={i} href={a.href} target="_blank" rel="noreferrer" className={cn("inline-flex items-center gap-1 h-8 px-3 rounded-md text-xs font-medium", a.cls)}>
+                    {settlementActions(r).map((a, i) => a.doc ? (
+                      <StoredDocButton key={i} value={a.doc} className={cn("inline-flex items-center gap-1 h-8 px-3 rounded-md text-xs font-medium", a.cls)}>
                         <Download size={14} /> {a.label}
-                      </a>
+                      </StoredDocButton>
                     ) : (
                       <Button key={i} size="sm" onClick={a.onClick} disabled={busy} className={cn("h-8 text-xs gap-1", a.cls)}>
                         {a.label}
@@ -469,16 +470,16 @@ export default function ApprovalsPortal({ portalSession }) {
       {/* سجل المعاملات المالي الدائم — كل ما صُرف أو اعتمد عبر المالية */}
       {(() => {
         const docBtn = (url, label) => url ? (
-          <a href={url} target="_blank" rel="noopener noreferrer"
+          <StoredDocButton value={url}
             className="inline-flex items-center gap-1.5 text-xs px-2.5 py-1.5 rounded-lg bg-violet-700 text-white hover:bg-violet-800 whitespace-nowrap">
             <Download size={13} /> {label}
-          </a>
+          </StoredDocButton>
         ) : null;
         const proofBtn = (url) => url ? (
-          <a href={url} target="_blank" rel="noopener noreferrer"
+          <StoredDocButton value={url}
             className="inline-flex items-center gap-1.5 text-xs px-2.5 py-1.5 rounded-lg bg-blue-600 text-white hover:bg-blue-700 whitespace-nowrap">
             <Download size={13} /> {t.finProof}
-          </a>
+          </StoredDocButton>
         ) : null;
         const printBtn = (rec) => rec ? (
           <button type="button" onClick={() => printSet(rec)}

@@ -3,6 +3,7 @@ import { base44 } from "@/api/base44Client";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Plane, Download } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { StoredDocButton } from "@/components/VaultDocLink";
 import { useI18n } from "@/lib/i18n";
 
 export default function EmployeeTripsDialog({ open, onClose, employee }) {
@@ -77,9 +78,9 @@ export default function EmployeeTripsDialog({ open, onClose, employee }) {
                       <td className="px-3 py-2"><span className={cn("text-xs px-2 py-0.5 rounded-full", st.cls)}>{st.label}</span></td>
                       <td className="px-3 py-2">
                         {tr.approval_pdf_url ? (
-                          <a href={tr.approval_pdf_url} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 text-xs px-2 py-1 rounded-md bg-blue-50 text-blue-600 hover:bg-blue-100">
+                          <StoredDocButton value={tr.approval_pdf_url} className="inline-flex items-center gap-1 text-xs px-2 py-1 rounded-md bg-blue-50 text-blue-600 hover:bg-blue-100">
                             <Download size={13} /> مستند الانتداب
-                          </a>
+                          </StoredDocButton>
                         ) : <span className="text-xs text-muted-foreground">—</span>}
                       </td>
                     </tr>

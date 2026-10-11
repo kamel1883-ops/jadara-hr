@@ -10,17 +10,18 @@ import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter
 } from "@/components/ui/dialog";
-import { ClipboardCheck, Check, X, Loader2, Search, Download, RefreshCw, Wallet, Plane } from "lucide-react";
-import { cn, safeHref } from "@/lib/utils";
+import { ClipboardCheck, Check, X, Loader2, Search, Download, RefreshCw, Plane } from "lucide-react";
+import { cn } from "@/lib/utils";
 import { leaveTypeLabel, formatCurrency, todayISO } from "@/lib/hr";
 import { badge, leaveTicketAmount, needsFinance } from "@/lib/approvals";
-import { getEmployeeAnnualDays, computeLeaveEntitlement, usedLeaveTotal } from "@/lib/leaveBalance";
+import { computeLeaveEntitlement, usedLeaveTotal } from "@/lib/leaveBalance";
 import { useI18n } from "@/lib/i18n";
 import { generateLeaveSettlement, generateLoanStatement, generateBusinessTripApproval } from "@/lib/docGenerators";
 import PullToRefresh from "@/components/PullToRefresh";
 import VaultDocLink from "@/components/VaultDocLink";
 import { uploadFileToVault } from "@/lib/vaultDocuments";
 import { enrichRecordsWithVault, VAULT_MODULES } from "@/lib/vaultGeneric";
+import { enrichEmployeesBatch, applySensitiveMap } from "@/lib/vaultSensitive";
 
 export default function Approvals() {
   const { lang } = useI18n();
@@ -140,7 +141,8 @@ export default function Approvals() {
       enrichRecordsWithVault(lv, VAULT_MODULES.leaves, "leave_ref", ["reason", "manager_note", "hr_note", "finance_note"]),
       enrichRecordsWithVault(tr, VAULT_MODULES.businessTrips, "trip_ref", ["purpose", "employee_note", "notes", "hr_note", "finance_note"]),
     ]);
-    setLeaves(lvEnriched); setLoans(ln); setTrips(trEnriched); setEmployees(emps); setOrg(orgs[0]);
+    const sens = await enrichEmployeesBatch(emps);
+    setLeaves(lvEnriched); setLoans(ln); setTrips(trEnriched); setEmployees(applySensitiveMap(emps, sens)); setOrg(orgs[0]);
     try { setMe(await base44.auth.me()); } catch {}
     setLoading(false);
   };

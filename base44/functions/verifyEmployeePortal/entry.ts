@@ -2,6 +2,7 @@ import { createClientFromRequest } from "npm:@base44/sdk@0.8.40";
 import { signToken } from "../../shared/portalToken.ts";
 import { verifyTurnstile, createRateLimiter } from "../../shared/turnstile.ts";
 import { verifyPassword } from "../../shared/ownerAuth.ts";
+import { findEmployeesByNationalId, preferPortalEmployee } from "../../shared/vaultIdentity.ts";
 
 // بوابة الموظف الذاتية — دخول برقم الإقامة + كلمة المرور + كابتشا.
 // تاريخ الميلاد لم يعد يُستخدم للدخول بل للتسجيل الأول لمرة واحدة (registerEmployeePortal).
@@ -30,13 +31,8 @@ export default async function (req) {
     if (!(await verifyTurnstile(captchaToken)))
       return Response.json({ ok: false, error: "captcha_failed" }, { status: 403 });
 
-    const emps = await base44.asServiceRole.entities.Employee.filter({ national_id: nid });
-    const all = emps || [];
-    // عند تكرار رقم الإقامة عبر أكثر من سجل (موظف انتقل بين شركات): نُفضّل السجل
-    // النشط/المُجاز الذي أنشأ كلمة مرور للبوابة، ثم أي سجل نشط، وأخيراً الأول.
-    const emp = all.find((e: any) => (e.status === "active" || e.status === "on_leave") && e.portal_password_enabled)
-      || all.find((e: any) => e.status === "active" || e.status === "on_leave")
-      || all[0];
+    const all = await findEmployeesByNationalId(base44, nid);
+    const emp = preferPortalEmployee(all);
     if (!emp) return Response.json({ ok: false, error: "invalid_credentials" });
     if (emp.status && emp.status !== "active" && emp.status !== "on_leave")
       return Response.json({ ok: false, error: "inactive" });

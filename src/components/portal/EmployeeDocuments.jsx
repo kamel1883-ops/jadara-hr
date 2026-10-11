@@ -4,6 +4,7 @@ import SettlementSheet from "@/components/SettlementSheet";
 import { leaveTypeLabel, sarSymbol } from "@/lib/hr";
 import { reasonMeta } from "@/lib/eos";
 import { usePortalT } from "@/lib/portalI18n";
+import { StoredDocButton } from "@/components/VaultDocLink";
 
 // مستنداتي المالية في بوابة الموظف — مخالصات تصفية الإجازات + مخالصات نهاية الخدمة المصروفة
 export default function EmployeeDocuments({ loans, leaves, settlements, org }) {
@@ -42,10 +43,10 @@ export default function EmployeeDocuments({ loans, leaves, settlements, org }) {
                 <div className="text-sm font-medium">{t.leaveDoc} — {leaveTypeLabel(l.leave_type)}</div>
                 <div className="text-xs text-muted-foreground">{l.start_date} ← {l.end_date} · {t.days(l.days_count)}</div>
               </div>
-              <a href={l.settlement_pdf_url} target="_blank" rel="noreferrer"
+              <StoredDocButton value={l.settlement_pdf_url}
                 className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-slate-100 text-slate-700 hover:bg-slate-200 text-xs font-medium shrink-0">
                 <Download size={14} /> {t.settle}
-              </a>
+              </StoredDocButton>
             </div>
           ))}
 
@@ -59,10 +60,10 @@ export default function EmployeeDocuments({ loans, leaves, settlements, org }) {
                   <div className="text-sm font-medium">{t.loansDoc} — {total.toLocaleString()} {sarSymbol()}</div>
                   <div className="text-xs text-muted-foreground">{t.paid}: {paid.toLocaleString()} · {t.remaining}: {rem.toLocaleString()} · {t.installments(l.installment_count || 0)}</div>
                 </div>
-                <a href={l.statement_pdf_url} target="_blank" rel="noreferrer"
+                <StoredDocButton value={l.statement_pdf_url}
                   className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-slate-100 text-slate-700 hover:bg-slate-200 text-xs font-medium shrink-0">
                   <Download size={14} /> {t.settle}
-                </a>
+                </StoredDocButton>
               </div>
             );
           })}
@@ -75,10 +76,10 @@ export default function EmployeeDocuments({ loans, leaves, settlements, org }) {
               </div>
               <div className="flex gap-1 shrink-0">
                 {s.finance_proof_url && (
-                  <a href={s.finance_proof_url} target="_blank" rel="noreferrer"
+                  <StoredDocButton value={s.finance_proof_url}
                     className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-blue-50 text-blue-600 hover:bg-blue-100 text-xs font-medium">
                     <FileText size={14} /> {t.proof}
-                  </a>
+                  </StoredDocButton>
                 )}
                 <button onClick={() => printSet(s)}
                   className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-emerald-50 text-emerald-700 hover:bg-emerald-100 text-xs font-medium">

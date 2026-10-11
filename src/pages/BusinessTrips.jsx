@@ -3,17 +3,18 @@ import { base44 } from "@/api/base44Client";
 import PageHeader from "@/components/PageHeader";
 import BusinessTripForm from "@/components/BusinessTripForm";
 import { Input } from "@/components/ui/input";
-import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import {
   Table, TableHeader, TableBody, TableRow, TableHead, TableCell
 } from "@/components/ui/table";
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue
 } from "@/components/ui/select";
-import { Pencil, Trash2, Plane, MapPin, Wallet, Download, Loader2, RefreshCw } from "lucide-react";
-import { cn, safeHref } from "@/lib/utils";
+import { Pencil, Plane, MapPin, Wallet, Download, Loader2, RefreshCw } from "lucide-react";
+import { cn } from "@/lib/utils";
 import { useI18n } from "@/lib/i18n";
 import { generateBusinessTripApproval } from "@/lib/docGenerators";
+import { StoredDocButton } from "@/components/VaultDocLink";
+import { enrichEmployeesBatch, applySensitiveMap } from "@/lib/vaultSensitive";
 import { getOrgOnce } from "@/lib/leaveBalance";
 import PullToRefresh from "@/components/PullToRefresh";
 import { enrichRecordsWithVault, VAULT_MODULES } from "@/lib/vaultGeneric";
@@ -83,6 +84,8 @@ export default function BusinessTrips() {
     // جلب نصوص الرحلة الحسّاسة (الغرض/ملاحظات الموظف/الملاحظات) من الخزنة للعرض
     const enrichedTr = await enrichRecordsWithVault(tr, VAULT_MODULES.businessTrips, "trip_ref", ["purpose", "employee_note", "notes"]);
     setTrips(enrichedTr); setEmployees(e); setOrg(o); setLoading(false);
+    const sens = await enrichEmployeesBatch(e);
+    setEmployees(applySensitiveMap(e, sens));
   };
   useEffect(() => { load(); }, []);
 
@@ -194,10 +197,10 @@ export default function BusinessTrips() {
                         <button onClick={() => { setEditing(tr); setShowForm(true); }} className="p-1.5 rounded-lg hover:bg-slate-100 text-slate-500"><Pencil size={15} /></button>
                         {tr.status === "completed" ? (
                           tr.approval_pdf_url ? (
-                            <a href={safeHref(tr.approval_pdf_url)} target="_blank" rel="noreferrer"
+                            <StoredDocButton value={tr.approval_pdf_url}
                               className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-slate-100 text-slate-700 hover:bg-slate-200 text-xs font-medium">
                               <Download size={15} /> {t.doc}
-                            </a>
+                            </StoredDocButton>
                           ) : (
                             <button onClick={() => genDoc(tr)} disabled={busy === "t" + tr.id}
                               className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-emerald-50 text-emerald-700 hover:bg-emerald-100 text-xs font-medium disabled:opacity-50">

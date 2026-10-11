@@ -1,6 +1,7 @@
 import { createClientFromRequest } from "npm:@base44/sdk@0.8.40";
 import { hashPassword } from "../../shared/ownerAuth.ts";
 import { verifyTurnstile, createRateLimiter } from "../../shared/turnstile.ts";
+import { findEmployeesByNationalId, preferPortalEmployee } from "../../shared/vaultIdentity.ts";
 
 // إعادة تعيين كلمة مرور بوابة الموظف: يتحقق من رمز الاستعادة (غير منتهٍ) مع تقييد المعدّل
 // وقفل بعد عدد محاولات فاشل، ثم يخزّن تجزئة كلمة المرور الجديدة ويمسح الرمز والمحاولات.
@@ -26,8 +27,7 @@ export default async function (req) {
     if (!(await verifyTurnstile(captchaToken)))
       return Response.json({ ok: false, error: "captcha_failed" }, { status: 403 });
 
-    const emps = await base44.asServiceRole.entities.Employee.filter({ national_id: nid });
-    const emp = (emps || [])[0];
+    const emp = preferPortalEmployee(await findEmployeesByNationalId(base44, nid));
     if (!emp) return Response.json({ ok: false, error: "invalid_code" }, { status: 400 });
     if ((emp.role_level || "") === "owner")
       return Response.json({ ok: false, error: "invalid_code" }, { status: 400 });

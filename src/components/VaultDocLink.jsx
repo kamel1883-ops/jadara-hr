@@ -1,7 +1,7 @@
 import React, { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { FileText, Loader2, Download } from "lucide-react";
-import { openVaultDoc } from "@/lib/vaultDocuments";
+import { openStoredDoc, openVaultDoc } from "@/lib/vaultDocuments";
 
 /**
  * VaultDocLink — عرض/تنزيل مستند مؤرشف في الخزنة السعودية.
@@ -28,5 +28,22 @@ export default function VaultDocLink({ value, label = "فتح المستند", c
       {busy ? <Loader2 size={14} className="animate-spin" /> : <Download size={14} />}
       <FileText size={14} /> {label}
     </Button>
+  );
+}
+
+/** زر يفتح رابطاً قديماً أو رمز خزنة مع الإبقاء على شكل الزر في الصفحة */
+export function StoredDocButton({ value, className = "", children }) {
+  const [busy, setBusy] = useState(false);
+  if (!value) return null;
+  const open = async () => {
+    setBusy(true);
+    const ok = await openStoredDoc(value);
+    setBusy(false);
+    if (!ok) alert("تعذر فتح المستند من الخزنة.");
+  };
+  return (
+    <button type="button" onClick={open} disabled={busy} className={className}>
+      {children}
+    </button>
   );
 }

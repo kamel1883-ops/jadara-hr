@@ -1,6 +1,7 @@
 import { createClientFromRequest } from "npm:@base44/sdk@0.8.40";
 import { verifyTurnstile, createRateLimiter } from "../../shared/turnstile.ts";
 import { hashPassword } from "../../shared/ownerAuth.ts";
+import { findEmployeesByNationalId, preferPortalEmployee } from "../../shared/vaultIdentity.ts";
 
 // التسجيل الأول (مرة واحدة) لبوابة الموظف الذاتية:
 // يتحقق برقم الإقامة + تاريخ الميلاد من سجل الموارد البشرية (تحقق لمرة واحدة)،
@@ -30,8 +31,7 @@ export default async function (req) {
     if (!(await verifyTurnstile(captchaToken)))
       return Response.json({ ok: false, error: "captcha_failed" }, { status: 403 });
 
-    const emps = await base44.asServiceRole.entities.Employee.filter({ national_id: nid });
-    const emp = (emps || []).find((e) => (e.birth_date || "").slice(0, 10) === birthDate);
+    const emp = preferPortalEmployee(await findEmployeesByNationalId(base44, nid, birthDate));
     if (!emp) return Response.json({ ok: false, error: "not_matched" });
     if (emp.status && emp.status !== "active" && emp.status !== "on_leave")
       return Response.json({ ok: false, error: "inactive" });

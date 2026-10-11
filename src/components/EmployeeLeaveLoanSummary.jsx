@@ -6,6 +6,7 @@ import { formatCurrency, leaveTypeLabel } from "@/lib/hr";
 import { badge } from "@/lib/approvals";
 import { Download, FileText, Loader2, RefreshCw, CalendarDays, Wallet } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { StoredDocButton } from "@/components/VaultDocLink";
 import { useI18n } from "@/lib/i18n";
 
 export default function EmployeeLeaveLoanSummary({ employee }) {
@@ -116,10 +117,10 @@ export default function EmployeeLeaveLoanSummary({ employee }) {
                 </div>
                 <div className="shrink-0">
                   {l.settlement_pdf_url ? (
-                    <a href={l.settlement_pdf_url} target="_blank" rel="noreferrer"
+                    <StoredDocButton value={l.settlement_pdf_url}
                       className="inline-flex items-center gap-1 px-2 py-1 rounded-md bg-slate-100 text-slate-700 hover:bg-slate-200">
                       <Download size={13} /> {t.settlement}
-                    </a>
+                    </StoredDocButton>
                   ) : (
                     <button type="button" onClick={() => regenLeave(l)} disabled={busy === "l" + l.id}
                       className="inline-flex items-center gap-1 px-2 py-1 rounded-md bg-slate-50 text-slate-600 hover:bg-slate-100 disabled:opacity-50">
@@ -159,10 +160,10 @@ export default function EmployeeLeaveLoanSummary({ employee }) {
                   </div>
                   <div className="shrink-0">
                     {l.statement_pdf_url ? (
-                      <a href={l.statement_pdf_url} target="_blank" rel="noreferrer"
+                      <StoredDocButton value={l.statement_pdf_url}
                         className="inline-flex items-center gap-1 px-2 py-1 rounded-md bg-slate-100 text-slate-700 hover:bg-slate-200">
                         <FileText size={13} /> {t.statement}
-                      </a>
+                      </StoredDocButton>
                     ) : (
                       <button type="button" onClick={() => genLoan(l)} disabled={busy === "loan" + l.id}
                         className="inline-flex items-center gap-1 px-2 py-1 rounded-md bg-slate-50 text-slate-600 hover:bg-slate-100 disabled:opacity-50">

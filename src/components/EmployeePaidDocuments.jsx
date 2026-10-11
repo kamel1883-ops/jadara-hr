@@ -6,6 +6,7 @@ import SettlementSheet from "@/components/SettlementSheet";
 import { leaveTypeLabel, formatCurrency } from "@/lib/hr";
 import { reasonMeta } from "@/lib/eos";
 import { useI18n } from "@/lib/i18n";
+import { StoredDocButton } from "@/components/VaultDocLink";
 
 // أرشيف مستندات الموظف المالية — سلف، إجازات، انتدابات، مخالصات نهاية الخدمة
 // يظهر لجميع الموظفين (نشطين وغير نشطين) طالما توجد مستندات
@@ -78,16 +79,16 @@ export default function EmployeePaidDocuments({ employee, org }) {
           </div>
           <div className="flex gap-1 shrink-0">
             {l.statement_pdf_url && (
-              <a href={l.statement_pdf_url} target="_blank" rel="noreferrer"
+              <StoredDocButton value={l.statement_pdf_url}
                 className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-slate-100 text-slate-700 hover:bg-slate-200 text-xs font-medium">
                 <Download size={14} /> {t.statement}
-              </a>
+              </StoredDocButton>
             )}
             {l.finance_proof_url && (
-              <a href={l.finance_proof_url} target="_blank" rel="noreferrer"
+              <StoredDocButton value={l.finance_proof_url}
                 className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-blue-50 text-blue-600 hover:bg-blue-100 text-xs font-medium">
                 <FileText size={14} /> {t.proof}
-              </a>
+              </StoredDocButton>
             )}
           </div>
         </div>
@@ -104,16 +105,16 @@ export default function EmployeePaidDocuments({ employee, org }) {
           </div>
           <div className="flex gap-1 shrink-0">
             {l.settlement_pdf_url && (
-              <a href={l.settlement_pdf_url} target="_blank" rel="noreferrer"
+              <StoredDocButton value={l.settlement_pdf_url}
                 className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-slate-100 text-slate-700 hover:bg-slate-200 text-xs font-medium">
                 <Download size={14} /> {t.settle}
-              </a>
+              </StoredDocButton>
             )}
             {l.finance_proof_url && (
-              <a href={l.finance_proof_url} target="_blank" rel="noreferrer"
+              <StoredDocButton value={l.finance_proof_url}
                 className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-blue-50 text-blue-600 hover:bg-blue-100 text-xs font-medium">
                 <FileText size={14} /> {t.proof}
-              </a>
+              </StoredDocButton>
             )}
           </div>
         </div>
@@ -130,22 +131,22 @@ export default function EmployeePaidDocuments({ employee, org }) {
           </div>
           <div className="flex gap-1 shrink-0">
             {tr.approval_pdf_url && (
-              <a href={tr.approval_pdf_url} target="_blank" rel="noreferrer"
+              <StoredDocButton value={tr.approval_pdf_url}
                 className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-slate-100 text-slate-700 hover:bg-slate-200 text-xs font-medium">
                 <Download size={14} /> {t.approval}
-              </a>
+              </StoredDocButton>
             )}
             {tr.hr_document_url && (
-              <a href={tr.hr_document_url} target="_blank" rel="noreferrer"
+              <StoredDocButton value={tr.hr_document_url}
                 className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-violet-50 text-violet-600 hover:bg-violet-100 text-xs font-medium">
                 <FileCheck2 size={14} /> {isAr ? "مرفق الموارد" : "HR doc"}
-              </a>
+              </StoredDocButton>
             )}
             {tr.finance_proof_url && (
-              <a href={tr.finance_proof_url} target="_blank" rel="noreferrer"
+              <StoredDocButton value={tr.finance_proof_url}
                 className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-blue-50 text-blue-600 hover:bg-blue-100 text-xs font-medium">
                 <FileText size={14} /> {t.proof}
-              </a>
+              </StoredDocButton>
             )}
           </div>
         </div>
@@ -162,10 +163,10 @@ export default function EmployeePaidDocuments({ employee, org }) {
           </div>
           <div className="flex gap-1 shrink-0">
             {s.finance_proof_url && (
-              <a href={s.finance_proof_url} target="_blank" rel="noreferrer"
+              <StoredDocButton value={s.finance_proof_url}
                 className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-blue-50 text-blue-600 hover:bg-blue-100 text-xs font-medium">
                 <FileText size={14} /> {t.proof}
-              </a>
+              </StoredDocButton>
             )}
             <button onClick={() => printSet(s)}
               className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-emerald-50 text-emerald-700 hover:bg-emerald-100 text-xs font-medium">

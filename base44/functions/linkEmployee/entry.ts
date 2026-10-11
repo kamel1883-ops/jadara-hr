@@ -1,4 +1,5 @@
 import { createClientFromRequest } from 'npm:@base44/sdk@0.8.40';
+import { findEmployeesByNationalId } from '../../shared/vaultIdentity.ts';
 
 export default async function(req) {
   try {
@@ -10,10 +11,8 @@ export default async function(req) {
     const nationalId = String(body.national_id || '').trim();
     if (!nationalId) return Response.json({ error: 'رقم الهوية/الإقامة مطلوب' }, { status: 400 });
 
-    // بحث بسجلات الموظفين (service role لتجاوز قيود RLS) مطابقة رقم الهوية/الإقامة
-    const matches = await base44.asServiceRole.entities.Employee.filter(
-      { national_id: nationalId }, '-created_date', 20
-    );
+    // الهوية المعزولة تُطابق داخل الخزنة السعودية، ويُعاد سجل الموظف دون إعادة كتابتها
+    const matches = await findEmployeesByNationalId(base44, nationalId);
     if (!matches || matches.length === 0) {
       return Response.json({ error: 'لا يوجد موظف مسجل بهذا الرقم. تأكد من الرقم أو تواصل مع الموارد البشرية.' }, { status: 404 });
     }

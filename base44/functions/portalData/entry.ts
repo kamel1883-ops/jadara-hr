@@ -5,6 +5,8 @@ import {
   computeAbsentDeduction, computeNetFromAttendance,
 } from "../../shared/payrollCompute.ts";
 import { notifyApproverForStatus } from "../../shared/approverNotify.ts";
+import { getDocumentLinkInCompany, buildDownloadUrl } from "../../shared/vaultClient.ts";
+import { tenantKeysForEmployee } from "../../shared/vaultIdentity.ts";
 
 // وصلة بيانات بوابة المالك/الموظف: تتحقق من رمز الجلسة الموقّع ثم ترد/تنشئ
 // بيانات الموظف (طلباته، حضوره، إنذاراته) وإنشاء طلبات إجازة/سلفة/انتداب وبصمة الحضور،
@@ -120,6 +122,22 @@ export default async function (req) {
       );
       return Response.json({ ok: true, notifications: notifs || [] });
     }
+    // فتح مستند محفوظ في الخزنة من بوابة الموظف. الرمز العشوائي لا يكفي وحده:
+    // البحث محصور بمفاتيح منشأة هذا الموظف، والرابط مؤقت.
+    if (action === "document_link") {
+      if (isOwnerSession) return Response.json({ ok: false, error: "forbidden" }, { status: 403 });
+      const docRef = String(body.doc_ref || "").trim();
+      if (!docRef || docRef.length > 80 || /^https?:\/\//i.test(docRef))
+        return Response.json({ ok: false, error: "doc_ref_required" }, { status: 400 });
+      try {
+        const keys = await tenantKeysForEmployee(base44, emp);
+        const link = await getDocumentLinkInCompany(keys, docRef);
+        return Response.json({ ok: true, download_url: buildDownloadUrl(link.token) });
+      } catch {
+        return Response.json({ ok: false, error: "not_found" }, { status: 404 });
+      }
+    }
+
     // تعليم كل إشعارات الموظف غير المقروءة كمقروءة
     if (action === "mark_notifications_read") {
       await base44.asServiceRole.entities.Notification.updateMany(

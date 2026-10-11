@@ -2,6 +2,7 @@ import { createClientFromRequest } from "npm:@base44/sdk@0.8.40";
 import { verifyTurnstile, createRateLimiter } from "../../shared/turnstile.ts";
 import { generateResetCode, RESET_CODE_TTL_MS } from "../../shared/ownerAuth.ts";
 import { wrapEmailContent } from "../../shared/emailFooter.ts";
+import { findEmployeesByNationalId, preferPortalEmployee } from "../../shared/vaultIdentity.ts";
 
 // طلب استعادة كلمة مرور بوابة الموظف: يطابق الإقامة، يشترط أن يكون للموظف كلمة مرور
 // مُنشأة مسبقاً (otherwise needs_registration)، ثم يُنشئ رمز 6 أرقام صالح 10 دقائق
@@ -27,8 +28,7 @@ export default async function (req) {
     if (!(await verifyTurnstile(captchaToken)))
       return Response.json({ ok: false, error: "captcha_failed" }, { status: 403 });
 
-    const emps = await base44.asServiceRole.entities.Employee.filter({ national_id: nid });
-    const emp = (emps || [])[0];
+    const emp = preferPortalEmployee(await findEmployeesByNationalId(base44, nid));
     if (!emp) return Response.json({ ok: false, error: "not_found" });
     if ((emp.role_level || "") === "owner")
       return Response.json({ ok: false, error: "not_found" });

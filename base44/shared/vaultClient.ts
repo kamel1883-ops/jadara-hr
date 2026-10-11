@@ -129,42 +129,79 @@ async function mapPool(items, limit, fn) {
  * لأن السجلات القديمة حُفظت تحت أكثر من مفتاح.
  */
 export async function getEmployeesBatch(tenantIds, empRefs) {
-  const ids = [...new Set((tenantIds || []).map((t) => String(t || "").trim()).filter(Boolean))].slice(0, 8);
+  const ids = [...new Set((tenantIds || []).map((t) => String(t || "").trim()).filter(Boolean))].slice(0, 24);
   const refs = [...new Set((empRefs || []).map((r) => String(r || "").trim()).filter(Boolean))].slice(0, 500);
   const found = {};
   if (!ids.length || !refs.length) return found;
-  try {
-    const body = await callVault("/api/vault/employees/lookup", ids[0], {
-      method: "POST",
-      body: JSON.stringify({ refs, tenant_ids: ids }),
-      timeoutMs: 8000,
-    });
-    const employees = body?.employees;
-    if (employees && typeof employees === "object") return employees;
-  } catch {
-    // مسار lookup غير منشور بعد على السيرفر السعودي — نكمل بالطلبات الفردية
-  }
-  let pending = refs;
-  for (const tenant of ids) {
-    if (!pending.length) break;
-    const missed = [];
-    await mapPool(pending, 8, async (ref) => {
-      try {
-        const row = await getEmployee(tenant, ref);
-        if (row && typeof row === "object") found[ref] = row;
-        else missed.push(ref);
-      } catch {
-        missed.push(ref);
+  // الخزنة المنشورة حالياً تقبل 8 مفاتيح في الاستعلام الواحد.
+  // نجزّئ المفاتيح حتى لا يُسقط مفتاح المنشئ الذي حُفظت تحته الهوية.
+  let lookupAvailable = true;
+  let pending = refs.slice();
+  for (let i = 0; i < ids.length && pending.length && lookupAvailable; i += 8) {
+    const chunk = ids.slice(i, i + 8);
+    try {
+      const body = await callVault("/api/vault/employees/lookup", chunk[0], {
+        method: "POST",
+        body: JSON.stringify({ refs: pending, tenant_ids: chunk }),
+        timeoutMs: 8000,
+      });
+      const employees = body?.employees;
+      if (employees && typeof employees === "object") {
+        for (const [ref, row] of Object.entries(employees)) {
+          if (row && typeof row === "object") found[ref] = row;
+        }
+        pending = pending.filter((r) => !found[r]);
+        continue;
       }
-    });
-    pending = missed;
+      lookupAvailable = false;
+    } catch {
+      lookupAvailable = false;
+    }
+  }
+  if (!lookupAvailable) {
+    pending = refs.filter((r) => !found[r]);
+    for (const tenant of ids) {
+      if (!pending.length) break;
+      const missed = [];
+      await mapPool(pending, 8, async (ref) => {
+        try {
+          const row = await getEmployee(tenant, ref);
+          if (row && typeof row === "object") found[ref] = row;
+          else missed.push(ref);
+        } catch {
+          missed.push(ref);
+        }
+      });
+      pending = missed;
+    }
   }
   return found;
 }
 
+/**
+ * يبحث داخل الخزنة عن رقم الهوية (وتاريخ الميلاد إن وُجد) ويعيد الرموز فقط.
+ * المقارنة تتم في السيرفر السعودي. إن لم يُنشر المسار بعد تُعاد null ليكمل المستدعي بالجلب.
+ */
+export async function findEmpRefsByNationalId(tenantIds, nationalId, birthDate = "") {
+  const ids = [...new Set((tenantIds || []).map((t) => String(t || "").trim()).filter(Boolean))].slice(0, 64);
+  const nid = String(nationalId || "").trim();
+  if (!nid) return [];
+  try {
+    const body = await callVault("/api/vault/employees/find", ids[0] || "portal", {
+      method: "POST",
+      body: JSON.stringify({ national_id: nid, birth_date: birthDate || "", tenant_ids: ids }),
+      timeoutMs: 12000,
+    });
+    if (Array.isArray(body?.matches)) return body.matches.map((m) => m?.emp_ref).filter(Boolean);
+  } catch {
+    return null;
+  }
+  return null;
+}
+
 /** يحدّث السجل تحت المستأجر الذي يملكه فعلاً، لا تحت مفتاح الحساب الحالي فقط */
 export async function updateEmployeeInCompany(tenantIds, empRef, sensitiveData) {
-  const ids = [...new Set((tenantIds || []).map((t) => String(t || "").trim()).filter(Boolean))].slice(0, 8);
+  const ids = [...new Set((tenantIds || []).map((t) => String(t || "").trim()).filter(Boolean))].slice(0, 24);
   let lastError = null;
   for (const tenant of ids) {
     try {
@@ -279,6 +316,23 @@ export async function storeDocument(tenantId, fileBuffer, fileName, mimeType, em
 /** يولّد رابط تنزيل مؤقت (JWT) — يُعرض للمستخدم النهائي */
 export async function getDocumentLink(tenantId, docRef) {
   return callVault(`/api/vault/documents/${docRef}/link`, tenantId, { method: "POST" });
+}
+
+/** يبحث عن المستند تحت مفاتيح منشأة الموظف، لا تحت حساب الفاتح فقط */
+export async function getDocumentLinkInCompany(tenantIds, docRef) {
+  const ids = [...new Set((tenantIds || []).map((t) => String(t || "").trim()).filter(Boolean))].slice(0, 24);
+  const ref = String(docRef || "").trim();
+  if (!ref) throw new Error("vault_error: 400");
+  let lastError = null;
+  for (const tenant of ids) {
+    try {
+      return await getDocumentLink(tenant, ref);
+    } catch (e: any) {
+      lastError = e;
+      if (!String(e?.message || "").includes("404")) throw e;
+    }
+  }
+  throw lastError || new Error("vault_error: 404");
 }
 
 /** يبني رابط التنزيل العام النهائي (رابط مباشر يفتح في المتصفح) */

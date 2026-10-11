@@ -8,10 +8,12 @@ import {
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue
 } from "@/components/ui/select";
-import { Trash2, CalendarDays, Clock, CheckCircle2, XCircle, Download, Loader2, RefreshCw } from "lucide-react";
-import { cn, safeHref } from "@/lib/utils";
+import { CalendarDays, Clock, CheckCircle2, XCircle, Download, Loader2, RefreshCw } from "lucide-react";
+import { cn } from "@/lib/utils";
 import { useI18n } from "@/lib/i18n";
 import { generateLeaveSettlement } from "@/lib/docGenerators";
+import { StoredDocButton } from "@/components/VaultDocLink";
+import { enrichEmployeesBatch, applySensitiveMap } from "@/lib/vaultSensitive";
 import { getOrgOnce } from "@/lib/leaveBalance";
 import PullToRefresh from "@/components/PullToRefresh";
 
@@ -87,6 +89,8 @@ export default function Leaves() {
       getOrgOnce(),
     ]);
     setRequests(r); setEmployees(e); setOrg(o); setLoading(false);
+    const sens = await enrichEmployeesBatch(e);
+    setEmployees(applySensitiveMap(e, sens));
   };
   useEffect(() => { load(); }, []);
 
@@ -198,10 +202,10 @@ export default function Leaves() {
                     <TableCell>
                       {r.status === "completed" ? (
                         r.settlement_pdf_url ? (
-                          <a href={safeHref(r.settlement_pdf_url)} target="_blank" rel="noreferrer"
+                          <StoredDocButton value={r.settlement_pdf_url}
                             className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-slate-100 text-slate-700 hover:bg-slate-200 text-xs font-medium">
                             <Download size={15} /> {t.clearance}
-                          </a>
+                          </StoredDocButton>
                         ) : (
                           <button onClick={() => genClearance(r)} disabled={busy === "l" + r.id}
                             className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-emerald-50 text-emerald-700 hover:bg-emerald-100 text-xs font-medium disabled:opacity-50">
