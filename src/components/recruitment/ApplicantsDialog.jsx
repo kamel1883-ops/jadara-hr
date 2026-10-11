@@ -8,11 +8,12 @@ import { base44 } from "@/api/base44Client";
 import { listCurrentOrg } from "@/lib/currentOrg";
 import { useToast } from "@/components/ui/use-toast";
 import { useI18n } from "@/lib/i18n";
-import { renderToPdfBlob, uploadPdfBlob } from "@/lib/pdfDocs";
+import { renderToPdfBlob } from "@/lib/pdfDocs";
 import AppointmentLetterDoc from "@/components/docs/AppointmentLetterDoc";
 import VaultDocLink from "@/components/VaultDocLink";
 import { archiveBlobToVault } from "@/lib/vaultDocuments";
-import { CheckCircle2, XCircle, CalendarClock, UserCheck, ClipboardList, Loader2, FileCheck } from "lucide-react";
+import JobOfferDialog from "@/components/recruitment/JobOfferDialog";
+import { CheckCircle2, XCircle, CalendarClock, UserCheck, ClipboardList, Loader2, Download } from "lucide-react";
 
 export default function ApplicantsDialog({ open, onOpenChange, job, onHired, onEvaluate }) {
   const { toast } = useToast();
@@ -27,6 +28,7 @@ export default function ApplicantsDialog({ open, onOpenChange, job, onHired, onE
     yrs: "سنوات خبرة", qual: "المؤهلات",
     cv: "عرض السيرة الذاتية", apptDoc: "قرار التعيين",
     screen: "ترشيح", interview: "استدعاء للمقابلة",
+    offer: "إنشاء عرض وظيفي",
     hire: "تعيين وإصدار قرار", reject: "رفض", eval: "تقييم فترة التجربة",
     rejectReasonLbl: "سبب الرفض",
     hireAsk: (n) => `تعيين ${n}؟ سيتم إنشاء ملف موظف ومستند قرار تعيين ومعتمد، وإغلاق الوظيفة ورفض بقية الطلبات تلقائياً.`,
@@ -48,6 +50,7 @@ export default function ApplicantsDialog({ open, onOpenChange, job, onHired, onE
     yrs: "years exp", qual: "Qualifications",
     cv: "View CV", apptDoc: "Appointment letter",
     screen: "Shortlist", interview: "Invite to interview",
+    offer: "Create job offer",
     hire: "Hire & issue", reject: "Reject", eval: "Trial evaluation",
     rejectReasonLbl: "Reject reason",
     hireAsk: (n) => `Hire ${n}? An employee record and appointment letter will be created, the job closed, and the rest of the applications rejected automatically.`,
@@ -75,6 +78,7 @@ export default function ApplicantsDialog({ open, onOpenChange, job, onHired, onE
   const [onlySuitable, setOnlySuitable] = useState(false);
   const [rejectTarget, setRejectTarget] = useState(null);
   const [rejectReason, setRejectReason] = useState("");
+  const [offerTarget, setOfferTarget] = useState(null);
 
   const load = async () => {
     if (!job) return;
@@ -83,7 +87,7 @@ export default function ApplicantsDialog({ open, onOpenChange, job, onHired, onE
     catch (e) { toast({ title: t.fail, description: e.message, variant: "destructive" }); }
     finally { setLoading(false); }
   };
-  useEffect(() => { if (open) load(); }, [open, job?.id]);
+  useEffect(() => { if (open) load(); else setOfferTarget(null); }, [open, job?.id]);
 
   const suitable = (a) => {
     if (!job || job.nationality_req === "any") return true;
@@ -145,6 +149,7 @@ export default function ApplicantsDialog({ open, onOpenChange, job, onHired, onE
   };
 
   return (
+    <>
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
         <DialogHeader><DialogTitle>{t.title(job?.title || "")}</DialogTitle></DialogHeader>
@@ -181,6 +186,7 @@ export default function ApplicantsDialog({ open, onOpenChange, job, onHired, onE
                   <div className="flex flex-wrap gap-2 pt-1">
                     {a.status === "applied" && <Button size="sm" variant="outline" onClick={() => setStatus(a, "screened")}><UserCheck size={14} /> {t.screen}</Button>}
                     {a.status !== "interview" && a.status !== "hired" && a.status !== "rejected" && <Button size="sm" variant="outline" onClick={() => setStatus(a, "interview", { interview_date: new Date().toISOString().slice(0, 10) })}><CalendarClock size={14} /> {t.interview}</Button>}
+                    {job && job.status === "open" && a.status !== "hired" && a.status !== "rejected" && <Button size="sm" variant="outline" onClick={() => setOfferTarget(a)}><Download size={14} /> {t.offer}</Button>}
                     {job && job.status === "open" && a.status !== "hired" && a.status !== "rejected" && <Button size="sm" variant="default" onClick={() => hire(a)} disabled={busy}>{busy ? <Loader2 size={14} className="animate-spin" /> : <CheckCircle2 size={14} />} {t.hire}</Button>}
                     {a.status !== "hired" && a.status !== "rejected" && <Button size="sm" variant="destructive" onClick={() => { setRejectTarget(a); setRejectReason(""); }}><XCircle size={14} /> {t.reject}</Button>}
                     {a.status === "hired" && <Button size="sm" variant="outline" onClick={() => onEvaluate?.(a)}><ClipboardList size={14} /> {t.eval}</Button>}
@@ -203,5 +209,7 @@ export default function ApplicantsDialog({ open, onOpenChange, job, onHired, onE
         )}
       </DialogContent>
     </Dialog>
+    <JobOfferDialog open={!!offerTarget} onOpenChange={(o) => { if (!o) setOfferTarget(null); }} applicant={offerTarget} job={job} />
+    </>
   );
 }
