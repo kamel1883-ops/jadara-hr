@@ -36,6 +36,7 @@ const EMPLOYEE_KEYED = {
 const COMPANY_SCOPED = new Set([
   "Branch", "OrgUnit", "Vehicle", "License", "Job", "JobApplication",
   "Survey", "SurveyResponse", "WorkforcePlan", "AdminDecision", "TrialEvaluation",
+  "CustomerSurvey", "CustomerSurveyResponse", "PlatformSubscription", "Organization",
 ]);
 
 // قراءة سجل عام بمعرّفه (صفحة الوظيفة المفتوحة للجميع) — مسموحة بلا جلسة منشأة
@@ -47,8 +48,11 @@ const PARENT_OF = {
   SurveyResponse: { parent: "Survey", key: "survey_id" },
 };
 
+import { onlyMatching, visibleByUnified } from "./companyGuard";
+
 let rawClient = null;
 let ctxPromise = null;
+let ctxUserKey = null;
 
 // يُستدعى مرة واحدة عند تهيئة عميل البيانات
 export function installTenantScope(client) {
@@ -58,10 +62,24 @@ export function installTenantScope(client) {
 // تُصفَّر الذاكرة المؤقتة بعد إضافة/حذف موظفين حتى يُعاد حساب نطاق المنشأة
 export function invalidateTenantScope() {
   ctxPromise = null;
+  ctxUserKey = null;
+}
+
+async function currentUserId() {
+  try {
+    const me = await rawClient.auth.me();
+    return String(me?.id || "");
+  } catch (_) {
+    return "";
+  }
 }
 
 async function tenantContext() {
-  if (!ctxPromise) ctxPromise = loadTenantContext();
+  const userId = await currentUserId();
+  if (!ctxPromise || ctxUserKey !== userId) {
+    ctxUserKey = userId;
+    ctxPromise = loadTenantContext();
+  }
   return ctxPromise;
 }
 
@@ -82,7 +100,12 @@ async function loadTenantContext() {
       { fields: ["id"], limit: 1000 }
     );
     const items = page?.items || (Array.isArray(page) ? page : []);
-    return { unified, userId, employeeIds: items.map((e) => e.id).filter(Boolean) };
+    const ctx = { unified, userId };
+    return {
+      unified,
+      userId,
+      employeeIds: items.filter((e) => visibleByUnified(e, ctx)).map((e) => e.id).filter(Boolean),
+    };
   } catch (_) {
     // عند تعذّر تحديد المنشأة لا تُعرض أي بيانات تشغيلية (الأمان أولاً)
     return { unified: "", userId: "", employeeIds: [] };
@@ -165,14 +188,16 @@ function scopedEntity(keys, api) {
       if (!s) return legacy ? [] : emptyPage();
       const merged = { ...query, ...s };
       const result = legacy ? await api.filter(merged, a, b) : (a === undefined ? await api.filter(merged) : await api.filter(merged, a));
-      return overlayVault(result);
+      const ctx = await tenantContext();
+      return overlayVault(onlyMatching(result, (rec) => belongsToTenant(rec, keys, ctx)));
     },
     async list(a, b) {
       const s = await scope();
       const legacy = typeof a === "string";
       if (!s) return legacy ? [] : emptyPage();
       const result = legacy ? await api.filter(s, a, b) : (a === undefined ? await api.filter(s) : await api.filter(s, { limit: 200, ...a }));
-      return overlayVault(result);
+      const ctx = await tenantContext();
+      return overlayVault(onlyMatching(result, (rec) => belongsToTenant(rec, keys, ctx)));
     },
     async count(query = {}) {
       const s = await scope();
@@ -193,14 +218,33 @@ function scopedEntity(keys, api) {
     },
     create: (data) => api.create(data),
     bulkCreate: (rows) => api.bulkCreate(rows),
-    update: (id, data) => api.update(id, data),
-    bulkUpdate: (rows) => api.bulkUpdate(rows),
+    async update(id, data) {
+      const ctx = await tenantContext();
+      const rec = await api.get(id).catch(() => null);
+      if (!belongsToTenant(rec, keys, ctx)) throw new Error("forbidden");
+      return api.update(id, data);
+    },
+    async bulkUpdate(rows = []) {
+      const ctx = await tenantContext();
+      const safe = [];
+      for (const row of rows) {
+        if (!row?.id) continue;
+        const rec = await api.get(row.id).catch(() => null);
+        if (belongsToTenant(rec, keys, ctx)) safe.push(row);
+      }
+      return safe.length ? api.bulkUpdate(safe) : [];
+    },
     async updateMany(query, update) {
       const s = await scope();
       if (!s) return { updated: 0 };
       return api.updateMany({ ...query, ...s }, update);
     },
-    delete: (id) => api.delete(id),
+    async delete(id) {
+      const ctx = await tenantContext();
+      const rec = await api.get(id).catch(() => null);
+      if (!belongsToTenant(rec, keys, ctx)) throw new Error("forbidden");
+      return api.delete(id);
+    },
     async deleteMany(query = {}) {
       const s = await scope();
       if (!s) return { deleted: 0 };
@@ -230,8 +274,9 @@ function scopedEmployee(api) {
       const legacy = typeof a === "string";
       if (!u) return legacy ? [] : emptyPage();
       const merged = { ...query, unified_number: u };
+      const ctx = await tenantContext();
       const result = legacy ? await api.filter(merged, a, b) : (a === undefined ? await api.filter(merged) : await api.filter(merged, a));
-      return overlayVault(result);
+      return overlayVault(onlyMatching(result, (rec) => visibleByUnified(rec, ctx)));
     },
     async list(a, b) {
       const u = await unified();
@@ -240,7 +285,8 @@ function scopedEmployee(api) {
       const result = legacy
         ? await api.filter({ unified_number: u }, a, b)
         : (a === undefined ? await api.filter({ unified_number: u }) : await api.filter({ unified_number: u }, { limit: 200, ...a }));
-      return overlayVault(result);
+      const ctx = await tenantContext();
+      return overlayVault(onlyMatching(result, (rec) => visibleByUnified(rec, ctx)));
     },
     async count(query = {}) {
       const u = await unified();
@@ -255,7 +301,8 @@ function scopedEmployee(api) {
       const u = await unified();
       if (!u) return null;
       const rec = await api.get(id).catch(() => null);
-      if (!rec || String(rec.unified_number || "") !== u) return null;
+      const ctx = await tenantContext();
+      if (!visibleByUnified(rec, ctx)) return null;
       const [one] = asRows(await overlayVault([rec]));
       return one || rec;
     },
@@ -272,16 +319,22 @@ function scopedEmployee(api) {
       return created;
     },
     async update(id, data = {}) {
-      const u = await unified();
-      const patch = { ...data };
-      if (patch.unified_number !== undefined) patch.unified_number = u;
+      const ctx = await tenantContext();
+      const rec = await api.get(id).catch(() => null);
+      if (!visibleByUnified(rec, ctx)) throw new Error("forbidden");
+      const patch = { ...data, unified_number: ctx.unified };
       return api.update(id, patch);
     },
     async bulkUpdate(rows = []) {
-      const u = await unified();
-      const out = await api.bulkUpdate(
-        rows.map((r) => (r.unified_number !== undefined ? { ...r, unified_number: u } : r))
-      );
+      const ctx = await tenantContext();
+      const safe = [];
+      for (const row of rows) {
+        if (!row?.id) continue;
+        const rec = await api.get(row.id).catch(() => null);
+        if (visibleByUnified(rec, ctx)) safe.push({ ...row, unified_number: ctx.unified });
+      }
+      if (!safe.length) return [];
+      const out = await api.bulkUpdate(safe);
       invalidateTenantScope();
       return out;
     },
@@ -290,7 +343,14 @@ function scopedEmployee(api) {
       if (!u) return { updated: 0 };
       return api.updateMany({ ...query, unified_number: u }, update);
     },
-    delete: (id) => api.delete(id),
+    async delete(id) {
+      const ctx = await tenantContext();
+      const rec = await api.get(id).catch(() => null);
+      if (!visibleByUnified(rec, ctx)) throw new Error("forbidden");
+      const out = await api.delete(id);
+      invalidateTenantScope();
+      return out;
+    },
     async deleteMany(query = {}) {
       const u = await unified();
       if (!u) return { deleted: 0 };
@@ -330,15 +390,17 @@ function companyScopedEntity(name, api) {
       const legacy = typeof a === "string";
       if (!s) return legacy ? [] : emptyPage();
       const merged = { ...query, ...s };
-      if (legacy) return api.filter(merged, a, b);
-      return a === undefined ? api.filter(merged) : api.filter(merged, a);
+      const ctx = await tenantContext();
+      const result = legacy ? await api.filter(merged, a, b) : (a === undefined ? await api.filter(merged) : await api.filter(merged, a));
+      return onlyMatching(result, (rec) => visibleByUnified(rec, ctx));
     },
     async list(a, b) {
       const s = await scope();
       const legacy = typeof a === "string";
       if (!s) return legacy ? [] : emptyPage();
-      if (legacy) return api.filter(s, a, b);
-      return a === undefined ? api.filter(s) : api.filter(s, { limit: 200, ...a });
+      const ctx = await tenantContext();
+      const result = legacy ? await api.filter(s, a, b) : (a === undefined ? await api.filter(s) : await api.filter(s, { limit: 200, ...a }));
+      return onlyMatching(result, (rec) => visibleByUnified(rec, ctx));
     },
     async count(query = {}) {
       const s = await scope();
@@ -353,7 +415,8 @@ function companyScopedEntity(name, api) {
       const s = await scope();
       if (!s) return PUBLIC_GET.has(name) ? api.get(id).catch(() => null) : null;
       const rec = await api.get(id).catch(() => null);
-      return rec && String(rec.unified_number || "") === s.unified_number ? rec : null;
+      const ctx = await tenantContext();
+      return visibleByUnified(rec, ctx) ? rec : null;
     },
     async create(data) {
       return api.create(await stamp(data));
@@ -364,18 +427,32 @@ function companyScopedEntity(name, api) {
       return api.bulkCreate(out);
     },
     async update(id, data = {}) {
-      const s = await scope();
-      const patch = { ...data };
-      if (patch.unified_number !== undefined && s) patch.unified_number = s.unified_number;
-      return api.update(id, patch);
+      const ctx = await tenantContext();
+      const rec = await api.get(id).catch(() => null);
+      if (!visibleByUnified(rec, ctx)) throw new Error("forbidden");
+      return api.update(id, { ...data, unified_number: ctx.unified });
     },
-    bulkUpdate: (rows) => api.bulkUpdate(rows),
+    async bulkUpdate(rows = []) {
+      const ctx = await tenantContext();
+      const safe = [];
+      for (const row of rows) {
+        if (!row?.id) continue;
+        const rec = await api.get(row.id).catch(() => null);
+        if (visibleByUnified(rec, ctx)) safe.push({ ...row, unified_number: ctx.unified });
+      }
+      return safe.length ? api.bulkUpdate(safe) : [];
+    },
     async updateMany(query, update) {
       const s = await scope();
       if (!s) return { updated: 0 };
       return api.updateMany({ ...query, ...s }, update);
     },
-    delete: (id) => api.delete(id),
+    async delete(id) {
+      const ctx = await tenantContext();
+      const rec = await api.get(id).catch(() => null);
+      if (!visibleByUnified(rec, ctx)) throw new Error("forbidden");
+      return api.delete(id);
+    },
     async deleteMany(query = {}) {
       const s = await scope();
       if (!s) return { deleted: 0 };
@@ -383,8 +460,8 @@ function companyScopedEntity(name, api) {
     },
     subscribe(cb) {
       return api.subscribe(async (event) => {
-        const s = await scope();
-        if (s && String(event?.data?.unified_number || "") === s.unified_number) cb(event);
+        const ctx = await tenantContext();
+        if (visibleByUnified(event?.data, ctx)) cb(event);
       });
     },
   };
@@ -401,13 +478,13 @@ function scopedNotification(api) {
     if (!parts.length) return null;
     return parts.length === 1 ? parts[0] : { $or: parts };
   };
-  const mine = async (rec) => {
-    if (!rec) return false;
-    const ctx = await tenantContext();
+  const mineSync = (rec, ctx) => {
+    if (!rec || !ctx) return false;
     if (ctx.userId && String(rec.user_id || "") === ctx.userId) return true;
     if (ctx.unified && String(rec.unified_number || "") === ctx.unified) return true;
-    return ctx.employeeIds.some((id) => String(rec.employee_id || "") === id);
+    return ctx.employeeIds.some((id) => String(rec.employee_id || "") === String(id));
   };
+  const mine = async (rec) => mineSync(rec, await tenantContext());
   const stamp = async (data = {}) => {
     const ctx = await tenantContext();
     return ctx.unified ? { ...data, unified_number: ctx.unified } : data;
@@ -418,15 +495,17 @@ function scopedNotification(api) {
       const legacy = typeof a === "string";
       if (!s) return legacy ? [] : emptyPage();
       const merged = { ...query, ...s };
-      if (legacy) return api.filter(merged, a, b);
-      return a === undefined ? api.filter(merged) : api.filter(merged, a);
+      const ctx = await tenantContext();
+      const result = legacy ? await api.filter(merged, a, b) : (a === undefined ? await api.filter(merged) : await api.filter(merged, a));
+      return onlyMatching(result, (rec) => mineSync(rec, ctx));
     },
     async list(a, b) {
       const s = await scope();
       const legacy = typeof a === "string";
       if (!s) return legacy ? [] : emptyPage();
-      if (legacy) return api.filter(s, a, b);
-      return a === undefined ? api.filter(s) : api.filter(s, { limit: 200, ...a });
+      const ctx = await tenantContext();
+      const result = legacy ? await api.filter(s, a, b) : (a === undefined ? await api.filter(s) : await api.filter(s, { limit: 200, ...a }));
+      return onlyMatching(result, (rec) => mineSync(rec, ctx));
     },
     async count(query = {}) {
       const s = await scope();

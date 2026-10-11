@@ -1,9 +1,9 @@
 import { createClientFromRequest } from 'npm:@base44/sdk@0.8.40';
 
 // إرجاع بيانات منشأة المستخدم الحالي (الكيان Tenant):
-// 1) بمطابقة بريده مع بريد الاتصال أو بريد مسؤول المنشأة.
-// 2) أو بمطابقة معرّف حسابه كمسؤول للمنشأة.
-// 3) أو بصفته موظفاً مسجّلاً — تُحدَّد منشأته من الرقم الموحّد في سجل موظفه.
+// 1) بمطابقة معرّف حسابه كمسؤول للمنشأة.
+// 2) أو بريده إذا طابق منشأة واحدة فقط.
+// 3) أو بصفته موظفاً، إذا كان رقمه الموحّد واحداً لا يطابق أكثر من منشأة.
 // تُستخدم هذه الدالة في كل منصة جداره لتحديد منشأة العميل الحالية (نطاق العزل).
 export default async function (req) {
   try {
@@ -18,23 +18,23 @@ export default async function (req) {
     const tenants = (await base44.asServiceRole.entities.Tenant.filter({})) || [];
     const norm = (x: any) => String(x || '').trim().toLowerCase();
 
-    let t = tenants.find((x: any) => norm(x.contact_email) === email || norm(x.admin_email) === email);
-    if (!t) t = tenants.find((x: any) => String(x.admin_user_id || '') === String(user.id || ''));
+    const uid = String(user.id || '');
+    // الحساب المرتبط بالمنشأة أولاً. البريد يُستخدم فقط إذا طابق منشأة واحدة، حتى لا تُفتح شركة أخرى.
+    let t = tenants.find((x: any) => uid && String(x.admin_user_id || '') === uid);
     if (!t) {
-      // موظف مسجّل أو مسؤول مُدعوّ: منشأته هي المنشأة المطابقة للرقم الموحّد في سجل موظفه
-      let emp: any = null;
-      try {
-        const byUser = await base44.asServiceRole.entities.Employee.filter({ user_id: user.id });
-        emp = (byUser || [])[0] || null;
-      } catch {}
-      if (!emp) {
-        try {
-          const byEmail = await base44.asServiceRole.entities.Employee.filter({ email: user.email });
-          emp = (byEmail || [])[0] || null;
-        } catch {}
+      const emailHits = tenants.filter((x: any) => norm(x.contact_email) === email || norm(x.admin_email) === email);
+      if (emailHits.length === 1) t = emailHits[0];
+    }
+    if (!t) {
+      // موظف مسجّل: منشأته من رقمه الموحّد، بشرط ألا تتعدد المنشآت على نفس الحساب.
+      const asList = (page: any) => Array.isArray(page) ? page : (Array.isArray(page?.items) ? page.items : []);
+      let emps: any[] = [];
+      try { emps = asList(await base44.asServiceRole.entities.Employee.filter({ user_id: user.id })); } catch {}
+      if (!emps.length) {
+        try { emps = asList(await base44.asServiceRole.entities.Employee.filter({ email: user.email })); } catch {}
       }
-      const un = String(emp?.unified_number || '').trim();
-      if (un) t = tenants.find((x: any) => String(x.unified_number || '').trim() === un);
+      const uns = [...new Set(emps.map((e) => String(e?.unified_number || '').trim()).filter(Boolean))];
+      if (uns.length === 1) t = tenants.find((x: any) => String(x.unified_number || '').trim() === uns[0]);
     }
     if (!t) return Response.json({ ok: true, found: false });
 
@@ -43,6 +43,7 @@ export default async function (req) {
       found: true,
       tenant: {
         name: t.name || '',
+        logo_url: t.logo_url || '',
         industry: t.industry || '',
         city: t.city || '',
         contact_name: t.contact_name || '',

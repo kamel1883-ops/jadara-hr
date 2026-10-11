@@ -1,7 +1,6 @@
 // هوية الطباعة الموحّدة: شعار المنشأة + اسمها أعلى اليمين، وشعار جداره (التاج الذهبي) أعلى اليسار.
 // تستخدمها جميع أدوات الطباعة (employeePrint / sectionPrint ...) لإدراج ترويسة هوية واحدة على كل مستند.
-import { base44 } from "@/api/base44Client";
-import { listCurrentOrg } from "@/lib/currentOrg";
+import { getCurrentOrgContext, listCurrentOrg } from "@/lib/currentOrg";
 
 const AMP = String.fromCharCode(38);
 const SEMI = String.fromCharCode(59);
@@ -9,7 +8,7 @@ const ENT = { 38: AMP + "amp" + SEMI, 60: AMP + "lt" + SEMI, 62: AMP + "gt" + SE
 function esc(v) { return String(v == null ? "" : v).replace(/[&<>"']/g, (c) => ENT[c.charCodeAt(0)]); }
 
 let _orgCache = null;
-let _orgFetched = false;
+let _orgUnified = null;
 
 // يخزّن رابط الشعار مسبقًا في ذاكرة المتصفح ليظهر فورًا في المستندات المطبوعة.
 export function preloadLogo(url) {
@@ -17,13 +16,25 @@ export function preloadLogo(url) {
   try { const pre = new Image(); pre.crossOrigin = "anonymous"; pre.src = url; } catch (e) {}
 }
 
+export function invalidatePrintOrg() {
+  _orgCache = null;
+  _orgUnified = null;
+}
+
 export async function fetchOrg() {
-  if (_orgFetched) return _orgCache;
-  _orgFetched = true;
+  const ctx = await getCurrentOrgContext();
+  const unified = String(ctx?.unified || "");
+  if (_orgUnified === unified && _orgCache) return _orgCache;
   try {
     const r = await listCurrentOrg();
-    _orgCache = (r && r[0]) || null;
-  } catch (e) { _orgCache = null; }
+    const org = (r && r[0]) || null;
+    if (org && unified && String(org.unified_number || "").trim() && String(org.unified_number || "").trim() !== unified) {
+      _orgCache = null;
+    } else {
+      _orgCache = org;
+    }
+    _orgUnified = unified;
+  } catch (e) { _orgCache = null; _orgUnified = unified; }
   // تخزين الشعار مسبقًا في ذاكرة المتصفح ليظهر فورًا في كل المستندات دون تأخير.
   if (_orgCache && _orgCache.logo_url) {
     try { const pre = new Image(); pre.crossOrigin = "anonymous"; pre.src = _orgCache.logo_url; } catch (e) {}
