@@ -2,7 +2,6 @@ import React, { useState, useEffect } from "react";
 import { base44 } from "@/api/base44Client";
 import { getCurrentOrgContext, invalidateCurrentOrg } from "@/lib/currentOrg";
 import PageHeader from "@/components/PageHeader";
-import { Button } from "@/components/ui/button";
 import { Users, UserCheck, Globe2, Settings2, TrendingUp, AlertTriangle, ShieldCheck, Info, UserX, Building2 } from "lucide-react";
 import {
   ResponsiveContainer, RadialBarChart, RadialBar, PolarAngleAxis,
@@ -29,7 +28,7 @@ export default function Nitaqat() {
     saudis: "سعوديون نشطون", expats: "مقيمون نشطون", total: "إجمالي العمالة النشطة", pct: "نسبة التوطين",
     currentBand: "النطاق الحالي",
     formulaNote: "تُحتسب حدود النطاقات بمعادلة «نطاقات المطور»: الحد = م × لوغ(إجمالي العمالة) + ث — حيث يختلف (م، ث) حسب النشاط. النتيجة الرسمية المعتمدة تظهر على منصة قوى.",
-    provNote: "الثوابت الموثّقة رسمياً متاحة لنشاط البيع بالجملة والتجزئة العامة؛ باقي الأنشطة تستخدم ثوابت تقديرية حتى استكمال جدول المرفق الأول. النتيجة استرشادية.",
+    provNote: "ثوابت الألوان من المرفق الأول في دليل نطاقات المطور 2026، لكل نشاط ولكل سنة. الحساب من عدد السعوديين وعدد المقيمين ونشاط نطاقات هذه المنشأة.",
     microNote: "الكيان متناهي الصغر (أقل من 6 عاملين): يكفي توظيف سعودي واحد (ولو كان المالك) للبقاء في النطاق الأخضر.",
     bandsH: "نسب النطاقات لنشاطك عند حجم عمالتك الحالي",
     saudNeeded: "السعوديون المطلوبون للخروج من النطاق الأحمر",
@@ -47,7 +46,7 @@ export default function Nitaqat() {
     saudis: "Active Saudis", expats: "Active expats", total: "Total active workforce", pct: "Saudization %",
     currentBand: "Current band",
     formulaNote: "Band limits use the Developed-Nitaqat formula: Limit = m × ln(total headcount) + c — where (m, c) vary by activity. The official result appears on the Qiwa platform.",
-    provNote: "Officially verified coefficients are available for Wholesale & General Retail; other activities use provisional coefficients pending Annex 1. Result is indicative.",
+    provNote: "Band coefficients come from Annex 1 of the 2026 Developed-Nitaqat guide, per activity and year. The band uses this establishment's Saudi count, expat count, and Nitaqat activity.",
     microNote: "Micro entity (under 6 workers): one Saudi hire (even the owner) keeps you in Green.",
     bandsH: "Nitaqat thresholds for your activity at your current headcount",
     saudNeeded: "Saudis needed to leave the Red band",
