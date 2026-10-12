@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from "react";
-import { base44 } from "@/api/base44Client";
 import { listCurrentOrg } from "@/lib/currentOrg";
+import { clientLogoStyle } from "@/lib/printBrand";
 
 // مستند الوصف الوظيفي — يُستخدم للمشاهدة والطباعة PDF في ملف الموظف ونموذج الموظف
 // الترويسة: شعار المنشأة أعلى اليمين، وشعار جداره أعلى اليسار.
@@ -45,7 +45,7 @@ export default function JobDescriptionDoc({ employee, text, isAr = true }) {
       <div className="jd-header flex items-center justify-between gap-4 border-b-2 pb-3 mb-5" style={{ borderColor: "#0B2545" }}>
         <div className="flex items-center gap-3">
           {org?.logo_url
-            ? <img src={org.logo_url} alt="" style={{ height: 44, width: "auto", objectFit: "contain" }} />
+            ? <img src={org.logo_url} alt="" style={clientLogoStyle} />
             : null}
           <div>
             <div className="font-bold text-base">{org?.name || ""}</div>

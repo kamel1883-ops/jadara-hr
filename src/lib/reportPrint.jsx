@@ -1,5 +1,6 @@
 import { elementToPdfBlob } from "@/lib/pdfDocs";
 import { archiveBlobToVault } from "@/lib/vaultDocuments";
+import { PRINT_MARK_PX, clientLogoStyle } from "@/lib/printBrand";
 
 function buildBrandHeader(org) {
   const wrap = document.createElement("div");
@@ -14,7 +15,7 @@ function buildBrandHeader(org) {
   if (org?.logo_url) {
     const img = document.createElement("img");
     img.src = org.logo_url; img.crossOrigin = "anonymous"; img.alt = "logo";
-    Object.assign(img.style, { maxWidth: "150px", maxHeight: "64px", objectFit: "contain" });
+    Object.assign(img.style, clientLogoStyle);
     right.appendChild(img);
   }
   const nm = document.createElement("div");
@@ -32,7 +33,7 @@ function buildBrandHeader(org) {
   Object.assign(left.style, { display: "flex", alignItems: "center", gap: "10px" });
   const badge = document.createElement("div");
   Object.assign(badge.style, {
-    width: "44px", height: "44px", borderRadius: "14px",
+    width: PRINT_MARK_PX + "px", height: PRINT_MARK_PX + "px", borderRadius: "14px",
     background: "linear-gradient(135deg,#0b0f19,#2e2448)",
     boxShadow: "0 0 0 1px rgba(252,211,77,.3)",
     display: "flex", alignItems: "center", justifyContent: "center", flexShrink: "0",

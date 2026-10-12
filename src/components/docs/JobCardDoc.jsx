@@ -1,8 +1,7 @@
 import React, { useEffect, useState, useMemo } from "react";
-import { base44 } from "@/api/base44Client";
 import ReactMarkdown from "react-markdown";
 import { Crown } from "lucide-react";
-import { fetchOrg, preloadLogo } from "@/lib/printBrand";
+import { fetchOrg, preloadLogo, PRINT_MARK_PX, clientLogoStyle } from "@/lib/printBrand";
 
 // مستند البطاقة الوظيفية — يُستخدم للطباعة PDF لكل وظيفة (شاغرة / مغلقة / منتهية).
 // الترويسة: شعار المنشأة أعلى اليمين، وشعار جداره أعلى اليسار.
@@ -92,13 +91,13 @@ export default function JobCardDoc({ job, isAr = true, org: orgProp }) {
       <div className="jc-header" style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", borderBottom: "2px solid #0b1120", paddingBottom: 12, marginBottom: 16, breakInside: "avoid", pageBreakInside: "avoid" }}>
         <div style={{ display: "flex", flexDirection: "column", alignItems: isAr ? "flex-end" : "flex-start", maxWidth: 260 }}>
           {org?.logo_url
-            ? <img src={org.logo_url} crossOrigin="anonymous" alt="" style={{ maxWidth: 150, maxHeight: 60, objectFit: "contain" }} />
+            ? <img src={org.logo_url} crossOrigin="anonymous" alt="" style={clientLogoStyle} />
             : null}
           <div style={{ fontWeight: 700, fontSize: 13, color: "#0b1120", marginTop: 6, textAlign: isAr ? "right" : "left" }}>{org?.name || t.na}</div>
           {org?.unified_number ? <div style={{ fontSize: 10, color: "#666" }}>{isAr ? "الرقم الموحد: " : "Unified No: "}{org.unified_number}</div> : null}
         </div>
         <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-          <div style={{ width: 44, height: 44, borderRadius: 14, background: "#2d234a", boxShadow: "0 0 0 1px rgba(197,160,89,.35)", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+          <div style={{ width: PRINT_MARK_PX, height: PRINT_MARK_PX, borderRadius: 14, background: "#2d234a", boxShadow: "0 0 0 1px rgba(197,160,89,.35)", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
             <Crown size={22} strokeWidth={1.8} style={{ color: "#c5a059" }} />
           </div>
           <div style={{ display: "flex", flexDirection: "column" }}>

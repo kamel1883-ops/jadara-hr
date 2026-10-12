@@ -1,5 +1,6 @@
 import { orgStats, roleLabel, employeeDisplayName } from "@/lib/orgTree";
 import { genDateBoth } from "@/lib/printDate";
+import { CLIENT_LOGO_CSS, PRINT_MARK_PX } from "@/lib/printBrand";
 
 const ROLE_COLORS = {
   owner: "#b45309",
@@ -177,7 +178,7 @@ export function buildOrgHTML(_ref) {
     : "";
 
   const logo = logoUrl
-    ? "<img src=\"" + escapeHtml(logoUrl) + "\" style=\"max-width:150px;max-height:64px;object-fit:contain;\" />"
+    ? "<img src=\"" + escapeHtml(logoUrl) + "\" style=\"" + CLIENT_LOGO_CSS + "\" />"
     : "";
   const crown = "<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"22\" height=\"22\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"#c5a059\" stroke-width=\"1.8\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><path d=\"m2 4 3 12h14l3-12-6.5 6L12 4l-3.5 6L2 4Z\"/><path d=\"M5 20h14\"/></svg>";
   const brandName = isAr ? "جداره" : "Jadara";
@@ -190,11 +191,11 @@ export function buildOrgHTML(_ref) {
     ".doc { width:100%; max-width:1000px; margin:0 auto; }" +
     ".head { display:flex; align-items:flex-start; justify-content:space-between; gap:16px; padding-bottom:12px; border-bottom:2px solid #0b1120; margin-bottom:16px; }" +
     ".org { display:flex; flex-direction:column; align-items:" + (isAr ? "flex-end" : "flex-start") + "; max-width:260px; }" +
-    ".org img { max-width:150px; max-height:64px; object-fit:contain; }" +
+    ".org img { " + CLIENT_LOGO_CSS + " }" +
     ".org-name { font-size:13px; font-weight:700; color:#0b1120; margin-top:6px; text-align:" + (isAr ? "right" : "left") + "; }" +
     ".org-un { font-size:10px; color:#666; }" +
     ".brand { display:flex; align-items:center; gap:10px; }" +
-    ".brand-badge { width:44px; height:44px; border-radius:14px; background:#2d234a; box-shadow:0 0 0 1px rgba(197,160,89,.35); display:flex; align-items:center; justify-content:center; flex-shrink:0; }" +
+    ".brand-badge { width:" + PRINT_MARK_PX + "px; height:" + PRINT_MARK_PX + "px; border-radius:14px; background:#2d234a; box-shadow:0 0 0 1px rgba(197,160,89,.35); display:flex; align-items:center; justify-content:center; flex-shrink:0; }" +
     ".brand-name { font-size:15px; font-weight:800; color:#1a1a2e; }" +
     ".brand-sub { font-size:10px; color:#1a1a2e; opacity:.75; margin-top:1px; }" +
     ".head h1 { font-size:20px; margin:0; text-align:center; }" +

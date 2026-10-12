@@ -1,5 +1,6 @@
 import React from "react";
 import { Crown } from "lucide-react";
+import { PRINT_MARK_PX, clientLogoStyle } from "@/lib/printBrand";
 
 // شعار الشركة يميناً + شعار جداره يساراً — يظهر على كل مستند مُولّد
 export default function BrandHeader({ org }) {
@@ -22,7 +23,7 @@ export default function BrandHeader({ org }) {
             src={org.logo_url}
             crossOrigin="anonymous"
             alt="logo"
-            style={{ maxWidth: 150, maxHeight: 64, objectFit: "contain" }}
+            style={clientLogoStyle}
           />
         ) : null}
         <div style={{ fontWeight: 700, fontSize: 13, color: "#0b1120", marginTop: 6, textAlign: "right" }}>
@@ -37,8 +38,8 @@ export default function BrandHeader({ org }) {
       <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
         <div
           style={{
-            width: 44,
-            height: 44,
+            width: PRINT_MARK_PX,
+            height: PRINT_MARK_PX,
             borderRadius: 14,
             background: "#2d234a",
             boxShadow: "0 0 0 1px rgba(197,160,89,.35)",

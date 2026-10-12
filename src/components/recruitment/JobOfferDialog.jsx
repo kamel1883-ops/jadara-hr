@@ -237,7 +237,7 @@ export default function JobOfferDialog({ open, onOpenChange, applicant, job }) {
           <DialogTitle>{t.title(applicant?.full_name || "")}</DialogTitle>
         </DialogHeader>
         <div className="flex items-center gap-3 border rounded-xl p-3">
-          {identity.logo ? <img src={identity.logo} alt="" className="h-12 max-w-[120px] object-contain" /> : null}
+          {identity.logo ? <img src={identity.logo} alt="" className="h-11 w-auto max-w-[200px] object-contain" /> : null}
           <div className="text-sm">
             <div className="font-medium">{identity.establishment || "—"}</div>
             <div className="text-xs text-muted-foreground mt-1">{identity.logo ? t.brandNote : t.noLogo}</div>

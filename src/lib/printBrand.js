@@ -45,11 +45,22 @@ export async function fetchOrg() {
 // تاج ذهبي داخل مربع كحلي — مطابق لهوية جداره في باقي المستندات.
 const CROWN_SVG = '<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#fbbf24" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M11.562 3.266a.5.5 0 0 1 .876 0L15.39 8.87a1 1 0 0 0 1.516.294L21.183 5.5a.5.5 0 0 1 .798.519l-2.834 10.246a1 1 0 0 1-.956.734H5.81a1 1 0 0 1-.957-.734L2.02 6.02a.5.5 0 0 1 .798-.519l4.276 3.664a1 1 0 0 0 1.516-.294z"/><path d="M5 21h14"/></svg>';
 
+// مربع شعار جداره ٤٤ بكسل. شعار العميل يُرسم بنفس الارتفاع حتى يتناسب معه في كل المطبوعات.
+export const PRINT_MARK_PX = 44;
+export const CLIENT_LOGO_CSS = "height:" + PRINT_MARK_PX + "px;width:auto;max-width:200px;object-fit:contain;display:block;";
+export const clientLogoStyle = {
+  height: PRINT_MARK_PX + "px",
+  width: "auto",
+  maxWidth: "200px",
+  objectFit: "contain",
+  display: "block",
+};
+
 // أنماط CSS الخاصة بترويسة الهوية — تُضاف مرة واحدة لكل مستند.
 export const brandHeaderCss = [
   ".print-report .brand-head{display:flex;align-items:flex-start;justify-content:space-between;border-bottom:2px solid #0b1120;padding-bottom:10px;margin-bottom:10px;}",
   ".print-report .brand-right{display:flex;flex-direction:column;align-items:flex-end;max-width:260px;}",
-  ".print-report .brand-right img{max-width:150px;max-height:56px;object-fit:contain;}",
+  ".print-report .brand-right img{" + CLIENT_LOGO_CSS + "}",
   ".print-report .brand-name{font-weight:700;font-size:12pt;color:#0b1120;margin-top:6px;text-align:right;}",
   ".print-report .brand-unified{font-size:9pt;color:#666;}",
   ".print-report .brand-left{display:flex;align-items:center;gap:10px;}",
@@ -61,7 +72,7 @@ export const brandHeaderCss = [
 export function brandHeaderHtml(org, isAr) {
   const name = org && org.name ? org.name : (isAr ? "جداره — الموارد البشرية" : "Jadara HR");
   const logo = org && org.logo_url
-    ? "<img src=\"" + esc(org.logo_url) + "\" crossOrigin=\"anonymous\" alt=\"\">"
+    ? "<img src=\"" + esc(org.logo_url) + "\" crossOrigin=\"anonymous\" alt=\"\" style=\"" + CLIENT_LOGO_CSS + "\">"
     : "";
   const unified = org && org.unified_number
     ? "<div class=\"brand-unified\">" + (isAr ? "الرقم الموحد: " : "Unified No: ") + esc(org.unified_number) + "</div>"

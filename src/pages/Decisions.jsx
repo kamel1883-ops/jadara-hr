@@ -5,8 +5,9 @@ import PageHeader from "@/components/PageHeader";
 import DecisionFormDialog from "@/components/decisions/DecisionFormDialog";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { ScrollText, Plus, Eye, Trash2, Archive, Printer } from "lucide-react";
+import { ScrollText, Plus, Eye, Archive, Printer } from "lucide-react";
 import { useI18n } from "@/lib/i18n";
+import { CLIENT_LOGO_CSS, PRINT_MARK_PX } from "@/lib/printBrand";
 import { cn } from "@/lib/utils";
 
 const TYPE_LABEL = {
@@ -91,11 +92,11 @@ export default function Decisions() {
       .doc{max-width:780px;margin:0 auto;padding:8px 0;}
       .head{display:flex;justify-content:space-between;align-items:flex-start;border-bottom:2px solid #0b1120;padding-bottom:12px;margin-bottom:18px;}
       .org{display:flex;flex-direction:column;align-items:${isAr ? "flex-end" : "flex-start"};max-width:240px;}
-      .org img{max-width:150px;max-height:64px;object-fit:contain;}
+      .org img{${CLIENT_LOGO_CSS}}
       .org-name{font-size:13px;font-weight:700;color:#0b1120;margin-top:6px;text-align:${isAr ? "right" : "left"};}
       .org-un{font-size:10px;color:#666;}
       .brand{display:flex;align-items:center;gap:10px;}
-      .brand-badge{width:44px;height:44px;border-radius:14px;background:#2d234a;box-shadow:0 0 0 1px rgba(197,160,89,.35);display:flex;align-items:center;justify-content:center;flex-shrink:0;}
+      .brand-badge{width:${PRINT_MARK_PX}px;height:${PRINT_MARK_PX}px;border-radius:14px;background:#2d234a;box-shadow:0 0 0 1px rgba(197,160,89,.35);display:flex;align-items:center;justify-content:center;flex-shrink:0;}
       .brand-name{font-size:15px;font-weight:800;color:#1a1a2e;}
       .brand-sub{font-size:10px;color:#1a1a2e;opacity:.75;margin-top:1px;}
       .h1{font-size:20px;font-weight:800;margin:14px 0 2px;text-align:center;}
