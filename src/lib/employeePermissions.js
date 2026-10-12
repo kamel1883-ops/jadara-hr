@@ -22,6 +22,7 @@ export const PERMISSION_MODULES = [
   { key: "workforce-planning", ar: "تخطيط القوى العاملة", en: "Workforce planning" },
   { key: "exit-interviews", ar: "مقابلات الخروج", en: "Exit interviews" },
   { key: "surveys", ar: "استبيانات الموظفين", en: "Surveys" },
+  { key: "investigations", ar: "محضر التحقيق", en: "Investigation report" },
   { key: "warnings", ar: "الإنذارات", en: "Warnings" },
   { key: "decisions", ar: "القرارات الإدارية", en: "Decisions" },
   { key: "incentives", ar: "الحوافز", en: "Incentives" },

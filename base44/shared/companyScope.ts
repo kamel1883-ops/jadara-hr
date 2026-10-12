@@ -14,7 +14,7 @@ export type CompanyBag = { unified: string; ids: Set<string>; employees: any[] }
 export const COMPANY_FIELD = new Set([
   "Branch", "OrgUnit", "Vehicle", "License", "Job", "JobApplication",
   "Survey", "SurveyResponse", "WorkforcePlan", "AdminDecision", "TrialEvaluation",
-  "Organization", "Employee", "CustomerSurveyResponse", "Notification",
+  "Organization", "Employee", "CustomerSurveyResponse", "Notification", "Investigation",
 ]);
 
 /** سجلات تشغيلية مربوطة بموظف */

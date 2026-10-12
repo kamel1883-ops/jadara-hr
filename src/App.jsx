@@ -24,6 +24,7 @@ const MyRequests = lazy(() => import("@/pages/MyRequests"));
 const OwnerPortal = lazy(() => import("@/pages/OwnerPortal"));
 const ExitInterviews = lazy(() => import("@/pages/ExitInterviews"));
 const Surveys = lazy(() => import("@/pages/Surveys"));
+const Investigations = lazy(() => import("@/pages/Investigations"));
 const Warnings = lazy(() => import("@/pages/Warnings"));
 const Decisions = lazy(() => import("@/pages/Decisions"));
 const Incentives = lazy(() => import("@/pages/Incentives"));
@@ -183,6 +184,7 @@ const AuthenticatedApp = () => {
         <Route path="/workforce-planning" element={<WorkforcePlanning />} />
         <Route path="/exit-interviews" element={<ExitInterviews />} />
         <Route path="/surveys" element={<Surveys />} />
+        <Route path="/investigations" element={<Investigations />} />
         <Route path="/warnings" element={<Warnings />} />
         <Route path="/decisions" element={<Decisions />} />
         <Route path="/incentives" element={<Incentives />} />

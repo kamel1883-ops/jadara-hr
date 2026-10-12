@@ -37,6 +37,7 @@ const COMPANY_SCOPED = new Set([
   "Branch", "OrgUnit", "Vehicle", "License", "Job", "JobApplication",
   "Survey", "SurveyResponse", "WorkforcePlan", "AdminDecision", "TrialEvaluation",
   "CustomerSurvey", "CustomerSurveyResponse", "PlatformSubscription", "Organization",
+  "Investigation",
 ]);
 
 // قراءة سجل عام بمعرّفه (صفحة الوظيفة المفتوحة للجميع) — مسموحة بلا جلسة منشأة

@@ -3,7 +3,7 @@ import { cn } from "@/lib/utils";
 import {
   Users, UserPlus, Fingerprint, Upload, CheckCircle2, CalendarDays, Plane, Banknote,
   ShieldCheck, Car, FileText, Target, GraduationCap, Network, MessageSquare,
-  AlertTriangle, ScrollText, Gift, BarChart3, FileBadge, Globe, Settings, ChevronLeft,
+  AlertTriangle, FileSearch, ScrollText, Gift, BarChart3, FileBadge, Globe, Settings,
 } from "lucide-react";
 import { delegatedFor } from "./delegatedRegistry";
 import DelegatedAdminSection from "./DelegatedAdminSection";
@@ -11,7 +11,7 @@ import DelegatedAdminSection from "./DelegatedAdminSection";
 const ICONS = {
   Users, UserPlus, Fingerprint, Upload, CheckCircle2, CalendarDays, Plane, Banknote,
   ShieldCheck, Car, FileText, Target, GraduationCap, Network, MessageSquare,
-  AlertTriangle, ScrollText, Gift, BarChart3, FileBadge, Globe, Settings,
+  AlertTriangle, FileSearch, ScrollText, Gift, BarChart3, FileBadge, Globe, Settings,
 };
 
 // أي قسم مُفوّض يُعرض للموظف بصفحته الأصلية من لوحة الشركات وبكامل صلاحياته،

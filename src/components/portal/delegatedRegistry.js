@@ -19,6 +19,7 @@ export const DELEGATED_SECTIONS = [
   { key: "workforce-planning", ar: "إدارة تخطيط القوى العاملة", en: "Workforce planning", icon: "Target" },
   { key: "exit-interviews", ar: "إدارة مقابلات الخروج", en: "Exit interviews", icon: "MessageSquare" },
   { key: "surveys", ar: "إدارة استبيانات الموظفين", en: "Surveys", icon: "MessageSquare" },
+  { key: "investigations", ar: "محضر التحقيق", en: "Investigation report", icon: "FileSearch" },
   { key: "warnings", ar: "إدارة الإنذارات", en: "Warnings", icon: "AlertTriangle" },
   { key: "decisions", ar: "إدارة القرارات الإدارية", en: "Decisions", icon: "ScrollText" },
   { key: "incentives", ar: "إدارة الحوافز والمكافآت", en: "Incentives", icon: "Gift" },

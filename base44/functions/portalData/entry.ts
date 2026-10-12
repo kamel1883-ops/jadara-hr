@@ -5,7 +5,7 @@ import {
   computeAbsentDeduction, computeNetFromAttendance,
 } from "../../shared/payrollCompute.ts";
 import { notifyApproverForStatus } from "../../shared/approverNotify.ts";
-import { getDocumentLinkInCompany, buildDownloadUrl } from "../../shared/vaultClient.ts";
+import { getDocumentLinkInCompany, buildDownloadUrl, storeDocument } from "../../shared/vaultClient.ts";
 import { tenantKeysForEmployee } from "../../shared/vaultIdentity.ts";
 import {
   loadCompanyBag, organizationForEmployee, inCompany, canWrite, stampCompany, scopeQuery, filterPayload,
@@ -130,6 +130,33 @@ export default async function (req) {
       });
       // مخالصات نهاية الخدمة المكتملة/المصروفة فقط (لإطلاع الموظف على مستحقاته المحفوظة)
       const paidSettlements = (settlements || []).filter((s: any) => s?.status === "completed");
+      let investigations: any[] = [];
+      try {
+        const unified = String(emp?.unified_number || bagForFetch?.unified || "").trim();
+        const invRows = unified
+          ? await base44.asServiceRole.entities.Investigation.filter({ unified_number: unified }, "-created_date", 200)
+          : [];
+        const sidInv = String(employeeId);
+        investigations = (invRows || []).flatMap((r: any) => {
+          let parties: any[] = [];
+          try { const p = JSON.parse(r?.parties || "[]"); if (Array.isArray(p)) parties = p; } catch { parties = []; }
+          const mine = parties.find((p) => String(p?.employee_id || "") === sidInv);
+          if (!mine) return [];
+          return [{
+            id: r.id,
+            ref_no: r.ref_no,
+            violation_type: r.violation_type,
+            custom_type: r.custom_type || "",
+            allegations: r.allegations || "",
+            status: r.status,
+            role: mine.role === "witness" ? "witness" : "subject",
+            reply_status: mine.status || "pending",
+            reply: mine.reply || "",
+            evidence_ref: mine.evidence_ref || "",
+            witness_names: mine.witness_names || "",
+          }];
+        });
+      } catch { investigations = []; }
       let branch: any = null;
       if (!isOwnerSession && emp?.branch_id) {
         try { branch = await base44.asServiceRole.entities.Branch.get(emp.branch_id); } catch { branch = null; }
@@ -152,6 +179,7 @@ export default async function (req) {
         notifications: notifications || [],
         equipmentRequests: equipmentReqs || [],
         complaints: complaints || [],
+        investigations,
       });
     }
 
@@ -1008,6 +1036,72 @@ export default async function (req) {
       });
       try { await notifyApproverForStatus(base44, { type: "complaint", employeeId, employeeName: empLabel, status }); } catch {}
       return Response.json({ ok: true, complaint: created });
+    }
+
+    if (action === "reply_investigation") {
+      if (isOwnerSession) return Response.json({ ok: false, error: "forbidden" }, { status: 403 });
+      const id = String(body.id || "");
+      const reply = String(body.reply || "").trim().slice(0, 4000);
+      const witnessNames = String(body.witness_names || "").trim().slice(0, 1000);
+      if (!id || !reply) return Response.json({ ok: false, error: "missing" }, { status: 400 });
+      const rec: any = await base44.asServiceRole.entities.Investigation.get(id);
+      if (!rec) return Response.json({ ok: false, error: "not_found" }, { status: 404 });
+      const bag = await companyBag();
+      const recUn = String(rec.unified_number || "").trim();
+      if (!bag.unified || recUn !== bag.unified) return Response.json({ ok: false, error: "forbidden" }, { status: 403 });
+      if (rec.status === "closed") return Response.json({ ok: false, error: "closed" }, { status: 400 });
+      let parties: any[] = [];
+      try { const p = JSON.parse(rec.parties || "[]"); if (Array.isArray(p)) parties = p; } catch { parties = []; }
+      const idx = parties.findIndex((p) => String(p?.employee_id || "") === String(employeeId));
+      if (idx < 0) return Response.json({ ok: false, error: "forbidden" }, { status: 403 });
+      let evidenceRef = String(parties[idx].evidence_ref || "");
+      let evidenceSaved: boolean | null = null;
+      const fileB64 = String(body.file_base64 || "");
+      if (fileB64) {
+        if (fileB64.length > 3500000) return Response.json({ ok: false, error: "file_too_large" }, { status: 400 });
+        evidenceSaved = false;
+        try {
+          const clean = fileB64.replace(/^data:[^;]+;base64,/, "");
+          const bytes = Uint8Array.from(atob(clean), (c) => c.charCodeAt(0));
+          const keys = await tenantKeysForEmployee(base44, emp);
+          const tenantId = String(emp?.unified_number || "").trim() || keys[0];
+          const stored: any = await storeDocument(
+            tenantId, bytes, String(body.file_name || "evidence"), String(body.mime_type || "application/octet-stream"),
+            emp?.emp_ref || null, "investigation"
+          );
+          evidenceRef = stored?.doc_ref || stored?.docRef || evidenceRef;
+          evidenceSaved = !!evidenceRef;
+        } catch { evidenceSaved = false; }
+      }
+      parties[idx] = {
+        ...parties[idx],
+        status: "replied",
+        reply,
+        witness_names: witnessNames,
+        evidence_ref: evidenceRef,
+        replied_at: new Date().toISOString(),
+      };
+      const pendingSubject = parties.some((p) => p.role !== "witness" && p.status !== "replied");
+      const pendingWitness = parties.some((p) => p.role === "witness" && p.status !== "replied");
+      const nextStatus = pendingSubject ? "awaiting_subjects" : pendingWitness ? "awaiting_witnesses" : "ready";
+      await base44.asServiceRole.entities.Investigation.update(id, {
+        parties: JSON.stringify(parties),
+        status: nextStatus,
+      });
+      const who = parties[idx].employee_name || emp?.full_name || "";
+      const kind = parties[idx].role === "witness" ? "الشاهد" : "الموظف";
+      try {
+        await base44.asServiceRole.entities.Notification.create({
+          title: `رد على محضر التحقيق ${rec.ref_no}`,
+          body: `${kind} ${who} رد في محضر التحقيق رقم ${rec.ref_no}`,
+          type: "investigation",
+          user_id: rec.created_by_id || "",
+          unified_number: recUn,
+          link: "/investigations",
+          is_read: false,
+        });
+      } catch { /* الإشعار لا يمنع حفظ الرد */ }
+      return Response.json({ ok: true, evidence_saved: evidenceSaved });
     }
 
     if (action === "create_trip") {

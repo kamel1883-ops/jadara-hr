@@ -9,6 +9,7 @@ import EquipmentRequestForm from "@/components/EquipmentRequestForm";
 import ComplaintForm from "@/components/ComplaintForm";
 import EmployeeClock from "@/components/EmployeeClock";
 import EmployeeWarnings from "@/components/EmployeeWarnings";
+import EmployeeInvestigations from "@/components/portal/EmployeeInvestigations";
 import EmployeeDecisions from "@/components/portal/EmployeeDecisions";
 import EmployeeIncentives from "@/components/portal/EmployeeIncentives";
 import EmployeePerformance from "@/components/portal/EmployeePerformance";
@@ -19,15 +20,12 @@ import Logo from "@/components/Logo";
 import PortalLanguageSelector from "@/components/portal/PortalLanguageSelector";
 import PortalNotificationsBell from "@/components/portal/PortalNotificationsBell";
 import PortalNotificationsSection from "@/components/portal/PortalNotificationsSection";
-import TurnstileWidget from "@/components/TurnstileWidget";
 import PortalAuthCard from "@/components/portal/PortalAuthCard";
 import { Image } from "@/components/ui/image";
 import { usePortalI18n, usePortalT, portalDir } from "@/lib/portalI18n";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import {
-  CalendarPlus, Wallet, Loader2, BadgeCheck, Clock, Banknote, CalendarCheck, Plane, LogOut, Crown, ArrowRight, ShieldCheck, Building2, Package, MessageSquareWarning
+  CalendarPlus, Wallet, Loader2, BadgeCheck, Clock, Banknote, CalendarCheck, Plane, LogOut, Crown, ArrowRight, Building2, Package, MessageSquareWarning
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { leaveTypeLabel, formatCurrency, attendanceStatusLabel } from "@/lib/hr";
@@ -98,6 +96,7 @@ export default function MyRequests() {
   const [compOpen, setCompOpen] = useState(false);
   const [equipmentReqs, setEquipmentReqs] = useState([]);
   const [complaints, setComplaints] = useState([]);
+  const [investigations, setInvestigations] = useState([]);
   const location = useLocation();
   const navigate = useNavigate();
   const view = location.pathname === "/portal/notifications" ? "notifications" : location.pathname === "/portal/approvals" ? "approvals" : "self";
@@ -130,6 +129,7 @@ export default function MyRequests() {
       setIncentives(data.incentives || []);
       setEquipmentReqs(data.equipmentRequests || []);
       setComplaints(data.complaints || []);
+      setInvestigations(data.investigations || []);
       setTodayAtt(data.attendance?.find((a) => a.date === localToday()) || null);
     } catch (e) {
       setSignInMsg({ type: "err", text: e?.message || t.loading });
@@ -155,6 +155,7 @@ export default function MyRequests() {
     setSession(null);
     setEmployee(null); setOrg(null); setBranch(null);
     setLeaves([]); setLoans([]); setAttendance([]); setTrips([]); setWarnings([]); setReviews([]); setTrainings([]); setSettlements([]);
+    setInvestigations([]);
     setDecisions([]); setIncentives([]); setEquipmentReqs([]); setComplaints([]);
   };
 
@@ -578,6 +579,7 @@ export default function MyRequests() {
             <div className="mt-6">
               <EmployeeDocuments loans={loans} leaves={leaves} settlements={settlements} org={org} />
             </div>
+            <EmployeeInvestigations items={investigations} isAr={isAr} portalArgs={portalArgs} onDone={() => load(session)} />
             {can("warnings") && (
             <div className="mt-6">
               <EmployeeWarnings employee={employee} warnings={warnings} />

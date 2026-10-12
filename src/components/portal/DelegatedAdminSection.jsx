@@ -23,6 +23,7 @@ const PAGES = {
   "workforce-planning": lazy(() => import("@/pages/WorkforcePlanning")),
   "exit-interviews": lazy(() => import("@/pages/ExitInterviews")),
   surveys: lazy(() => import("@/pages/Surveys")),
+  investigations: lazy(() => import("@/pages/Investigations")),
   warnings: lazy(() => import("@/pages/Warnings")),
   decisions: lazy(() => import("@/pages/Decisions")),
   incentives: lazy(() => import("@/pages/Incentives")),

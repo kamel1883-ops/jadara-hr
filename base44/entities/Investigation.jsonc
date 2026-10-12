@@ -1,0 +1,68 @@
+{
+  "name": "Investigation",
+  "type": "object",
+  "properties": {
+    "ref_no": {
+      "type": "string",
+      "title": "الرقم المرجعي لمحضر التحقيق"
+    },
+    "violation_type": {
+      "type": "string",
+      "title": "نوع المخالفة"
+    },
+    "custom_type": {
+      "type": "string",
+      "title": "وصف النوع عند اختيار أخرى"
+    },
+    "allegations": {
+      "type": "string",
+      "title": "الادعاءات والإشكالية",
+      "maxLength": 4000
+    },
+    "parties": {
+      "type": "string",
+      "title": "أطراف المحضر (JSON): الموظف المعني أو الشاهد، وحالة رده"
+    },
+    "status": {
+      "type": "string",
+      "enum": ["awaiting_subjects", "awaiting_witnesses", "ready", "closed"],
+      "default": "awaiting_subjects",
+      "title": "حالة المحضر"
+    },
+    "recommendation": {
+      "type": "string",
+      "title": "التوصية عند الإغلاق",
+      "maxLength": 4000
+    },
+    "closed_at": {
+      "type": "string",
+      "format": "date",
+      "title": "تاريخ الإغلاق"
+    },
+    "unified_number": {
+      "type": "string",
+      "title": "الرقم الموحد للمنشأة"
+    }
+  },
+  "required": ["ref_no", "allegations", "status"],
+  "rls": {
+    "create": {
+      "created_by_id": "{{user.id}}"
+    },
+    "read": {
+      "$or": [
+        { "created_by_id": "{{user.id}}" },
+        { "user_condition": { "role": "admin" } }
+      ]
+    },
+    "update": {
+      "$or": [
+        { "created_by_id": "{{user.id}}" },
+        { "user_condition": { "role": "admin" } }
+      ]
+    },
+    "delete": {
+      "user_condition": { "role": "admin" }
+    }
+  }
+}
