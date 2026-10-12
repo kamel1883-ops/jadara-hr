@@ -3,7 +3,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
-import { Printer } from "lucide-react";
+import { Crown, Printer } from "lucide-react";
 
 const pad = (n) => String(n).padStart(2, "0");
 const todayISO = () => new Date().toISOString().slice(0, 10);
@@ -122,7 +122,9 @@ export default function InvoiceDialog({ open, onClose, tenant, subs, isAr }) {
               {/* رأس الفاتورة */}
               <div className="flex items-start justify-between border-b-2 border-slate-300 pb-4">
                 <div className="flex items-center gap-2.5">
-                  <div className="w-10 h-10 rounded-lg bg-[#1d3a5f] text-white flex items-center justify-center font-extrabold text-lg">ج</div>
+                  <div className="w-11 h-11 rounded-2xl flex items-center justify-center shrink-0" style={{ background: "#2d234a", boxShadow: "0 0 0 1px rgba(197,160,89,.35)" }}>
+                    <Crown size={22} strokeWidth={1.8} style={{ color: "#c5a059" }} />
+                  </div>
                   <div>
                     <div className="text-lg font-extrabold text-[#1d3a5f]">جداره</div>
                     <div className="text-[10px] text-slate-500">{isAr ? "لإدارة الموارد البشرية" : "HR Platform"} · jadara-hr.com</div>

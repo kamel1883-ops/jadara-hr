@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from "react";
 import { listCurrentOrg } from "@/lib/currentOrg";
-import { clientLogoStyle } from "@/lib/printBrand";
+import BrandHeader from "@/components/docs/BrandHeader";
 
 // مستند الوصف الوظيفي — يُستخدم للمشاهدة والطباعة PDF في ملف الموظف ونموذج الموظف
 // الترويسة: شعار المنشأة أعلى اليمين، وشعار جداره أعلى اليسار.
@@ -42,23 +42,8 @@ export default function JobDescriptionDoc({ employee, text, isAr = true }) {
 
   return (
     <div style={{ fontFamily: "'Tajawal','IBM Plex Sans Arabic',sans-serif", color: "#0f172a", maxWidth: 800, margin: "0 auto" }}>
-      <div className="jd-header flex items-center justify-between gap-4 border-b-2 pb-3 mb-5" style={{ borderColor: "#0B2545" }}>
-        <div className="flex items-center gap-3">
-          {org?.logo_url
-            ? <img src={org.logo_url} alt="" style={clientLogoStyle} />
-            : null}
-          <div>
-            <div className="font-bold text-base">{org?.name || ""}</div>
-            {org?.unified_number && <div className="text-xs text-slate-500">{isAr ? "الرقم الموحد: " : "Unified No: "}{org.unified_number}</div>}
-          </div>
-        </div>
-        <div className="flex items-center gap-2">
-          <div className="w-10 h-10 rounded-xl flex items-center justify-center font-bold text-lg" style={{ background: "#0B2545", color: "#d4af37" }}>ج</div>
-          <div>
-            <div className="font-bold text-sm">جداره</div>
-            <div className="text-[10px] text-slate-500">{isAr ? "منصة الموارد البشرية" : "HR Platform"}</div>
-          </div>
-        </div>
+      <div className="jd-header">
+        <BrandHeader org={org} />
       </div>
       <h1 className="text-lg font-bold mb-2.5">{isAr ? "الوصف الوظيفي" : "Job Description"}</h1>
       <div className="jd-meta flex flex-wrap gap-5 text-[13px] mb-4 px-3.5 py-3 rounded-xl border" style={{ background: "#f8fafc", borderColor: "#e2e8f0", color: "#334155" }}>
