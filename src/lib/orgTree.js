@@ -38,6 +38,25 @@ export const roleRank = (level) => {
 
 export const roleLabel = (level, lang = "ar") => ROLE_LABELS[lang]?.[level] || level;
 
+// ألوان الطباعة والمخطط: قمة فاتحة، إدارة بنفسجي، قسم أصفر، مسمى أزرق — مثل الهيكل المرجعي.
+export const CHART_COLORS = {
+  owner: { bg: "#f8fbff", border: "#1d4ed8", color: "#1e3a8a" },
+  executive: { bg: "#eef2ff", border: "#3730a3", color: "#1e1b4b" },
+  manager: { bg: "#6d28d9", border: "#5b21b6", color: "#ffffff" },
+  supervisor: { bg: "#fde047", border: "#a16207", color: "#1c1917" },
+  employee: { bg: "#1e3a8a", border: "#172554", color: "#ffffff" },
+  worker: { bg: "#1d4ed8", border: "#1e3a8a", color: "#ffffff" },
+};
+
+export const chartColors = (level) => CHART_COLORS[level] || CHART_COLORS.employee;
+
+export const chartNodeText = (node, lang = "ar") => {
+  const title = (node.position && String(node.position).trim()) || roleLabel(node.role_level, lang);
+  const name = node.full_name || "";
+  const num = node.employee_number ? "#" + node.employee_number : "";
+  return { title, name, num };
+};
+
 // اسم عرض الموظف (الاسم الكامل، أو المسمى الوظيفي، أو الرقم)
 export const employeeDisplayName = (emp) => {
   const name = emp.full_name || emp.position || (emp.employee_number ? `#${emp.employee_number}` : "—");
