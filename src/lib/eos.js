@@ -130,6 +130,12 @@ export function computeEOS({ employee, lastWorkingDate, reason, basis = "gross" 
   return { years: years.toFixed(2), monthlyWage, dailyWage: monthlyWageForDaily, fullEOS, amount, fractionLabel, lastWorkingDate: lwd };
 }
 
+// الاشتراك يستمر في كل أنواع الإجازة. يتوقف فقط عند فسخ العقد وإنهاء الخدمة.
+export function isGosiSubscriber(employee) {
+  const status = String(employee?.status || "active");
+  return status !== "terminated" && status !== "resigned";
+}
+
 export function computeGOSI({ employee, org }) {
   const gross = eosSalaryBasis(employee, "gross");
   const isSaudi = employee.is_saudi || isSaudiNationalId(employee.national_id);

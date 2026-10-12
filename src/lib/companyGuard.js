@@ -14,6 +14,16 @@ export function visibleByUnified(rec, ctx) {
   return !!ctx.userId && String(rec.created_by_id || "") === String(ctx.userId);
 }
 
+// معاملة أي منشأة: رقمها الموحّد يكفي لإظهارها. سجل بلا رقم يظهر فقط إذا كان موظفه من هذه المنشأة.
+// رقم منشأة أخرى يُستبعد دائماً، أياً كان الرقم.
+export function recordBelongsToCompany(rec, ctx, keys = ["employee_id"]) {
+  if (!rec || !ctx?.unified) return false;
+  const un = String(rec.unified_number || "").trim();
+  if (un) return un === String(ctx.unified);
+  const ids = Array.isArray(ctx.employeeIds) ? ctx.employeeIds : [];
+  return ids.some((id) => keys.some((k) => String(rec?.[k] || "") === String(id)));
+}
+
 // يجمع صفوف الرقم الموحّد مع السجلات القديمة بلا رقم، ويسقط المكرر وصفوف الشركات الأخرى.
 export function mergeCompanyRows(primary, legacy, ctx) {
   const seen = new Set();

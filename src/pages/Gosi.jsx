@@ -12,7 +12,7 @@ import { Input } from "@/components/ui/input";
 import { Shield, FileDown, Save, CheckCircle2, BadgeCheck, Wallet, Building2, ArrowRight } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { formatCurrency } from "@/lib/hr";
-import { computeGOSI } from "@/lib/eos";
+import { computeGOSI, isGosiSubscriber } from "@/lib/eos";
 import { useI18n } from "@/lib/i18n";
 import { printReport } from "@/lib/reportPrint";
 
@@ -29,7 +29,7 @@ export default function Gosi() {
     sTotalEmp: "إجمالي حصة الموظف", sTotalEmpr: "إجمالي حصة صاحب العمل", sGrand: "إجمالي الاشتراكات", sGross: "إجمالي الأجور الخاضعة", sCount: "عدد المشتركين",
     save: "حفظ سجلات الاشتراكات", saving: "جارٍ الحفظ...", saved: "محفوظ", notSaved: "غير محفوظ لهذا الشهر",
     pdf: "تحميل / طباعة PDF", exporting: "جارٍ التجهيز...",
-    loading: "جارٍ التحميل...", empty: "لا يوجد موظفون على رأس العمل.",
+    loading: "جارٍ التحميل...", empty: "لا يوجد مشتركون. التأمينات تتوقف فقط بعد فسخ العقد وإنهاء الخدمة.",
     savedOn: "آخر حفظ:",
     thN: "#", thEmp: "الموظف", thId: "الهوية/الإقامة", thType: "النوع", thGross: "الأجر الخاضع",
     thEmpRate: "نسبة الموظف", thEmpShare: "حصة الموظف", thEmprRate: "نسبة صاحب العمل", thEmprShare: "حصة صاحب العمل", thTotal: "إجمالي الاشتراك",
@@ -44,7 +44,7 @@ export default function Gosi() {
     sTotalEmp: "Total employee share", sTotalEmpr: "Total employer share", sGrand: "Total subscriptions", sGross: "Total subject wages", sCount: "Subscribers",
     save: "Save subscription records", saving: "Saving...", saved: "Saved", notSaved: "Not saved for this month",
     pdf: "Download / Print PDF", exporting: "Preparing...",
-    loading: "Loading...", empty: "No active employees.",
+    loading: "Loading...", empty: "No subscribers. Contributions stop only after the contract ends.",
     savedOn: "Last saved:",
     thN: "#", thEmp: "Employee", thId: "ID/Iqama", thType: "Type", thGross: "Subject wage",
     thEmpRate: "Employee %", thEmpShare: "Employee share", thEmprRate: "Employer %", thEmprShare: "Employer share", thTotal: "Total",
@@ -69,8 +69,8 @@ export default function Gosi() {
         listCurrentOrg(),
         base44.entities.GosiRecord.filter({ month, year }, "-created_date", 1000),
       ]);
-      // المشترك ما زال في المنشأة: على رأس العمل أو في إجازة. نهاية الخدمة والاستقالة لا تُحسب في كشف الشهر.
-      const employed = (Array.isArray(emps) ? emps : []).filter((e) => e.status !== "terminated" && e.status !== "resigned");
+      // كل أنواع الإجازة تبقى داخل الكشف. الإيقاف فقط عند فسخ العقد وإنهاء الخدمة.
+      const employed = (Array.isArray(emps) ? emps : []).filter((e) => isGosiSubscriber(e));
       setEmployees(employed);
       setOrg(orgs?.[0] || null);
       setRecords(Array.isArray(recs) ? recs : []);

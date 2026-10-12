@@ -48,7 +48,7 @@ const PARENT_OF = {
   SurveyResponse: { parent: "Survey", key: "survey_id" },
 };
 
-import { mergeCompanyRows, onlyMatching, visibleByUnified } from "./companyGuard";
+import { mergeCompanyRows, onlyMatching, recordBelongsToCompany, visibleByUnified } from "./companyGuard";
 
 let rawClient = null;
 let ctxPromise = null;
@@ -101,6 +101,11 @@ async function loadTenantContext() {
     try {
       people = await readScopedRows(rawClient.entities.Employee, ctx, {}, "-created_date", 5000);
     } catch { people = []; }
+    // أي منشأة: الموظف الذي أنشأه حسابها بلا رقم موحّد يُربط برقمه حتى لا يختفي لاحقاً.
+    const orphans = people.filter((e) => e?.id && !String(e.unified_number || "").trim());
+    if (orphans.length) {
+      rawClient.entities.Employee.bulkUpdate(orphans.map((e) => ({ id: e.id, unified_number: unified }))).catch(() => {});
+    }
     return {
       unified,
       userId,
@@ -158,9 +163,13 @@ async function overlayVault(result) {
 }
 
 function employeeScope(keys, ctx) {
-  if (!ctx.unified || !ctx.employeeIds?.length) return null;
-  if (keys.length === 1) return { [keys[0]]: { $in: ctx.employeeIds } };
-  return { $or: keys.map((k) => ({ [k]: { $in: ctx.employeeIds } })) };
+  if (!ctx?.unified) return null;
+  const byCompany = { unified_number: ctx.unified };
+  if (!ctx.employeeIds?.length) return byCompany;
+  const byEmployee = keys.length === 1
+    ? { [keys[0]]: { $in: ctx.employeeIds } }
+    : { $or: keys.map((k) => ({ [k]: { $in: ctx.employeeIds } })) };
+  return { $or: [byEmployee, byCompany] };
 }
 
 // صفوف المنشأة: الرقم الموحّد، ومعها السجل القديم الذي أنشأه هذا الحساب قبل حفظ الرقم.
@@ -179,29 +188,56 @@ async function readScopedRows(api, ctx, query = {}, sort = "-created_date", limi
   return mergeCompanyRows(primary, legacy, ctx);
 }
 
-const belongsToTenant = (rec, keys, ctx) =>
-  !!rec && ctx.employeeIds.some((id) => keys.some((k) => String(rec[k] || "") === String(id)));
+const belongsToTenant = (rec, keys, ctx) => recordBelongsToCompany(rec, ctx, keys);
+
+// قراءتان منفصلتان ثم دمج: بمعرّف الموظف، وبرقم المنشأة. أي شركة، وأي رقم موحّد.
+async function readKeyedRows(api, keys, ctx, query = {}, sort, limit) {
+  if (!ctx?.unified || !api?.filter) return [];
+  const lim = Math.min(typeof limit === "number" && limit > 0 ? limit : 1000, 5000);
+  const srt = typeof sort === "string" && sort ? sort : "-created_date";
+  const chunks = [];
+  if (ctx.employeeIds?.length) {
+    const byEmployee = keys.length === 1
+      ? { [keys[0]]: { $in: ctx.employeeIds } }
+      : { $or: keys.map((k) => ({ [k]: { $in: ctx.employeeIds } })) };
+    try { chunks.push(...asRows(await api.filter({ ...query, ...byEmployee }, srt, lim))); } catch { /* تبقى قراءة الرقم الموحّد */ }
+  }
+  try { chunks.push(...asRows(await api.filter({ ...query, unified_number: ctx.unified }, srt, lim))); } catch { /* تبقى قراءة الموظفين */ }
+  const seen = new Set();
+  const out = [];
+  for (const rec of chunks) {
+    const id = String(rec?.id || "");
+    if (!id || seen.has(id)) continue;
+    if (!belongsToTenant(rec, keys, ctx)) continue;
+    seen.add(id);
+    out.push(rec);
+  }
+  return out;
+}
+
+async function stampCompany(data) {
+  const ctx = await tenantContext();
+  if (!ctx.unified) return data || {};
+  return { ...(data || {}), unified_number: ctx.unified };
+}
 
 // كيان تشغيلي مرتبط بموظفين
 function scopedEntity(keys, api) {
   const scope = async () => employeeScope(keys, await tenantContext());
   return {
     async filter(query = {}, a, b) {
-      const s = await scope();
-      const legacy = typeof a === "string";
-      if (!s) return legacy ? [] : emptyPage();
-      const merged = { ...query, ...s };
-      const result = legacy ? await api.filter(merged, a, b) : (a === undefined ? await api.filter(merged) : await api.filter(merged, a));
       const ctx = await tenantContext();
-      return overlayVault(onlyMatching(result, (rec) => belongsToTenant(rec, keys, ctx)));
+      const legacy = typeof a === "string";
+      if (!ctx.unified) return legacy ? [] : emptyPage();
+      const rows = await readKeyedRows(api, keys, ctx, query, legacy ? a : "-created_date", legacy ? b : a?.limit);
+      return overlayVault(rows);
     },
     async list(a, b) {
-      const s = await scope();
-      const legacy = typeof a === "string";
-      if (!s) return legacy ? [] : emptyPage();
-      const result = legacy ? await api.filter(s, a, b) : (a === undefined ? await api.filter(s) : await api.filter(s, { limit: 200, ...a }));
       const ctx = await tenantContext();
-      return overlayVault(onlyMatching(result, (rec) => belongsToTenant(rec, keys, ctx)));
+      const legacy = typeof a === "string";
+      if (!ctx.unified) return legacy ? [] : emptyPage();
+      const rows = await readKeyedRows(api, keys, ctx, {}, legacy ? a : "-created_date", legacy ? b : a?.limit);
+      return overlayVault(rows);
     },
     async count(query = {}) {
       const s = await scope();
@@ -220,13 +256,17 @@ function scopedEntity(keys, api) {
       const [one] = asRows(await overlayVault([rec]));
       return one || rec;
     },
-    create: (data) => api.create(data),
-    bulkCreate: (rows) => api.bulkCreate(rows),
+    async create(data) { return api.create(await stampCompany(data)); },
+    async bulkCreate(rows = []) {
+      const stamped = [];
+      for (const row of rows) stamped.push(await stampCompany(row));
+      return api.bulkCreate(stamped);
+    },
     async update(id, data) {
       const ctx = await tenantContext();
       const rec = await api.get(id).catch(() => null);
       if (!belongsToTenant(rec, keys, ctx)) throw new Error("forbidden");
-      return api.update(id, data);
+      return api.update(id, await stampCompany(data));
     },
     async bulkUpdate(rows = []) {
       const ctx = await tenantContext();
@@ -234,7 +274,7 @@ function scopedEntity(keys, api) {
       for (const row of rows) {
         if (!row?.id) continue;
         const rec = await api.get(row.id).catch(() => null);
-        if (belongsToTenant(rec, keys, ctx)) safe.push(row);
+        if (belongsToTenant(rec, keys, ctx)) safe.push(await stampCompany(row));
       }
       return safe.length ? api.bulkUpdate(safe) : [];
     },
