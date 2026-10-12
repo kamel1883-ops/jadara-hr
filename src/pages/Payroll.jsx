@@ -85,15 +85,20 @@ export default function Payroll() {
   };
   const load = async () => {
     setLoading(true);
-    const [data, emps, orgs] = await Promise.all([
-      base44.entities.Payroll.filter({ month, year }, "-created_date", 500),
-      base44.entities.Employee.filter({ status: "active" }, "-created_date", 500),
-      listCurrentOrg(),
-    ]);
-    setPayrolls(data);
-    setEmployees(emps);
-    setOrg(orgs[0]);
-    setLoading(false);
+    try {
+      const [data, emps, orgs] = await Promise.all([
+        base44.entities.Payroll.filter({ month, year }, "-created_date", 500),
+        base44.entities.Employee.filter({ status: "active" }, "-created_date", 500),
+        listCurrentOrg(),
+      ]);
+      setPayrolls(Array.isArray(data) ? data : []);
+      setEmployees(Array.isArray(emps) ? emps : []);
+      setOrg(orgs?.[0] || null);
+    } catch {
+      setPayrolls([]);
+    } finally {
+      setLoading(false);
+    }
   };
   useEffect(() => { load(); }, [month, year]);
 

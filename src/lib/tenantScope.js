@@ -48,7 +48,7 @@ const PARENT_OF = {
   SurveyResponse: { parent: "Survey", key: "survey_id" },
 };
 
-import { onlyMatching, visibleByUnified } from "./companyGuard";
+import { mergeCompanyRows, onlyMatching, visibleByUnified } from "./companyGuard";
 
 let rawClient = null;
 let ctxPromise = null;
@@ -95,16 +95,16 @@ async function loadTenantContext() {
     const res = await rawClient.functions.invoke("getMyTenant", {});
     const unified = String(res?.data?.tenant?.unified_number || "").trim();
     if (!unified) return { unified: "", userId, employeeIds: [] };
-    const page = await rawClient.entities.Employee.filter(
-      { unified_number: unified },
-      { fields: ["id"], limit: 1000 }
-    );
-    const items = page?.items || (Array.isArray(page) ? page : []);
     const ctx = { unified, userId };
+    // السجل الكامل لازم: طلب حقل id وحده يُسقط الرقم الموحّد، فيُرفض كل موظف وتختفي إجازاته ورواتبه.
+    let people = [];
+    try {
+      people = await readScopedRows(rawClient.entities.Employee, ctx, {}, "-created_date", 5000);
+    } catch { people = []; }
     return {
       unified,
       userId,
-      employeeIds: items.filter((e) => visibleByUnified(e, ctx)).map((e) => e.id).filter(Boolean),
+      employeeIds: people.map((e) => e.id).filter(Boolean),
     };
   } catch (_) {
     // عند تعذّر تحديد المنشأة لا تُعرض أي بيانات تشغيلية (الأمان أولاً)
@@ -158,9 +158,25 @@ async function overlayVault(result) {
 }
 
 function employeeScope(keys, ctx) {
-  if (!ctx.unified) return null;
+  if (!ctx.unified || !ctx.employeeIds?.length) return null;
   if (keys.length === 1) return { [keys[0]]: { $in: ctx.employeeIds } };
   return { $or: keys.map((k) => ({ [k]: { $in: ctx.employeeIds } })) };
+}
+
+// صفوف المنشأة: الرقم الموحّد، ومعها السجل القديم الذي أنشأه هذا الحساب قبل حفظ الرقم.
+async function readScopedRows(api, ctx, query = {}, sort = "-created_date", limit = 1000) {
+  if (!ctx?.unified || !api?.filter) return [];
+  const lim = Math.min(typeof limit === "number" && limit > 0 ? limit : 1000, 5000);
+  const srt = typeof sort === "string" && sort ? sort : "-created_date";
+  const primary = asRows(await api.filter({ ...query, unified_number: ctx.unified }, srt, lim));
+  let legacy = [];
+  if (ctx.userId) {
+    try {
+      const mine = asRows(await api.filter({ ...query, created_by_id: ctx.userId }, srt, lim));
+      legacy = mine.filter((rec) => !String(rec?.unified_number || "").trim());
+    } catch { /* يبقى ما طابَق الرقم الموحّد */ }
+  }
+  return mergeCompanyRows(primary, legacy, ctx);
 }
 
 const belongsToTenant = (rec, keys, ctx) =>
@@ -258,23 +274,18 @@ function scopedEmployee(api) {
   };
   return {
     async filter(query = {}, a, b) {
-      const u = await unified();
-      const legacy = typeof a === "string";
-      if (!u) return legacy ? [] : emptyPage();
-      const merged = { ...query, unified_number: u };
       const ctx = await tenantContext();
-      const result = legacy ? await api.filter(merged, a, b) : (a === undefined ? await api.filter(merged) : await api.filter(merged, a));
-      return overlayVault(onlyMatching(result, (rec) => visibleByUnified(rec, ctx)));
+      const legacy = typeof a === "string";
+      if (!ctx.unified) return legacy ? [] : emptyPage();
+      const rows = await readScopedRows(api, ctx, query, legacy ? a : "-created_date", legacy ? b : a?.limit);
+      return overlayVault(rows);
     },
     async list(a, b) {
-      const u = await unified();
-      const legacy = typeof a === "string";
-      if (!u) return legacy ? [] : emptyPage();
-      const result = legacy
-        ? await api.filter({ unified_number: u }, a, b)
-        : (a === undefined ? await api.filter({ unified_number: u }) : await api.filter({ unified_number: u }, { limit: 200, ...a }));
       const ctx = await tenantContext();
-      return overlayVault(onlyMatching(result, (rec) => visibleByUnified(rec, ctx)));
+      const legacy = typeof a === "string";
+      if (!ctx.unified) return legacy ? [] : emptyPage();
+      const rows = await readScopedRows(api, ctx, {}, legacy ? a : "-created_date", legacy ? b : a?.limit);
+      return overlayVault(rows);
     },
     async count(query = {}) {
       const u = await unified();
@@ -374,21 +385,16 @@ function companyScopedEntity(name, api) {
   };
   return {
     async filter(query = {}, a, b) {
-      const s = await scope();
-      const legacy = typeof a === "string";
-      if (!s) return legacy ? [] : emptyPage();
-      const merged = { ...query, ...s };
       const ctx = await tenantContext();
-      const result = legacy ? await api.filter(merged, a, b) : (a === undefined ? await api.filter(merged) : await api.filter(merged, a));
-      return onlyMatching(result, (rec) => visibleByUnified(rec, ctx));
+      const legacy = typeof a === "string";
+      if (!ctx.unified) return legacy ? [] : emptyPage();
+      return readScopedRows(api, ctx, query, legacy ? a : "-created_date", legacy ? b : a?.limit);
     },
     async list(a, b) {
-      const s = await scope();
-      const legacy = typeof a === "string";
-      if (!s) return legacy ? [] : emptyPage();
       const ctx = await tenantContext();
-      const result = legacy ? await api.filter(s, a, b) : (a === undefined ? await api.filter(s) : await api.filter(s, { limit: 200, ...a }));
-      return onlyMatching(result, (rec) => visibleByUnified(rec, ctx));
+      const legacy = typeof a === "string";
+      if (!ctx.unified) return legacy ? [] : emptyPage();
+      return readScopedRows(api, ctx, {}, legacy ? a : "-created_date", legacy ? b : a?.limit);
     },
     async count(query = {}) {
       const s = await scope();

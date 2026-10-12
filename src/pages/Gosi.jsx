@@ -63,15 +63,23 @@ export default function Gosi() {
 
   const load = async () => {
     setLoading(true);
-    const [emps, orgs, recs] = await Promise.all([
-      base44.entities.Employee.filter({ status: "active" }, "-created_date", 500),
-      listCurrentOrg(),
-      base44.entities.GosiRecord.filter({ month, year }, "-created_date", 1000),
-    ]);
-    setEmployees(emps);
-    setOrg(orgs[0]);
-    setRecords(recs);
-    setLoading(false);
+    try {
+      const [emps, orgs, recs] = await Promise.all([
+        base44.entities.Employee.list("-created_date", 1000),
+        listCurrentOrg(),
+        base44.entities.GosiRecord.filter({ month, year }, "-created_date", 1000),
+      ]);
+      // المشترك ما زال في المنشأة: على رأس العمل أو في إجازة. نهاية الخدمة والاستقالة لا تُحسب في كشف الشهر.
+      const employed = (Array.isArray(emps) ? emps : []).filter((e) => e.status !== "terminated" && e.status !== "resigned");
+      setEmployees(employed);
+      setOrg(orgs?.[0] || null);
+      setRecords(Array.isArray(recs) ? recs : []);
+    } catch {
+      setEmployees([]);
+      setRecords([]);
+    } finally {
+      setLoading(false);
+    }
   };
   useEffect(() => { load(); }, [month, year]);
 

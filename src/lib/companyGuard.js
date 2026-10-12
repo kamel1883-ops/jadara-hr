@@ -14,6 +14,20 @@ export function visibleByUnified(rec, ctx) {
   return !!ctx.userId && String(rec.created_by_id || "") === String(ctx.userId);
 }
 
+// يجمع صفوف الرقم الموحّد مع السجلات القديمة بلا رقم، ويسقط المكرر وصفوف الشركات الأخرى.
+export function mergeCompanyRows(primary, legacy, ctx) {
+  const seen = new Set();
+  const out = [];
+  for (const rec of [...asRows(primary), ...asRows(legacy)]) {
+    const id = String(rec?.id || "");
+    if (!id || seen.has(id)) continue;
+    if (!visibleByUnified(rec, ctx)) continue;
+    seen.add(id);
+    out.push(rec);
+  }
+  return out;
+}
+
 export function pickByUnified(list, unified) {
   const want = String(unified || "").trim();
   if (!want) return null;
