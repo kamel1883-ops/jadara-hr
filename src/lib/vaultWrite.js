@@ -8,6 +8,7 @@
  * وتُعاد null ليبقى النظام يعمل دون انكسار.
  */
 import { base44 } from "@/api/base44Client";
+import { rememberEmployee } from "@/lib/vaultCache";
 
 export const SENSITIVE_WRITE_KEYS = [
   "national_id", "passport_number", "bank_account",
@@ -38,13 +39,16 @@ export async function writeEmployeeToVault(existingEmpRef, formData) {
       await base44.functions.invoke("vaultProxy", {
         action: "updateEmployee", empRef: existingEmpRef, sensitiveData,
       });
+      rememberEmployee(existingEmpRef, sensitiveData, true);
       return existingEmpRef;
     }
     const res = await base44.functions.invoke("vaultProxy", {
       action: "storeEmployee", sensitiveData,
     });
     const data = res?.data?.data || res?.data || {};
-    return data.emp_ref || data.empRef || null;
+    const ref = data.emp_ref || data.empRef || null;
+    if (ref) rememberEmployee(ref, sensitiveData, true);
+    return ref;
   } catch (e) {
     // الخزنة غير مُهيّأة — وضع احتياطي (النمط القديم)
     console.log("[vaultWrite] vault unavailable, legacy mode");

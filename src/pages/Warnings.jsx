@@ -9,7 +9,6 @@ import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from "@
 import { AlertTriangle, Plus, ScrollText, Search } from "lucide-react";
 import { VIOLATION_CATEGORIES, WARNING_LEVELS, categoryById, levelById, LABOR_POLICY_INTRO } from "@/lib/laborPolicy";
 import { useI18n } from "@/lib/i18n";
-import { enrichEmployeesBatch } from "@/lib/vaultSensitive";
 import { enrichRecordsWithVault, VAULT_MODULES } from "@/lib/vaultGeneric";
 import { cn } from "@/lib/utils";
 
@@ -46,11 +45,10 @@ export default function Warnings() {
       base44.entities.Employee.list("-created_date", 1000),
       base44.entities.Warning.list("-created_date", 1000),
     ]);
-    const sensMap = await enrichEmployeesBatch(e);
-    setEmployees(e.map((x) => (x.emp_ref ? { ...x, ...sensMap[x.emp_ref] } : x)));
-    // جلب نصوص الإنذار الحسّاسة (النص/ملخص التحقيق/الملاحظات) من الخزنة للعرض
-    const enrichedW = await enrichRecordsWithVault(w, VAULT_MODULES.warnings, "warning_ref", ["description", "investigation_summary", "notes"]);
-    setWarnings(enrichedW); setLoading(false);
+    setEmployees(e);
+    setWarnings(w);
+    setLoading(false);
+    enrichRecordsWithVault(w, VAULT_MODULES.warnings, "warning_ref", ["description", "investigation_summary", "notes"]).then(setWarnings);
   };
   useEffect(() => { load(); }, []);
 

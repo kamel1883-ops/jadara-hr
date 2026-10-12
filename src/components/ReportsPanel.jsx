@@ -4,11 +4,12 @@ import { listCurrentOrg } from "@/lib/currentOrg";
 import { useI18n } from "@/lib/i18n";
 import { cn } from "@/lib/utils";
 import { formatCurrency } from "@/lib/hr";
-import { turnoverWindow, attendanceRate, statusSplit, CHART_PALETTE } from "@/lib/analytics";
-import { BarChart3, FileText, FileSpreadsheet, Car, Plane, CalendarCheck, Users, ShieldCheck, Truck, TrendingDown, Clock, AlertTriangle, Target, DoorOpen, ClipboardList, Sparkles, Loader2, Printer, Wallet, Globe } from "lucide-react";
+import { turnoverWindow, CHART_PALETTE } from "@/lib/analytics";
+import { BarChart3, FileText, FileSpreadsheet, Car, Plane, CalendarCheck, ShieldCheck, TrendingDown, Clock, AlertTriangle, Target, DoorOpen, ClipboardList, Sparkles, Loader2, Printer, Wallet, Globe } from "lucide-react";
 import { PieChart, Pie, Cell, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend } from "recharts";
 import { Button } from "@/components/ui/button";
 import { printReport } from "@/lib/reportPrint";
+import { enrichRecordsWithVault, VAULT_MODULES } from "@/lib/vaultGeneric";
 import PayrollReport from "@/components/reports/PayrollReport";
 import PlatformSubscriptionsReport from "@/components/reports/PlatformSubscriptionsReport";
 import { MobileSelect, MobileSelectItem } from "@/components/ui/mobile-select";
@@ -145,6 +146,12 @@ export default function ReportsPanel({ employees, attendance }) {
       ]);
       setExtra({ lic, veh, trp, warnings: wrn, reviews: rev, exits: exi, surveys: srv, sresponses: sres, payroll: prl, platforms: psub });
       setOrg(orgs?.[0] || null);
+      enrichRecordsWithVault(lic, VAULT_MODULES.licenses, "license_ref", ["license_number", "issuing_authority", "notes"]).then((rows) => {
+        setExtra((cur) => ({ ...cur, lic: rows }));
+      });
+      enrichRecordsWithVault(wrn, VAULT_MODULES.warnings, "warning_ref", ["description", "investigation_summary", "notes"]).then((rows) => {
+        setExtra((cur) => ({ ...cur, warnings: rows }));
+      });
     })();
   }, []);
 

@@ -7,7 +7,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
-import { Loader2, Search, Printer, MessageSquareWarning, Check, X, ShieldAlert } from "lucide-react";
+import { Loader2, Search, MessageSquareWarning, Check, X, ShieldAlert } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useI18n } from "@/lib/i18n";
 import { todayISO } from "@/lib/hr";
@@ -67,11 +67,10 @@ export default function Complaints() {
       base44.entities.Employee.list("-created_date", 500),
       listCurrentOrg(),
     ]);
-    // جلب النصوص الحسّاسة من الخزنة (الوصف/الحل/الملاحظات) ودمجها للعرض
-    const enriched = await enrichRecordsWithVault(list, VAULT_MODULES.complaints, "complaint_ref", ["description", "hr_resolution", "manager_note", "hr_note", "notes"]);
-    setItems(enriched); setEmployees(emps); setOrg(orgs[0]);
+    setItems(list); setEmployees(emps); setOrg(orgs[0]);
     try { setMe(await base44.auth.me()); } catch {}
     setLoading(false);
+    enrichRecordsWithVault(list, VAULT_MODULES.complaints, "complaint_ref", ["description", "hr_resolution", "manager_note", "hr_note", "notes"]).then(setItems);
   };
   useEffect(() => { load(); }, []);
 

@@ -19,7 +19,7 @@ import { createClientFromRequest } from "npm:@base44/sdk@0.8.44";
 import {
   storeEmployee, storeEmployeesBulk, getEmployeesBatch, updateEmployeeInCompany, deleteEmployee,
   storePayroll, getPayroll, storeDocument, getDocumentLinkInCompany, buildDownloadUrl,
-  storeRecord, storeRecordsBulk, getRecord, updateRecord, deleteRecord,
+  storeRecord, storeRecordsBulk, getRecord, getRecordsBatch, updateRecord, deleteRecord,
 } from "../../shared/vaultClient.ts";
 import { tenantKeysForRead } from "../../shared/vaultIdentity.ts";
 
@@ -101,6 +101,10 @@ export default async function (req: Request): Promise<Response> {
       case "getRecord":
         if (!rest.module || !rest.ref) return Response.json({ error: "module_and_ref_required" }, { status: 400 });
         result = await getRecord(tenant, rest.module, rest.ref);
+        break;
+      case "getRecords":
+        if (!rest.module || !Array.isArray(rest.refs)) return Response.json({ error: "module_and_refs_required" }, { status: 400 });
+        result = { byRef: await getRecordsBatch(await tenantKeysForRead(base44, user), rest.module, rest.refs) };
         break;
       case "updateRecord":
         if (!rest.module || !rest.ref) return Response.json({ error: "module_and_ref_required" }, { status: 400 });

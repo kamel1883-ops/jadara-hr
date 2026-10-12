@@ -15,7 +15,6 @@ import { formatCurrency } from "@/lib/hr";
 import { computeGOSI } from "@/lib/eos";
 import { useI18n } from "@/lib/i18n";
 import { printReport } from "@/lib/reportPrint";
-import { enrichEmployeesBatch } from "@/lib/vaultSensitive";
 
 export default function Gosi() {
   const { lang } = useI18n();
@@ -64,12 +63,13 @@ export default function Gosi() {
 
   const load = async () => {
     setLoading(true);
-    const emps = await base44.entities.Employee.filter({ status: "active" }, "-created_date", 500);
-    const sensMap = await enrichEmployeesBatch(emps);
-    setEmployees(emps.map((e) => (e.emp_ref ? { ...e, ...sensMap[e.emp_ref] } : e)));
-    const orgs = await listCurrentOrg();
+    const [emps, orgs, recs] = await Promise.all([
+      base44.entities.Employee.filter({ status: "active" }, "-created_date", 500),
+      listCurrentOrg(),
+      base44.entities.GosiRecord.filter({ month, year }, "-created_date", 1000),
+    ]);
+    setEmployees(emps);
     setOrg(orgs[0]);
-    const recs = await base44.entities.GosiRecord.filter({ month, year }, "-created_date", 1000);
     setRecords(recs);
     setLoading(false);
   };

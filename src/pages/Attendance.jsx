@@ -8,13 +8,12 @@ import Time24Input from "@/components/ui/time24";
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue
 } from "@/components/ui/select";
-import { CalendarCheck, Plus, Save, CalendarOff } from "lucide-react";
+import { CalendarCheck, Plus, CalendarOff } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { todayISO, attendanceStatusLabel, isOrgWeeklyOff, dayNameAr } from "@/lib/hr";
 // dayNameAr يُستخدم فقط في الفرع العربي للإجازة الأسبوعية؛ الفرع الإنجليزي يستخدم toLocaleDateString داخل العنصر.
 import { useI18n } from "@/lib/i18n";
 import AttendanceReport from "@/components/reports/AttendanceReport";
-import { enrichEmployeesBatch } from "@/lib/vaultSensitive";
 import PullToRefresh from "@/components/PullToRefresh";
 
 export default function Attendance() {
@@ -56,12 +55,14 @@ export default function Attendance() {
 
   const load = async (silent = false) => {
     if (!silent) setLoading(true);
-    const data = await base44.entities.Attendance.filter({ date }, "-created_date", 500);
+    const [data, emps, brs] = await Promise.all([
+      base44.entities.Attendance.filter({ date }, "-created_date", 500),
+      base44.entities.Employee.filter({ status: "active" }, "-created_date", 500),
+      base44.entities.Branch.list("-is_main", 500).catch(() => []),
+    ]);
     setRecords(data);
-    const emps = await base44.entities.Employee.filter({ status: "active" }, "-created_date", 500);
-    const sensMap = await enrichEmployeesBatch(emps);
-    setEmployees(emps.map((x) => (x.emp_ref ? { ...x, ...sensMap[x.emp_ref] } : x)));
-    try { const brs = await base44.entities.Branch.list("-is_main", 500); setBranches(brs); } catch {}
+    setEmployees(emps);
+    setBranches(brs || []);
     setLoading(false);
   };
   useEffect(() => { load(); }, [date]);

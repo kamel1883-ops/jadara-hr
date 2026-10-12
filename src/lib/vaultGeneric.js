@@ -7,6 +7,7 @@
  * وضع احتياطي: لو فشلت الخزنة أو لم تُهيّأ، يُحفظ السجل محلياً في Base44 ولا ينكسر النظام.
  */
 import { base44 } from "@/api/base44Client";
+import { noteVaultFailure, readRecordCache, rememberRecord, vaultCooling } from "@/lib/vaultCache";
 
 // الأقسام الحساسة المدعومة في الخزنة الموسّعة
 export const VAULT_MODULES = {
@@ -44,7 +45,9 @@ export async function writeRecordToVault(moduleKey, existingRef, record) {
     const res = await base44.functions.invoke("vaultProxy", payload);
     const data = res?.data?.data || res?.data || {};
     const refKey = `${moduleKey}Ref`;
-    return data[refKey] || data.ref || data.emp_ref || null;
+    const ref = data[refKey] || data.ref || data.emp_ref || existingRef || null;
+    if (ref) rememberRecord(moduleKey, ref, record);
+    return ref;
   } catch (e) {
     console.log(`[vaultGeneric] ${moduleKey}: vault unavailable, legacy mode`);
     return null;
@@ -57,11 +60,16 @@ export async function writeRecordToVault(moduleKey, existingRef, record) {
  */
 export async function readRecordFromVault(moduleKey, ref) {
   if (!ref) return null;
+  const cached = readRecordCache(moduleKey, ref);
+  if (cached !== undefined) return cached;
+  if (vaultCooling()) return null;
   try {
     const res = await base44.functions.invoke("vaultProxy", {
       action: "getRecord", module: moduleKey, ref,
     });
-    return res?.data?.data || res?.data || null;
+    const data = res?.data?.data || res?.data || null;
+    if (data && typeof data === "object") rememberRecord(moduleKey, ref, data, true);
+    return data;
   } catch (e) {
     console.log(`[vaultGeneric] ${moduleKey}: read failed, legacy mode`);
     return null;
@@ -110,22 +118,81 @@ export function isVaultRecordActive(ref) {
  * - sensitiveKeys: الحقول الحساسة المطلوب جلبها من الخزنة ودمجها
  * يعيد القائمة مدموجة؛ السجلات بلا ref أو الفاشلة تبقى كما هي (وضع احتياطي).
  */
+function mergeRecordFields(row, data, sensitiveKeys) {
+  if (!row || !data) return;
+  for (const k of sensitiveKeys) {
+    if (data[k] !== undefined && data[k] !== null && data[k] !== "") row[k] = data[k];
+  }
+}
+
+function applyCachedRecords(records, moduleKey, refField, sensitiveKeys) {
+  for (const row of records || []) {
+    const ref = row?.[refField];
+    if (!ref) continue;
+    const cached = readRecordCache(moduleKey, ref);
+    if (cached && typeof cached === "object") mergeRecordFields(row, cached, sensitiveKeys);
+  }
+}
+
+const recordFlights = new Map();
+
+async function fetchRecordBatch(moduleKey, refs) {
+  try {
+    const res = await base44.functions.invoke("vaultProxy", {
+      action: "getRecords", module: moduleKey, refs,
+    });
+    const data = res?.data?.data || res?.data || {};
+    if (data?.byRef && typeof data.byRef === "object") {
+      for (const ref of refs) {
+        if (!Object.prototype.hasOwnProperty.call(data.byRef, ref)) data.byRef[ref] = null;
+      }
+      return data.byRef;
+    }
+  } catch { /* الدفعة غير منشورة بعد، أو الخزنة لم تجب */ }
+  const byRef = {};
+  const queue = refs.slice();
+  const workers = Array.from({ length: Math.min(4, queue.length) }, async () => {
+    while (queue.length) {
+      const ref = queue.shift();
+      const v = await readRecordFromVault(moduleKey, ref);
+      if (v && typeof v === "object") byRef[ref] = v;
+    }
+  });
+  await Promise.all(workers);
+  if (!Object.keys(byRef).length) noteVaultFailure();
+  return byRef;
+}
+
+/**
+ * يملأ النصوص من ذاكرة اليوم فوراً، ويجلب الناقص بطلب واحد في الخلفية.
+ * يعيد نفس المصفوفة بعد اكتمال الجلب حتى تحدّث الشاشة عرضها.
+ */
+export function warmRecords(records, moduleKey, refField, sensitiveKeys) {
+  const list = records || [];
+  applyCachedRecords(list, moduleKey, refField, sensitiveKeys);
+  const missing = [...new Set(list.map((r) => r?.[refField]).filter((ref) => ref && readRecordCache(moduleKey, ref) === undefined))];
+  if (!missing.length || vaultCooling()) return Promise.resolve(list);
+  const key = `${moduleKey}:${missing.slice().sort().join(",")}`;
+  let job = recordFlights.get(key);
+  if (!job) {
+    job = fetchRecordBatch(moduleKey, missing).then((byRef) => {
+      for (const ref of missing) {
+        if (Object.prototype.hasOwnProperty.call(byRef, ref)) {
+          rememberRecord(moduleKey, ref, byRef[ref] && typeof byRef[ref] === "object" ? byRef[ref] : null, true);
+        }
+      }
+      applyCachedRecords(list, moduleKey, refField, sensitiveKeys);
+      return list;
+    }).finally(() => recordFlights.delete(key));
+    recordFlights.set(key, job);
+  }
+  return job.then(() => list);
+}
+
 export async function enrichRecordsWithVault(records, moduleKey, refField, sensitiveKeys) {
   if (!records || !records.length) return records;
   const withRef = records.filter((r) => r[refField]);
   if (!withRef.length) return records;
-  const vaultMap = {};
-  await Promise.all(withRef.map(async (r) => {
-    const v = await readRecordFromVault(moduleKey, r[refField]);
-    if (v) vaultMap[r[refField]] = v;
-  }));
-  return records.map((r) => {
-    const v = vaultMap[r[refField]];
-    if (!v) return r;
-    const merged = { ...r };
-    for (const k of sensitiveKeys) {
-      if (v[k] !== undefined && v[k] !== null && v[k] !== "") merged[k] = v[k];
-    }
-    return merged;
-  });
+  await warmRecords(records, moduleKey, refField, sensitiveKeys);
+  return records.map((r) => ({ ...r }));
 }

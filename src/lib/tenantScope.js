@@ -124,7 +124,7 @@ let idSnap = null;
 let idSnapAt = 0;
 
 /** هوية قديمة ما زالت محفوظة على راتب أو تأمينات أو حضور، للعرض فقط إذا الخزنة لم تُرجعها */
-async function nationalIdSnapshots() {
+export async function loadNationalIdSnapshots() {
   if (idSnap && Date.now() - idSnapAt < 30000) return idSnap;
   const map = new Map();
   const take = (page) => {
@@ -150,23 +150,11 @@ async function overlayVault(result) {
   const rows = asRows(result);
   if (!rows.some((r) => r?.emp_ref)) return result;
   try {
-    const { mergeVaultRows } = await import("./vaultSensitive");
-    let merged = await mergeVaultRows(rows);
-    const missing = merged.filter((e) => e?.full_name && e?.id && !String(e.national_id || "").trim());
-    if (missing.length) {
-      const snaps = await nationalIdSnapshots();
-      if (snaps.size) {
-        merged = merged.map((e) => (
-          e?.full_name && e?.id && !String(e.national_id || "").trim() && snaps.has(e.id)
-            ? { ...e, national_id: snaps.get(e.id) }
-            : e
-        ));
-      }
-    }
-    return Array.isArray(result) ? merged : { ...result, items: merged };
-  } catch {
-    return result;
-  }
+    const { warmEmployeeRows } = await import("./vaultSensitive");
+    // الذاكرة تُطبَّق فوراً، وطلب الخزنة يكمل بعد ظهور القائمة.
+    warmEmployeeRows(rows);
+  } catch { /* تبقى حقول Base44 */ }
+  return result;
 }
 
 function employeeScope(keys, ctx) {

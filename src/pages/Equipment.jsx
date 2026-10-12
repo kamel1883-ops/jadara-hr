@@ -13,7 +13,6 @@ import { Loader2, Search, Printer, Package, Check, X } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useI18n } from "@/lib/i18n";
 import { todayISO } from "@/lib/hr";
-import { badge } from "@/lib/approvals";
 import PullToRefresh from "@/components/PullToRefresh";
 import EquipmentHandoverDoc from "@/components/docs/EquipmentHandoverDoc";
 import { writeRecordToVault, enrichRecordsWithVault, VAULT_MODULES } from "@/lib/vaultGeneric";
@@ -87,11 +86,10 @@ export default function Equipment() {
       base44.entities.Employee.list("-created_date", 500),
       listCurrentOrg(),
     ]);
-    // جلب بيانات العهدة الحسّاسة (البيان/السريال/الحالة/ملاحظات الإرجاع) من الخزنة للعرض والطباعة
-    const enrichedC = await enrichRecordsWithVault(c, VAULT_MODULES.equipment, "equip_ref", ["item_label", "custom_type", "serial_number", "condition_note", "return_note", "notes", "cost"]);
-    setReqs(r); setCustody(enrichedC); setEmployees(emps); setOrg(orgs[0]);
+    setReqs(r); setCustody(c); setEmployees(emps); setOrg(orgs[0]);
     try { setMe(await base44.auth.me()); } catch {}
     setLoading(false);
+    enrichRecordsWithVault(c, VAULT_MODULES.equipment, "equip_ref", ["item_label", "custom_type", "serial_number", "condition_note", "return_note", "notes", "cost"]).then(setCustody);
   };
   useEffect(() => { load(); }, []);
 

@@ -81,9 +81,8 @@ export default function BusinessTrips() {
       base44.entities.Employee.list("-created_date", 500),
       getOrgOnce(),
     ]);
-    // جلب نصوص الرحلة الحسّاسة (الغرض/ملاحظات الموظف/الملاحظات) من الخزنة للعرض
-    const enrichedTr = await enrichRecordsWithVault(tr, VAULT_MODULES.businessTrips, "trip_ref", ["purpose", "employee_note", "notes"]);
-    setTrips(enrichedTr); setEmployees(e); setOrg(o); setLoading(false);
+    setTrips(tr); setEmployees(e); setOrg(o); setLoading(false);
+    enrichRecordsWithVault(tr, VAULT_MODULES.businessTrips, "trip_ref", ["purpose", "employee_note", "notes"]).then(setTrips);
     const sens = await enrichEmployeesBatch(e);
     setEmployees(applySensitiveMap(e, sens));
   };

@@ -1,7 +1,8 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import { base44 } from "@/api/base44Client";
 import { useI18n } from "@/lib/i18n";
 import { cn } from "@/lib/utils";
+import { useVaultTick } from "@/components/VaultLive";
 import { CreditCard, AlertTriangle, CalendarClock, XCircle, Printer } from "lucide-react";
 import PageHeader from "@/components/PageHeader";
 import { Button } from "@/components/ui/button";
@@ -38,35 +39,38 @@ export default function IqamaExpiryReport() {
     exportPdf: "Export PDF",
   };
 
-  const [items, setItems] = useState([]);
+  const [emps, setEmps] = useState([]);
   const [loading, setLoading] = useState(true);
+  const tick = useVaultTick();
 
   useEffect(() => {
-    (async () => {
-      const today = new Date(); today.setHours(0, 0, 0, 0);
-      const emps = await base44.entities.Employee.list("-created_date", 5000);
-      const out = [];
-      for (const e of emps) {
-        if (e.status === "terminated" || e.status === "resigned") continue;
-        if (!e.iqama_expiry) continue;
-        const d = new Date(e.iqama_expiry + "T00:00:00");
-        if (isNaN(d.getTime())) continue;
-        const diff = d.getTime() - today.getTime();
-        const days = Math.round(diff / DAY);
-        // 90 يوماً أو أقل (يشمل المنتهية فعلاً — قيمة سالبة)
-        if (diff <= HORIZON) {
-          out.push({
-            id: e.id, name: e.full_name || "", national_id: e.national_id || "",
-            department: e.department || "", position: e.position || "",
-            expiry: e.iqama_expiry, days, expired: diff < 0,
-          });
-        }
-      }
-      out.sort((a, b) => a.days - b.days);
-      setItems(out);
+    base44.entities.Employee.list("-created_date", 5000).then((list) => {
+      setEmps(list || []);
       setLoading(false);
-    })();
+    }).catch(() => setLoading(false));
   }, []);
+
+  const items = useMemo(() => {
+    const today = new Date(); today.setHours(0, 0, 0, 0);
+    const out = [];
+    for (const e of emps) {
+      if (e.status === "terminated" || e.status === "resigned") continue;
+      if (!e.iqama_expiry) continue;
+      const d = new Date(e.iqama_expiry + "T00:00:00");
+      if (isNaN(d.getTime())) continue;
+      const diff = d.getTime() - today.getTime();
+      const days = Math.round(diff / DAY);
+      if (diff <= HORIZON) {
+        out.push({
+          id: e.id, name: e.full_name || "", national_id: e.national_id || "",
+          department: e.department || "", position: e.position || "",
+          expiry: e.iqama_expiry, days, expired: diff < 0,
+        });
+      }
+    }
+    out.sort((a, b) => a.days - b.days);
+    return out;
+  }, [emps, tick]);
 
   const expiredCount = items.filter((i) => i.expired).length;
   const soonCount = items.length - expiredCount;

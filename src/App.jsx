@@ -6,6 +6,7 @@ import { BrowserRouter as Router, Route, Routes, Navigate } from 'react-router-d
 import { lazy, Suspense } from "react";
 import PageNotFound from './lib/PageNotFound';
 import { AuthProvider, useAuth } from '@/lib/AuthContext';
+import VaultLive from '@/components/VaultLive';
 import { LanguageProvider } from '@/lib/i18n';
 import UserNotRegisteredError from '@/components/UserNotRegisteredError';
 import ScrollToTop from './components/ScrollToTop';
@@ -206,6 +207,7 @@ function App() {
     <AuthProvider>
       <LanguageProvider>
       <QueryClientProvider client={queryClientInstance}>
+        <VaultLive>
         <Router>
           <ScrollToTop />
           <NationalDayModal />
@@ -213,6 +215,7 @@ function App() {
             <AuthenticatedApp />
           </Suspense>
         </Router>
+        </VaultLive>
         <Toaster />
       </QueryClientProvider>
       </LanguageProvider>

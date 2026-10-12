@@ -5,10 +5,10 @@ import { listCurrentOrg } from "@/lib/currentOrg";
 import StatCard from "@/components/StatCard";
 import PageHeader from "@/components/PageHeader";
 import {
-  Users, CalendarCheck, ClipboardList, Wallet, Clock, CheckCircle2, AlertCircle,
+  Users, CalendarCheck, Clock, CheckCircle2, AlertCircle,
   Bell, IdCard, Shield, Car, FileText, Wrench, Gauge
 } from "lucide-react";
-import { formatCurrency, leaveTypeLabel, statusColors, todayISO } from "@/lib/hr";
+import { leaveTypeLabel, statusColors, todayISO } from "@/lib/hr";
 import { cn } from "@/lib/utils";
 import { expirySeverity, daysUntil } from "@/lib/eos";
 import { useI18n } from "@/lib/i18n";
@@ -44,36 +44,36 @@ export default function Dashboard() {
   const [stats, setStats] = useState({ employees: 0, onLeave: 0, pending: 0, payroll: 0 });
   const [recentLeaves, setRecentLeaves] = useState([]);
   const [todayAttendance, setTodayAttendance] = useState([]);
-  const [alerts, setAlerts] = useState([]);
+  const [vehicles, setVehicles] = useState([]);
   const [employees, setEmployees] = useState([]);
   const [org, setOrg] = useState(null);
   const [loading, setLoading] = useState(true);
 
   const load = async () => {
-    const [emps, leaves, attendance, vehicles] = await Promise.all([
+    const [emps, leaves, attendance, vehicleRows, activePay, olist] = await Promise.all([
       base44.entities.Employee.list("-created_date", 500),
       base44.entities.LeaveRequest.list("-created_date", 10),
       base44.entities.Attendance.filter({ date: todayISO() }, "-created_date", 100),
       base44.entities.Vehicle.list("-created_date", 500),
+      base44.entities.Payroll.filter({ status: "paid" }, "-created_date", 100).catch(() => []),
+      listCurrentOrg().catch(() => []),
     ]);
-    try {
-      const olist = await listCurrentOrg();
-      if (olist && olist[0]) setOrg(olist[0]);
-    } catch (_) {}
-    const activePay = await base44.entities.Payroll.filter({ status: "paid" }, "-created_date", 100);
+    if (olist && olist[0]) setOrg(olist[0]);
     setStats({
       employees: emps.filter((e) => e.status !== "terminated" && e.status !== "resigned").length,
       onLeave: emps.filter((e) => e.status === "on_leave").length,
       pending: leaves.filter((l) => l.status === "pending").length,
-      payroll: activePay.reduce((s, p) => s + (p.net_salary || 0), 0),
+      payroll: (activePay || []).reduce((s, p) => s + (p.net_salary || 0), 0),
     });
     setRecentLeaves(leaves.slice(0, 5));
     setTodayAttendance(attendance);
+    setVehicles(vehicleRows || []);
     setEmployees(emps);
-    setAlerts(buildAlerts(emps, vehicles, isAr, t));
     setLoading(false);
   };
   useEffect(() => { load(); }, [lang]);
+
+  const alerts = buildAlerts(employees, vehicles, isAr, t);
 
   if (loading) return <DashboardSkeleton />;
 

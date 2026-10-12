@@ -7,6 +7,9 @@
  */
 import { findEmpRefsByNationalId, getEmployeesBatch } from "./vaultClient.ts";
 
+const COMPANY_CACHE_TTL = 24 * 60 * 60 * 1000;
+const companyCache = new Map<string, { at: number; keys: string[]; unified: string }>();
+
 function asList(page: any): any[] {
   if (Array.isArray(page)) return page;
   if (Array.isArray(page?.items)) return page.items;
@@ -24,8 +27,16 @@ function day(value: any) {
 
 /** مفاتيح الخزنة الخاصة بمنشأة المستخدم: حسابه، ثم سجل المنشأة */
 export async function resolveCompanyContext(base44: any, user: any): Promise<{ keys: string[]; unified: string }> {
+  const uid = String(user?.id || "");
+  if (uid) {
+    const hit = companyCache.get(uid);
+    if (hit && Date.now() - hit.at < COMPANY_CACHE_TTL) {
+      return { keys: [...hit.keys], unified: hit.unified };
+    }
+  }
   const keys: string[] = [];
   let unified = "";
+  let failed = false;
   pushKey(keys, user?.id);
   try {
     const email = String(user?.email || "").trim().toLowerCase();
@@ -56,8 +67,10 @@ export async function resolveCompanyContext(base44: any, user: any): Promise<{ k
       pushKey(keys, unified);
     }
   } catch (e: any) {
+    failed = true;
     console.error("[vault] tenant resolve:", e?.message || e);
   }
+  if (uid && !failed) companyCache.set(uid, { at: Date.now(), keys: [...keys], unified });
   return { keys, unified };
 }
 
@@ -81,10 +94,11 @@ export async function tenantKeysForRead(base44: any, user: any, empRefs: string[
     };
     if (unified) addRows(await base44.asServiceRole.entities.Employee.filter({ unified_number: unified }));
     if (user?.id) addRows(await base44.asServiceRole.entities.Employee.filter({ created_by_id: user.id }));
-    // موظف بلا رقم موحّد لا يظهر في فلتر المنشأة، ومفتاح خزنته هو حساب من أنشأه.
-    for (const ref of [...want].slice(0, 80)) {
+    const have = new Set(rows.map((e) => String(e.emp_ref || "").trim()).filter(Boolean));
+    const missing = [...want].filter((ref) => !have.has(ref)).slice(0, 80);
+    if (missing.length) {
       try {
-        addRows(await base44.asServiceRole.entities.Employee.filter({ emp_ref: ref }));
+        addRows(await base44.asServiceRole.entities.Employee.filter({ emp_ref: { $in: missing } }));
       } catch { /* البحث بالرمز غير متاح */ }
     }
     for (const e of rows) {

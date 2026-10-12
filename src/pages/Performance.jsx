@@ -4,10 +4,9 @@ import PageHeader from "@/components/PageHeader";
 import PerformanceForm from "@/components/PerformanceForm";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
-import { Plus, Pencil, Trash2, Star, Target, TrendingUp, Award, ArrowUpRight, RotateCcw, Search, Printer } from "lucide-react";
+import { Plus, Pencil, Star, Target, TrendingUp, Award, ArrowUpRight, RotateCcw, Search, Printer } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
-import { todayISO } from "@/lib/hr";
 import { useI18n } from "@/lib/i18n";
 import { printSection } from "@/lib/sectionPrint";
 import { enrichRecordsWithVault, VAULT_MODULES } from "@/lib/vaultGeneric";
@@ -68,11 +67,10 @@ export default function Performance() {
       base44.entities.Performance.list("-created_date", 500),
       base44.entities.Employee.list("-created_date", 500),
     ]);
-    // جلب نصوص التقييم الحسّاسة (الأهداف/النقاط/التحسين/الملاحظات) من الخزنة للعرض
-    const enrichedR = await enrichRecordsWithVault(r, VAULT_MODULES.performance, "perf_ref", ["goals", "personal_goals", "behaviors", "tasks_coverage", "tasks_amendments", "strengths", "improvements", "notes"]);
-    setReviews(enrichedR); setEmployees(e);
+    setReviews(r); setEmployees(e);
     try { setUser(await base44.auth.me()); } catch {}
     setLoading(false);
+    enrichRecordsWithVault(r, VAULT_MODULES.performance, "perf_ref", ["goals", "personal_goals", "behaviors", "tasks_coverage", "tasks_amendments", "strengths", "improvements", "notes"]).then(setReviews);
   };
   useEffect(() => { load(); }, []);
 

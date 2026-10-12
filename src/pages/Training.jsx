@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
-import { Plus, Pencil, Trash2, GraduationCap, Search, Eye, Printer } from "lucide-react";
+import { Plus, Pencil, GraduationCap, Search, Eye, Printer } from "lucide-react";
 import { useToast } from "@/components/ui/use-toast";
 import { useI18n } from "@/lib/i18n";
 import TrainingPlanFormDialog from "@/components/training/TrainingPlanFormDialog";
@@ -85,10 +85,9 @@ export default function Training() {
         base44.entities.TrainingPlan.list("-created_date", 500),
         base44.entities.Employee.list("-created_date", 500).catch(() => []),
       ]);
-      // جلب محتوى الخطة الحساس (النقص/الهدف/الآلية/الوصف) من الخزنة للعرض
-      const enrichedPlans = await enrichRecordsWithVault(pl || [], VAULT_MODULES.training, "training_ref", ["deficiency", "goal", "mechanism", "description"]);
-      setPlans(enrichedPlans);
+      setPlans(pl || []);
       setEmployees(emps || []);
+      enrichRecordsWithVault(pl || [], VAULT_MODULES.training, "training_ref", ["deficiency", "goal", "mechanism", "description"]).then(setPlans);
     } catch (e) { toast({ title: t.loadErr, description: e.message, variant: "destructive" }); }
     finally { setLoading(false); }
   };

@@ -7,6 +7,10 @@
  */
 import { useState, useEffect } from "react";
 import { base44 } from "@/api/base44Client";
+import {
+  noteVaultFailure, readEmployeeCache, rememberEmployee, trackRows, vaultCooling,
+  snapshotsFresh, markSnapshotsDone, notifyVault,
+} from "@/lib/vaultCache";
 
 export const SENSITIVE_FIELDS = [
   "national_id", "birth_date", "phone", "address", "emergency_contact",
@@ -43,14 +47,10 @@ export function unwrapVaultPayload(res) {
  */
 export async function enrichEmployee(employee) {
   if (!employee || !employee.emp_ref) return employee;
-  try {
-    const res = await base44.functions.invoke("vaultProxy", { action: "getEmployee", empRef: employee.emp_ref });
-    const data = unwrapVaultPayload(res);
-    return { ...employee, ...pickSensitive(data) };
-  } catch (e) {
-    // الخزنة غير مُهيّأة أو السجل غير موجود — أبقِ الحقول المحلية
-    return employee;
-  }
+  const hit = readEmployeeCache(employee.emp_ref);
+  if (hit?.vault) return { ...employee, ...hit.fields };
+  const map = await enrichEmployeesBatch([employee]);
+  return { ...employee, ...(map[employee.emp_ref] || {}) };
 }
 
 /**
@@ -59,12 +59,10 @@ export async function enrichEmployee(employee) {
  */
 export async function fetchSensitiveByRef(empRef) {
   if (!empRef) return {};
-  try {
-    const res = await base44.functions.invoke("vaultProxy", { action: "getEmployee", empRef });
-    return pickSensitive(unwrapVaultPayload(res));
-  } catch (e) {
-    return {};
-  }
+  const hit = readEmployeeCache(empRef);
+  if (hit?.vault) return { ...hit.fields };
+  const map = await enrichEmployeesBatch([{ emp_ref: empRef }]);
+  return map[empRef] || {};
 }
 
 /**
@@ -72,31 +70,115 @@ export async function fetchSensitiveByRef(empRef) {
  * يعيد خريطة emp_ref → قيم حساسة. يتجاهل من لا يملكون emp_ref.
  * النداء الواحد يمنع فتح دالة سحابية لكل موظف، وهو ما كان يؤخر القائمة ثم يُسقط الحقول.
  */
+function applyCachedFields(row) {
+  const hit = row?.emp_ref ? readEmployeeCache(row.emp_ref) : null;
+  if (!hit?.fields) return;
+  for (const [k, v] of Object.entries(hit.fields)) {
+    if (v === undefined || v === null || String(v).trim() === "") continue;
+    if (row[k] !== undefined && row[k] !== null && String(row[k]).trim() !== "") continue;
+    row[k] = v;
+  }
+}
+
+/** يملأ الصفوف من ذاكرة اليوم فوراً، ويطلب الناقص من الخزنة في الخلفية دون حجب الشاشة. */
+export function warmEmployeeRows(rows) {
+  const list = Array.isArray(rows) ? rows : [];
+  trackRows(list);
+  for (const row of list) applyCachedFields(row);
+  const pending = warmMissing(list).then(() => finishEmployeeWarm(list));
+  pending.catch(() => {});
+  return pending;
+}
+
+let flight = Promise.resolve();
+const flightRefs = new Set();
+
+function warmMissing(rows) {
+  const refs = [...new Set(rows.map((r) => r?.emp_ref).filter(Boolean))];
+  if (vaultCooling()) return flight;
+  const need = refs.filter((ref) => {
+    const hit = readEmployeeCache(ref);
+    if (hit?.vault) return false;
+    if (flightRefs.has(ref)) return false;
+    return true;
+  });
+  if (!need.length) return flight;
+  for (const ref of need) flightRefs.add(ref);
+  const job = fetchEmployeeRefs(need).finally(() => {
+    for (const ref of need) flightRefs.delete(ref);
+  });
+  const current = flight.then(() => job, () => job);
+  flight = current;
+  current.finally(() => {
+    if (flight === current) flight = Promise.resolve();
+  });
+  return current;
+}
+
+async function fetchEmployeeRefs(refs) {
+  try {
+    const res = await base44.functions.invoke("vaultProxy", { action: "getEmployees", empRefs: refs });
+    const payload = unwrapVaultPayload(res);
+    const byRef = payload.byRef && typeof payload.byRef === "object" ? payload.byRef : null;
+    if (!byRef) throw new Error("no_byRef");
+    let stored = 0;
+    for (const ref of refs) {
+      const row = byRef[ref];
+      if (!row || typeof row !== "object") continue;
+      rememberEmployee(ref, pickSensitive(row), true, true);
+      stored++;
+    }
+    if (!stored) noteVaultFailure();
+  } catch {
+    noteVaultFailure();
+    await fetchEmployeesOneByOne(refs);
+  }
+}
+
+async function fetchEmployeesOneByOne(refs) {
+  const queue = refs.slice();
+  const workers = Array.from({ length: Math.min(4, queue.length) }, async () => {
+    while (queue.length) {
+      const ref = queue.shift();
+      try {
+        const res = await base44.functions.invoke("vaultProxy", { action: "getEmployee", empRef: ref });
+        const fields = pickSensitive(unwrapVaultPayload(res));
+        rememberEmployee(ref, fields, true, true);
+      } catch { /* يبقى العرض على الذاكرة أو الحقول المحلية */ }
+    }
+  });
+  await Promise.all(workers);
+}
+
+async function finishEmployeeWarm(rows) {
+  for (const row of rows) applyCachedFields(row);
+  const missingId = rows.filter((e) => e?.full_name && e?.id && !String(e.national_id || "").trim());
+  if (missingId.length && !snapshotsFresh()) {
+    try {
+      const { loadNationalIdSnapshots } = await import("./tenantScope");
+      const snaps = await loadNationalIdSnapshots();
+      markSnapshotsDone();
+      for (const row of missingId) {
+        const nid = snaps.get(row.id);
+        if (!nid) continue;
+        row.national_id = nid;
+        if (row.emp_ref) rememberEmployee(row.emp_ref, { national_id: nid }, false, true);
+      }
+    } catch { /* القوائم القديمة غير متاحة */ }
+  }
+  notifyVault();
+}
+
 export async function enrichEmployeesBatch(employees) {
   const withRef = (employees || []).filter((e) => e && e.emp_ref);
   if (withRef.length === 0) return {};
-  const empRefs = [...new Set(withRef.map((e) => e.emp_ref))];
-  try {
-    const res = await base44.functions.invoke("vaultProxy", { action: "getEmployees", empRefs });
-    const payload = unwrapVaultPayload(res);
-    const byRef = payload.byRef && typeof payload.byRef === "object" ? payload.byRef : {};
-    const map = {};
-    for (const ref of empRefs) map[ref] = pickSensitive(byRef[ref]);
-    return map;
-  } catch (e) {
-    // الدفعة فشلت أو الدالة المنشورة لا تعرفها بعد: جلب فردي محدود، لا تُترك الشاشة فاضية.
-    const map = {};
-    const queue = withRef.slice();
-    const workers = Array.from({ length: Math.min(4, queue.length) }, async () => {
-      while (queue.length) {
-        const emp = queue.shift();
-        const enriched = await enrichEmployee(emp);
-        map[emp.emp_ref] = pickSensitive(enriched);
-      }
-    });
-    await Promise.all(workers);
-    return map;
+  await warmEmployeeRows(withRef);
+  const map = {};
+  for (const emp of withRef) {
+    const hit = readEmployeeCache(emp.emp_ref);
+    map[emp.emp_ref] = hit?.fields ? { ...hit.fields } : {};
   }
+  return map;
 }
 
 /** يدمج خريطة الخزنة في قائمة العرض دون المساس بالسجل الأصلي في Base44 */

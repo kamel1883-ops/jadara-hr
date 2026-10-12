@@ -280,6 +280,32 @@ export async function getRecord(tenantId, module, ref) {
   return callVault(`/api/vault/modules/${module}/${ref}`, tenantId, { method: "GET" });
 }
 
+/** عدة سجلات في رحلة دالة واحدة. الخزنة الحالية تُقرأ سجلاً سجلاً بتوازي محدود. */
+export async function getRecordsBatch(tenantIds, module, refs) {
+  const ids = [...new Set((tenantIds || []).map((t) => String(t || "").trim()).filter(Boolean))].slice(0, 24);
+  const want = [...new Set((refs || []).map((r) => String(r || "").trim()).filter(Boolean))].slice(0, 200);
+  const found: Record<string, any> = {};
+  if (!module || !ids.length || !want.length) return found;
+  let pending = want.slice();
+  let down = false;
+  for (const tenant of ids) {
+    if (!pending.length || down) break;
+    const missed = [];
+    await mapPool(pending, 8, async (ref) => {
+      try {
+        const row = await getRecord(tenant, module, ref);
+        if (row && typeof row === "object") found[ref] = row;
+        else missed.push(ref);
+      } catch (e: any) {
+        if (String(e?.message || "").includes("404")) missed.push(ref);
+        else down = true;
+      }
+    });
+    pending = missed;
+  }
+  return found;
+}
+
 /** يحدّث سجلاً موجوداً */
 export async function updateRecord(tenantId, module, ref, data, empRef = null) {
   return callVault(`/api/vault/modules/${module}/${ref}`, tenantId, {

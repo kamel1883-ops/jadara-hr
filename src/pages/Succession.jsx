@@ -3,7 +3,7 @@ import { base44 } from "@/api/base44Client";
 import PageHeader from "@/components/PageHeader";
 import SuccessionForm from "@/components/SuccessionForm";
 import { Button } from "@/components/ui/button";
-import { Plus, Pencil, Trash2, Crown, AlertTriangle, ShieldCheck, GitBranch, Printer } from "lucide-react";
+import { Plus, Pencil, Crown, AlertTriangle, ShieldCheck, GitBranch, Printer } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { daysUntil } from "@/lib/eos";
 import { useI18n } from "@/lib/i18n";
@@ -62,9 +62,8 @@ export default function Succession() {
   const load = async () => {
     setLoading(true);
     const [p, e] = await Promise.all([base44.entities.SuccessionPlan.list("-created_date", 500), base44.entities.Employee.list("-created_date", 500)]);
-    // جلب خطة التطوير + الملاحظات الحسّاسة من الخزنة للعرض
-    const enrichedP = await enrichRecordsWithVault(p, VAULT_MODULES.succession, "succession_ref", ["development_plan", "notes"]);
-    setPlans(enrichedP); setEmployees(e); setLoading(false);
+    setPlans(p); setEmployees(e); setLoading(false);
+    enrichRecordsWithVault(p, VAULT_MODULES.succession, "succession_ref", ["development_plan", "notes"]).then(setPlans);
   };
   useEffect(() => { load(); }, []);
 

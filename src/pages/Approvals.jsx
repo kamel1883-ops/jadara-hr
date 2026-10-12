@@ -136,15 +136,12 @@ export default function Approvals() {
       base44.entities.Employee.list("-created_date", 500),
       listCurrentOrg(),
     ]);
-    // جلب النصوص الحسّاسة من الخزنة (سبب الإجازة / غرض الرحلة / الملاحظات) ودمجها للعرض
-    const [lvEnriched, trEnriched] = await Promise.all([
-      enrichRecordsWithVault(lv, VAULT_MODULES.leaves, "leave_ref", ["reason", "manager_note", "hr_note", "finance_note"]),
-      enrichRecordsWithVault(tr, VAULT_MODULES.businessTrips, "trip_ref", ["purpose", "employee_note", "notes", "hr_note", "finance_note"]),
-    ]);
-    const sens = await enrichEmployeesBatch(emps);
-    setLeaves(lvEnriched); setLoans(ln); setTrips(trEnriched); setEmployees(applySensitiveMap(emps, sens)); setOrg(orgs[0]);
+    setLeaves(lv); setLoans(ln); setTrips(tr); setEmployees(emps); setOrg(orgs[0]);
     try { setMe(await base44.auth.me()); } catch {}
     setLoading(false);
+    enrichRecordsWithVault(lv, VAULT_MODULES.leaves, "leave_ref", ["reason", "manager_note", "hr_note", "finance_note"]).then(setLeaves);
+    enrichRecordsWithVault(tr, VAULT_MODULES.businessTrips, "trip_ref", ["purpose", "employee_note", "notes", "hr_note", "finance_note"]).then(setTrips);
+    enrichEmployeesBatch(emps).then((sens) => setEmployees(applySensitiveMap(emps, sens)));
   };
   useEffect(() => { load(); }, []);
 

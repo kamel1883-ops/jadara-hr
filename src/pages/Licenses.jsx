@@ -7,6 +7,7 @@ import { Plus, Pencil, ShieldCheck, Ban, RefreshCw } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { LICENSE_TYPES, typeMeta, expiryStatus, statusBadgeOf } from "@/lib/licenses";
 import { useI18n } from "@/lib/i18n";
+import { enrichRecordsWithVault, VAULT_MODULES } from "@/lib/vaultGeneric";
 
 export default function Licenses() {
   const { lang } = useI18n();
@@ -41,6 +42,7 @@ export default function Licenses() {
     const data = await base44.entities.License.list("-created_date", 500);
     setLicenses(data);
     setLoading(false);
+    enrichRecordsWithVault(data, VAULT_MODULES.licenses, "license_ref", ["license_number", "issuing_authority", "notes"]).then(setLicenses);
   };
   useEffect(() => { load(); }, []);
 

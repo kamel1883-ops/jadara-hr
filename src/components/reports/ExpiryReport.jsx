@@ -1,7 +1,9 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import { base44 } from "@/api/base44Client";
 import { useI18n } from "@/lib/i18n";
 import { cn } from "@/lib/utils";
+import { useVaultTick } from "@/components/VaultLive";
+import { enrichRecordsWithVault, VAULT_MODULES } from "@/lib/vaultGeneric";
 import {
   FileText, ShieldCheck, Car, CalendarClock, Heart, Building2, Clock, AlertTriangle, CreditCard, Printer,
 } from "lucide-react";
@@ -22,6 +24,52 @@ function classify(dateStr, today) {
   if (diff < 0) return null;
   if (diff <= HORIZON) return { days, status: "soon", expiry: dateStr };
   return null;
+}
+
+function buildExpiryItems({ licenses, subs, emps, vehicles }) {
+  const today = new Date(); today.setHours(0, 0, 0, 0);
+  const out = [];
+  for (const l of licenses) {
+    if (l.not_applicable) continue;
+    const c = classify(l.expiry_date, today);
+    if (c) out.push({ category: "license", label: l.custom_label || l.license_type || "", identifier: l.license_number || "", expiry: c.expiry, days: c.days, status: c.status });
+  }
+  for (const s of subs) {
+    if (s.not_applicable) continue;
+    const c = classify(s.expiry_date, today);
+    if (c) out.push({ category: "gov_subscription", label: s.custom_label || s.platform_key || "", identifier: s.account_id || "", expiry: c.expiry, days: c.days, status: c.status });
+  }
+  for (const e of emps) {
+    if (e.status === "terminated" || e.status === "resigned") continue;
+    const iq = classify(e.iqama_expiry, today);
+    if (iq) out.push({ category: "iqama", label: e.full_name || "", identifier: e.national_id || e.employee_number || "", expiry: iq.expiry, days: iq.days, status: iq.status });
+    const ct = classify(e.contract_end_date, today);
+    if (ct) out.push({ category: "contract", label: e.full_name || "", identifier: e.employee_number || e.national_id || "", expiry: ct.expiry, days: ct.days, status: ct.status });
+    const hi = classify(e.health_insurance_expiry, today);
+    if (hi) out.push({ category: "health_insurance", label: e.full_name || "", identifier: e.national_id || "", expiry: hi.expiry, days: hi.days, status: hi.status });
+    if (e.hire_date && e.status === "active") {
+      const ph = new Date(e.hire_date + "T00:00:00");
+      if (!isNaN(ph.getTime())) {
+        const probEnd = new Date(ph.getTime() + 90 * DAY);
+        const diff = probEnd.getTime() - today.getTime();
+        const days = Math.round(diff / DAY);
+        if (diff >= 0 && diff <= HORIZON) {
+          out.push({ category: "probation", label: e.full_name || "", identifier: e.employee_number || e.national_id || "", expiry: probEnd.toISOString().slice(0, 10), days, status: "soon" });
+        }
+      }
+    }
+  }
+  for (const v of vehicles) {
+    const ident = v.plate_number || v.plate_number_en || "";
+    const le = classify(v.license_expiry, today);
+    if (le) out.push({ category: "vehicle_license", label: ident, identifier: ident, expiry: le.expiry, days: le.days, status: le.status });
+    const ie = classify(v.insurance_expiry, today);
+    if (ie) out.push({ category: "vehicle_insurance", label: ident, identifier: v.insurance_number || ident, expiry: ie.expiry, days: ie.days, status: ie.status });
+    const pe = classify(v.inspection_expiry, today);
+    if (pe) out.push({ category: "vehicle_inspection", label: ident, identifier: ident, expiry: pe.expiry, days: pe.days, status: pe.status });
+  }
+  out.sort((a, b) => a.days - b.days);
+  return out;
 }
 
 export default function ExpiryReport() {
@@ -79,63 +127,27 @@ export default function ExpiryReport() {
     exportPdf: "Export PDF",
   };
 
-  const [items, setItems] = useState([]);
+  const [sources, setSources] = useState(null);
   const [loading, setLoading] = useState(true);
+  const tick = useVaultTick();
 
   useEffect(() => {
     (async () => {
-      const today = new Date(); today.setHours(0, 0, 0, 0);
-      const out = [];
       const [licenses, subs, emps, vehicles] = await Promise.all([
         base44.entities.License.list("-created_date", 2000),
         base44.entities.PlatformSubscription.list("-created_date", 2000),
         base44.entities.Employee.list("-created_date", 5000),
         base44.entities.Vehicle.list("-created_date", 2000),
       ]);
-      for (const l of licenses) {
-        if (l.not_applicable) continue;
-        const c = classify(l.expiry_date, today);
-        if (c) out.push({ category: "license", label: l.custom_label || l.license_type || "", identifier: l.license_number || "", expiry: c.expiry, days: c.days, status: c.status });
-      }
-      for (const s of subs) {
-        if (s.not_applicable) continue;
-        const c = classify(s.expiry_date, today);
-        if (c) out.push({ category: "gov_subscription", label: s.custom_label || s.platform_key || "", identifier: s.account_id || "", expiry: c.expiry, days: c.days, status: c.status });
-      }
-      for (const e of emps) {
-        if (e.status === "terminated" || e.status === "resigned") continue;
-        const iq = classify(e.iqama_expiry, today);
-        if (iq) out.push({ category: "iqama", label: e.full_name || "", identifier: e.national_id || e.employee_number || "", expiry: iq.expiry, days: iq.days, status: iq.status });
-        const ct = classify(e.contract_end_date, today);
-        if (ct) out.push({ category: "contract", label: e.full_name || "", identifier: e.employee_number || e.national_id || "", expiry: ct.expiry, days: ct.days, status: ct.status });
-        const hi = classify(e.health_insurance_expiry, today);
-        if (hi) out.push({ category: "health_insurance", label: e.full_name || "", identifier: e.national_id || "", expiry: hi.expiry, days: hi.days, status: hi.status });
-        if (e.hire_date && e.status === "active") {
-          const ph = new Date(e.hire_date + "T00:00:00");
-          if (!isNaN(ph.getTime())) {
-            const probEnd = new Date(ph.getTime() + 90 * DAY);
-            const diff = probEnd.getTime() - today.getTime();
-            const days = Math.round(diff / DAY);
-            if (diff >= 0 && diff <= HORIZON) {
-              out.push({ category: "probation", label: e.full_name || "", identifier: e.employee_number || e.national_id || "", expiry: probEnd.toISOString().slice(0, 10), days, status: "soon" });
-            }
-          }
-        }
-      }
-      for (const v of vehicles) {
-        const ident = v.plate_number || v.plate_number_en || "";
-        const le = classify(v.license_expiry, today);
-        if (le) out.push({ category: "vehicle_license", label: ident, identifier: ident, expiry: le.expiry, days: le.days, status: le.status });
-        const ie = classify(v.insurance_expiry, today);
-        if (ie) out.push({ category: "vehicle_insurance", label: ident, identifier: v.insurance_number || ident, expiry: ie.expiry, days: ie.days, status: ie.status });
-        const pe = classify(v.inspection_expiry, today);
-        if (pe) out.push({ category: "vehicle_inspection", label: ident, identifier: ident, expiry: pe.expiry, days: pe.days, status: pe.status });
-      }
-      out.sort((a, b) => a.days - b.days);
-      setItems(out);
+      setSources({ licenses, subs, emps, vehicles });
       setLoading(false);
+      enrichRecordsWithVault(licenses, VAULT_MODULES.licenses, "license_ref", ["license_number", "issuing_authority", "notes"]).then((rows) => {
+        setSources((cur) => (cur ? { ...cur, licenses: rows } : cur));
+      });
     })();
   }, []);
+
+  const items = useMemo(() => (sources ? buildExpiryItems(sources) : []), [sources, tick]);
 
   const soon = items;
   const exportPdf = () => {

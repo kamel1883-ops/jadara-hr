@@ -11,7 +11,7 @@ import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue
 } from "@/components/ui/select";
 import { Input } from "@/components/ui/input";
-import { Wallet, FileCheck, Clock, TrendingUp, Sparkles, CheckCircle2, Shield, Fingerprint, FileDown, RotateCcw, FileSpreadsheet, Check, X, Send, Banknote } from "lucide-react";
+import { Wallet, FileCheck, Clock, TrendingUp, Sparkles, CheckCircle2, Shield, Fingerprint, FileDown, RotateCcw, Check, X, Send, Banknote } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { formatCurrency, payrollStatusLabel, todayISO } from "@/lib/hr";
 import { useI18n } from "@/lib/i18n";
@@ -23,8 +23,7 @@ import { enrichEmployeesBatch } from "@/lib/vaultSensitive";
 
 // === مساعدات احتساب الرواتب — مشتركة مع بوابة الموظف (المُفوّض بصلاحية الرواتب) ===
 import {
-  PAID_STATUSES, computeWorkDaysSet, computeWorkDaysInMonth,
-  computeDailyWage, computeHourlyWage, computeAbsentDeduction, computeNetFromAttendance,
+  PAID_STATUSES, computeWorkDaysSet, computeWorkDaysInMonth, computeAbsentDeduction, computeNetFromAttendance,
 } from "@/lib/payrollCompute";
 
 export default function Payroll() {
@@ -86,11 +85,13 @@ export default function Payroll() {
   };
   const load = async () => {
     setLoading(true);
-    const data = await base44.entities.Payroll.filter({ month, year }, "-created_date", 500);
+    const [data, emps, orgs] = await Promise.all([
+      base44.entities.Payroll.filter({ month, year }, "-created_date", 500),
+      base44.entities.Employee.filter({ status: "active" }, "-created_date", 500),
+      listCurrentOrg(),
+    ]);
     setPayrolls(data);
-    const emps = await base44.entities.Employee.filter({ status: "active" }, "-created_date", 500);
-    setEmployees(await enrichEmps(emps));
-    const orgs = await listCurrentOrg();
+    setEmployees(emps);
     setOrg(orgs[0]);
     setLoading(false);
   };
