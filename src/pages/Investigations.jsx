@@ -114,6 +114,7 @@ export default function Investigations() {
 
   const [rows, setRows] = useState([]);
   const [employees, setEmployees] = useState([]);
+  const [org, setOrg] = useState(null); // current organization (for header)
   const [loading, setLoading] = useState(true);
   const [open, setOpen] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -136,7 +137,11 @@ export default function Investigations() {
       setRows(items);
       setEmployees(Array.isArray(emps) ? emps : []);
       setSelected((cur) => (cur ? items.find((r) => r.id === cur.id) || null : null));
-    } catch {
+      try {
+        const os = await listCurrentOrg();
+        setOrg(Array.isArray(os) && os.length ? os[0] : null);
+      } catch (e) { /* ignore org error for printing fallback */ }
+    } catch (err) {
       setRows([]);
     } finally {
       setLoading(false);
@@ -180,7 +185,7 @@ export default function Investigations() {
     if (!form.ids.length || !form.allegations.trim() || !form.type) return;
     setBusy(true);
     try {
-      const org = (await listCurrentOrg())[0];
+      const orgInfo = (await listCurrentOrg())[0];
       const refNo = makeInvestigationRef();
       const parties = form.ids.map((id) => ({
         employee_id: id,
@@ -199,7 +204,7 @@ export default function Investigations() {
         allegations: form.allegations.trim(),
         parties: JSON.stringify(parties),
         status: "awaiting_subjects",
-        unified_number: org?.unified_number || "",
+        unified_number: orgInfo?.unified_number || "",
       });
       await Promise.all(form.ids.map((id) => notifyEmployee(id, refNo, "subject").catch(() => {})));
       setOpen(false);
@@ -267,11 +272,7 @@ export default function Investigations() {
     } catch { /* النسخ اختياري */ }
   };
 
-  // Build a clean print-only HTML in the requested order:
-  // 1. سبب الادعاء (allegations)
-  // 2. إفادة الموظف/الموظفين المشمولين (their replies)
-  // 3. إفادات الشهود
-  // 4. التوصية (recommendation)
+  // Build a clean print-only HTML in the requested order, and include header with company + jadara branding
   const printInvestigation = () => {
     if (!selected) { alert(isAr ? 'لا يوجد محضر مختار للطباعة.' : 'No investigation selected to print.'); return; }
 
@@ -285,40 +286,59 @@ export default function Investigations() {
     const allegations = escapeHtml(selected.allegations || '');
     const rec = escapeHtml(selected.recommendation || '');
 
+    const orgName = org?.name || selected.unified_number || '';
+    const orgUnified = org?.unified_number || selected.unified_number || '';
+    const orgLogo = org?.logo_url || org?.logo || ''; // fallback - replace with actual logo field if available
+
+    // Header: left = Jadara system, right = company name + unified number
+    let header = `<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;">`;
+    // left: Jadara branding (logo or text)
+    header += `<div style="text-align:left;flex:0 0 40%;">`;
+    header += `<div style="font-weight:700;font-size:16px;color:#111827;">جدارة لإدارة الموارد البشرية</div>`;
+    header += `</div>`;
+    // right: company
+    header += `<div style="text-align:right;flex:0 0 55%;">`;
+    header += `<div style="font-weight:700;font-size:16px;color:#111827;">${escapeHtml(orgName)}</div>`;
+    header += `<div style="font-size:12px;color:#6b7280">${escapeHtml(isAr? 'الرقم الموحد' : 'Unified No')}: ${escapeHtml(orgUnified)}</div>`;
+    header += `</div>`;
+    header += `</div>`;
+
     let body = '';
-    body += `<div class="header"><h1>${escapeHtml(docTitle)}</h1><div><strong>${escapeHtml(t.ref)}:</strong> ${ref}</div><div><strong>${escapeHtml(isAr? 'نوع المخالفة' : 'Violation')}:</strong> ${violation}</div><hr/></div>`;
+    body += header;
+    body += `<div style="border-top:1px solid #e5e7eb;margin-top:6px;padding-top:8px"></div>`;
+    body += `<div style="margin-top:8px;"><h1 style="font-size:20px;margin:0 0 6px 0">${escapeHtml(docTitle)}</h1><div style="margin-bottom:6px"><strong>${escapeHtml(t.ref)}:</strong> ${ref}</div><div style="margin-bottom:6px"><strong>${escapeHtml(isAr? 'نوع المخالفة' : 'Violation')}:</strong> ${violation}</div><hr/></div>`;
 
     // 1. السبب / الادعاء
-    body += `<section><h2>${escapeHtml(isAr? 'الادعاء / سبب المحضر' : 'Allegation')}</h2><div class="allegations">${allegations || '—'}</div></section>`;
+    body += `<section><h2 style="font-size:14px;margin-top:12px;margin-bottom:6px">${escapeHtml(isAr? 'الادعاء / سبب المحضر' : 'Allegation')}</h2><div class="allegations">${allegations || '—'}</div></section>`;
 
     // 2. إفادات الموظفين (subjects)
-    body += `<section><h2>${escapeHtml(t.subjects)}</h2>`;
+    body += `<section><h2 style="font-size:14px;margin-top:12px;margin-bottom:6px">${escapeHtml(t.subjects)}</h2>`;
     if (subjects.length === 0) {
       body += `<div>—</div>`;
     } else {
       for (const p of subjects) {
         const name = escapeHtml(labelOf(p.employee_id, p.employee_name));
         const reply = escapeHtml(p.reply || '—');
-        body += `<div class="party"><div class="party-name"><strong>${name}</strong></div><div class="party-reply"><strong>${escapeHtml(t.reply)}:</strong> ${reply}</div></div>`;
+        body += `<div class="party" style="border:1px solid #e6e6e6;padding:10px;border-radius:6px;margin-bottom:8px"><div class="party-name" style="margin-bottom:6px"><strong>${name}</strong></div><div class="party-reply"><strong>${escapeHtml(t.reply)}:</strong> ${reply}</div></div>`;
       }
     }
     body += `</section>`;
 
     // 3. إفادات الشهود
-    body += `<section><h2>${escapeHtml(t.witnesses)}</h2>`;
+    body += `<section><h2 style="font-size:14px;margin-top:12px;margin-bottom:6px">${escapeHtml(t.witnesses)}</h2>`;
     if (witnesses.length === 0) {
       body += `<div>—</div>`;
     } else {
       for (const p of witnesses) {
         const name = escapeHtml(labelOf(p.employee_id, p.employee_name));
         const reply = escapeHtml(p.reply || '—');
-        body += `<div class="party"><div class="party-name"><strong>${name}</strong></div><div class="party-reply"><strong>${escapeHtml(t.reply)}:</strong> ${reply}</div></div>`;
+        body += `<div class="party" style="border:1px solid #e6e6e6;padding:10px;border-radius:6px;margin-bottom:8px"><div class="party-name" style="margin-bottom:6px"><strong>${name}</strong></div><div class="party-reply"><strong>${escapeHtml(t.reply)}:</strong> ${reply}</div></div>`;
       }
     }
     body += `</section>`;
 
     // 4. التوصية
-    body += `<section><h2>${escapeHtml(t.recommendation)}</h2><div class="recommendation">${rec || '—'}</div></section>`;
+    body += `<section><h2 style="font-size:14px;margin-top:12px;margin-bottom:6px">${escapeHtml(t.recommendation)}</h2><div class="recommendation">${rec || '—'}</div></section>`;
 
     // Footer with date
     const dateStr = escapeHtml(new Date().toLocaleString(isAr ? 'ar-SA' : 'en-US'));
@@ -331,8 +351,6 @@ export default function Investigations() {
         h1 { font-size: 20px; margin-bottom: 6px; }
         h2 { font-size: 14px; margin-top: 14px; margin-bottom: 6px; }
         .allegations, .recommendation { white-space: pre-wrap; }
-        .party { border: 1px solid #e6e6e6; padding: 10px; border-radius: 6px; margin-bottom: 8px; }
-        .party-name { margin-bottom: 6px; }
       </style>`;
 
     const win = window.open('', '_blank', 'width=900,height=700');
