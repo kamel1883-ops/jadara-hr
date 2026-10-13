@@ -35,7 +35,7 @@ function escapeHtml(str) {
     .replace(/&/g, "&amp;")
     .replace(/</g, "&lt;")
     .replace(/>/g, "&gt;")
-    .replace(/"/g, "&quot;")
+    .replace(/\"/g, "&quot;")
     .replace(/'/g, "&#39;");
 }
 
@@ -290,14 +290,19 @@ export default function Investigations() {
     const orgUnified = org?.unified_number || selected.unified_number || '';
     const orgLogo = org?.logo_url || org?.logo || ''; // fallback - replace with actual logo field if available
 
-    // Header: left = Jadara system, right = company name + unified number
+    // Jadara public logo (used across the app) — keep in sync with emailFooter/SplashScreen
+    const JADARA_LOGO = "https://media.base44.com/images/public/6a74edc8f347046365c2e1a4/90516d3dc_.jpeg";
+
+    // Header: left = Jadara system logo, right = company name + unified number + company logo
     let header = `<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;">`;
-    // left: Jadara branding (logo or text)
-    header += `<div style="text-align:left;flex:0 0 40%;">`;
-    header += `<div style="font-weight:700;font-size:16px;color:#111827;">جدارة لإدارة الموارد البشرية</div>`;
+    // left: Jadara branding (logo image)
+    header += `<div style="text-align:left;flex:0 0 40%;display:flex;align-items:center;gap:10px">`;
+    header += `<img src="${JADARA_LOGO}" alt="جداره" style="height:56px;width:auto;border-radius:8px;" />`;
+    header += `<div style="font-weight:700;font-size:14px;color:#111827;margin-right:6px">جدارة لإدارة الموارد البشرية</div>`;
     header += `</div>`;
-    // right: company
-    header += `<div style="text-align:right;flex:0 0 55%;">`;
+    // right: company (logo + name + unified number)
+    header += `<div style="text-align:right;flex:0 0 55%;display:flex;flex-direction:column;align-items:flex-end;">`;
+    if (orgLogo) header += `<img src="${escapeHtml(orgLogo)}" alt="logo" style="height:56px;width:auto;border-radius:6px;margin-bottom:4px" />`;
     header += `<div style="font-weight:700;font-size:16px;color:#111827;">${escapeHtml(orgName)}</div>`;
     header += `<div style="font-size:12px;color:#6b7280">${escapeHtml(isAr? 'الرقم الموحد' : 'Unified No')}: ${escapeHtml(orgUnified)}</div>`;
     header += `</div>`;
