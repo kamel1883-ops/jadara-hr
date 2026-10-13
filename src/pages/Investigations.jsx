@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useState, useRef } from "react";
 import { base44 } from "@/api/base44Client";
 import { listCurrentOrg } from "@/lib/currentOrg";
 import PageHeader from "@/components/PageHeader";
@@ -8,7 +8,7 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
-import { FileSearch, Plus, Loader2 } from "lucide-react";
+import { FileSearch, Plus, Loader2, Printer } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useI18n } from "@/lib/i18n";
 import { todayISO } from "@/lib/hr";
@@ -27,6 +27,16 @@ function typeName(id, custom, isAr) {
   if (id === "other") return custom || (isAr ? "أخرى" : "Other");
   const cat = VIOLATION_CATEGORIES.find((c) => c.id === id);
   return cat ? (isAr ? cat.ar : cat.en) : (id || "—");
+}
+
+function escapeHtml(str) {
+  if (!str && str !== 0) return "";
+  return String(str)
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;");
 }
 
 export default function Investigations() {
@@ -65,6 +75,7 @@ export default function Investigations() {
     back: "كل المحاضر",
     copy: "نسخ الرقم",
     copied: "تم النسخ",
+    print: "طباعة المحضر",
   } : {
     title: "Investigation report",
     subtitle: "Workplace incident: choose the employees, describe the allegation, then collect replies and witness statements",
@@ -98,6 +109,7 @@ export default function Investigations() {
     back: "All reports",
     copy: "Copy number",
     copied: "Copied",
+    print: "Print report",
   };
 
   const [rows, setRows] = useState([]);
@@ -255,13 +267,88 @@ export default function Investigations() {
     } catch { /* النسخ اختياري */ }
   };
 
-  const parties = parseParties(selected?.parties);
+  // Build a clean print-only HTML in the requested order:
+  // 1. سبب الادعاء (allegations)
+  // 2. إفادة الموظف/الموظفين المشمولين (their replies)
+  // 3. إفادات الشهود
+  // 4. التوصية (recommendation)
+  const printInvestigation = () => {
+    if (!selected) { alert(isAr ? 'لا يوجد محضر مختار للطباعة.' : 'No investigation selected to print.'); return; }
+
+    const parties = parseParties(selected.parties || '[]');
+    const subjects = parties.filter((p) => p.role !== 'witness');
+    const witnesses = parties.filter((p) => p.role === 'witness');
+
+    const docTitle = isAr ? 'محضر التحقيق' : 'Investigation Report';
+    const ref = escapeHtml(selected.ref_no || '');
+    const violation = escapeHtml(typeName(selected.violation_type, selected.custom_type, isAr));
+    const allegations = escapeHtml(selected.allegations || '');
+    const rec = escapeHtml(selected.recommendation || '');
+
+    let body = '';
+    body += `<div class="header"><h1>${escapeHtml(docTitle)}</h1><div><strong>${escapeHtml(t.ref)}:</strong> ${ref}</div><div><strong>${escapeHtml(isAr? 'نوع المخالفة' : 'Violation')}:</strong> ${violation}</div><hr/></div>`;
+
+    // 1. السبب / الادعاء
+    body += `<section><h2>${escapeHtml(isAr? 'الادعاء / سبب المحضر' : 'Allegation')}</h2><div class="allegations">${allegations || '—'}</div></section>`;
+
+    // 2. إفادات الموظفين (subjects)
+    body += `<section><h2>${escapeHtml(t.subjects)}</h2>`;
+    if (subjects.length === 0) {
+      body += `<div>—</div>`;
+    } else {
+      for (const p of subjects) {
+        const name = escapeHtml(labelOf(p.employee_id, p.employee_name));
+        const reply = escapeHtml(p.reply || '—');
+        body += `<div class="party"><div class="party-name"><strong>${name}</strong></div><div class="party-reply"><strong>${escapeHtml(t.reply)}:</strong> ${reply}</div></div>`;
+      }
+    }
+    body += `</section>`;
+
+    // 3. إفادات الشهود
+    body += `<section><h2>${escapeHtml(t.witnesses)}</h2>`;
+    if (witnesses.length === 0) {
+      body += `<div>—</div>`;
+    } else {
+      for (const p of witnesses) {
+        const name = escapeHtml(labelOf(p.employee_id, p.employee_name));
+        const reply = escapeHtml(p.reply || '—');
+        body += `<div class="party"><div class="party-name"><strong>${name}</strong></div><div class="party-reply"><strong>${escapeHtml(t.reply)}:</strong> ${reply}</div></div>`;
+      }
+    }
+    body += `</section>`;
+
+    // 4. التوصية
+    body += `<section><h2>${escapeHtml(t.recommendation)}</h2><div class="recommendation">${rec || '—'}</div></section>`;
+
+    // Footer with date
+    const dateStr = escapeHtml(new Date().toLocaleString(isAr ? 'ar-SA' : 'en-US'));
+    body += `<footer style="margin-top:20px;border-top:1px solid #e5e7eb;padding-top:8px;font-size:12px;color:#6b7280;">${escapeHtml(isAr? 'تاريخ الطباعة' : 'Printed')}: ${dateStr}</footer>`;
+
+    const style = `
+      <style>
+        @media print { @page { size: A4; margin: 20mm; } }
+        body { font-family: "Tajawal", "Arial", sans-serif; direction: ${isAr ? 'rtl' : 'ltr'}; color: #111827; padding: 20px; }
+        h1 { font-size: 20px; margin-bottom: 6px; }
+        h2 { font-size: 14px; margin-top: 14px; margin-bottom: 6px; }
+        .allegations, .recommendation { white-space: pre-wrap; }
+        .party { border: 1px solid #e6e6e6; padding: 10px; border-radius: 6px; margin-bottom: 8px; }
+        .party-name { margin-bottom: 6px; }
+      </style>`;
+
+    const win = window.open('', '_blank', 'width=900,height=700');
+    win.document.open();
+    win.document.write(`<html><head><meta charset="utf-8"/>${style}</head><body>${body}</body></html>`);
+    win.document.close();
+    setTimeout(() => { win.focus(); win.print(); }, 500);
+  };
+
+  const parties = parseParties(selected?.parties || '[]');
   const subjects = parties.filter((p) => p.role !== "witness");
   const witnesses = parties.filter((p) => p.role === "witness");
   const taken = new Set(parties.map((p) => p.employee_id));
 
   const PartyBlock = ({ person }) => (
-    <div className="rounded-xl border border-border p-3 space-y-1.5">
+    <div className="rounded-xl border border-border p-3 space-y-1.5 party-block">
       <div className="flex items-center justify-between gap-2">
         <div className="font-medium text-sm">{labelOf(person.employee_id, person.employee_name)}</div>
         <span className={cn("text-[11px] px-2 py-0.5 rounded-full", person.status === "replied" ? "bg-emerald-50 text-emerald-700" : "bg-amber-50 text-amber-700")}>
@@ -283,7 +370,7 @@ export default function Investigations() {
       />
 
       {loading ? <div className="py-16 text-center text-muted-foreground">{t.loading}</div> : selected ? (
-        <div className="bg-white rounded-2xl border border-border p-5 space-y-4">
+        <div className="bg-white rounded-2xl border border-border p-5 space-y-4" id="investigation-print-area">
           <div className="flex flex-wrap items-center justify-between gap-3">
             <button type="button" className="text-sm text-violet-700" onClick={() => setSelected(null)}>{t.back}</button>
             <span className={cn("text-xs px-2.5 py-1 rounded-full", (STATUS[selected.status] || STATUS.awaiting_subjects).cls)}>
@@ -294,6 +381,7 @@ export default function Investigations() {
             <FileSearch size={18} className="text-amber-700" />
             <div className="font-bold">{t.ref}: {selected.ref_no}</div>
             <Button type="button" size="sm" variant="outline" onClick={() => copyRef(selected.ref_no)}>{copied ? t.copied : t.copy}</Button>
+            <Button type="button" size="sm" variant="outline" onClick={printInvestigation} className="no-print"><Printer size={16} style={{ marginLeft: 6 }} /> {t.print}</Button>
           </div>
           <div className="text-sm text-muted-foreground">{typeName(selected.violation_type, selected.custom_type, isAr)}</div>
           <div className="text-sm whitespace-pre-wrap leading-relaxed">{selected.allegations}</div>
@@ -328,7 +416,7 @@ export default function Investigations() {
             const names = parseParties(r.parties).filter((p) => p.role !== "witness").map((p) => labelOf(p.employee_id, p.employee_name)).join(" · ");
             const st = STATUS[r.status] || STATUS.awaiting_subjects;
             return (
-              <button key={r.id} type="button" onClick={() => { setSelected(r); setRecommendation(r.recommendation || ""); }} className="w-full text-right bg-white rounded-2xl border border-border p-4 hover:border-violet-300">
+              <button key={r.id} type="button" onClick={() => { setSelected(r); setRecommendation(r.recommendation || ""); }} className="w-full text-right bg-white rounded-2xl border border-border p-4">
                 <div className="flex items-center justify-between gap-3">
                   <div className="font-bold">{r.ref_no}</div>
                   <span className={cn("text-[11px] px-2 py-0.5 rounded-full", st.cls)}>{isAr ? st.ar : st.en}</span>
