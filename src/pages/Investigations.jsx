@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useState, useRef } from "react";
 import { base44 } from "@/api/base44Client";
 import { listCurrentOrg } from "@/lib/currentOrg";
 import PageHeader from "@/components/PageHeader";
@@ -8,7 +8,7 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
-import { FileSearch, Plus, Loader2 } from "lucide-react";
+import { FileSearch, Plus, Loader2, Printer } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useI18n } from "@/lib/i18n";
 import { todayISO } from "@/lib/hr";
@@ -65,6 +65,7 @@ export default function Investigations() {
     back: "كل المحاضر",
     copy: "نسخ الرقم",
     copied: "تم النسخ",
+    print: "طباعة المحضر",
   } : {
     title: "Investigation report",
     subtitle: "Workplace incident: choose the employees, describe the allegation, then collect replies and witness statements",
@@ -98,6 +99,7 @@ export default function Investigations() {
     back: "All reports",
     copy: "Copy number",
     copied: "Copied",
+    print: "Print report",
   };
 
   const [rows, setRows] = useState([]);
@@ -112,6 +114,7 @@ export default function Investigations() {
   const [witnessIds, setWitnessIds] = useState([]);
   const [recommendation, setRecommendation] = useState("");
   const [copied, setCopied] = useState(false);
+  const printRef = useRef(null);
 
   const load = async () => {
     setLoading(true);
@@ -255,13 +258,38 @@ export default function Investigations() {
     } catch { /* النسخ اختياري */ }
   };
 
+  // Print only the investigation content (no sidebar/other UI)
+  const printInvestigation = () => {
+    if (!printRef.current) {
+      alert(isAr ? 'لا يوجد محتوى للطباعة.' : 'No content to print.');
+      return;
+    }
+    const content = printRef.current.innerHTML;
+    const w = window.open('', '_blank', 'width=900,height=700');
+    const style = `
+      <style>
+        @media print {
+          @page { size: A4; margin: 20mm; }
+          body { font-family: "Tajawal", "Arial", sans-serif; direction: ${isAr ? 'rtl' : 'ltr'}; color: #111827; }
+          .no-print { display: none !important; }
+        }
+        body { padding: 20px; }
+        .investigation-title { font-size: 18px; font-weight: 700; margin-bottom: 10px; }
+        .party-block { border: 1px solid #e6e6e6; padding: 10px; border-radius: 8px; margin-bottom: 8px; }
+      </style>`;
+    w.document.open();
+    w.document.write(`<html><head><meta charset="utf-8"/>${style}</head><body>${content}</body></html>`);
+    w.document.close();
+    setTimeout(() => { w.focus(); w.print(); }, 500);
+  };
+
   const parties = parseParties(selected?.parties);
   const subjects = parties.filter((p) => p.role !== "witness");
   const witnesses = parties.filter((p) => p.role === "witness");
   const taken = new Set(parties.map((p) => p.employee_id));
 
   const PartyBlock = ({ person }) => (
-    <div className="rounded-xl border border-border p-3 space-y-1.5">
+    <div className="rounded-xl border border-border p-3 space-y-1.5 party-block">
       <div className="flex items-center justify-between gap-2">
         <div className="font-medium text-sm">{labelOf(person.employee_id, person.employee_name)}</div>
         <span className={cn("text-[11px] px-2 py-0.5 rounded-full", person.status === "replied" ? "bg-emerald-50 text-emerald-700" : "bg-amber-50 text-amber-700")}>
@@ -283,7 +311,7 @@ export default function Investigations() {
       />
 
       {loading ? <div className="py-16 text-center text-muted-foreground">{t.loading}</div> : selected ? (
-        <div className="bg-white rounded-2xl border border-border p-5 space-y-4">
+        <div className="bg-white rounded-2xl border border-border p-5 space-y-4" ref={printRef} id="investigation-print-area">
           <div className="flex flex-wrap items-center justify-between gap-3">
             <button type="button" className="text-sm text-violet-700" onClick={() => setSelected(null)}>{t.back}</button>
             <span className={cn("text-xs px-2.5 py-1 rounded-full", (STATUS[selected.status] || STATUS.awaiting_subjects).cls)}>
@@ -294,6 +322,7 @@ export default function Investigations() {
             <FileSearch size={18} className="text-amber-700" />
             <div className="font-bold">{t.ref}: {selected.ref_no}</div>
             <Button type="button" size="sm" variant="outline" onClick={() => copyRef(selected.ref_no)}>{copied ? t.copied : t.copy}</Button>
+            <Button type="button" size="sm" variant="outline" onClick={printInvestigation} className="no-print"><Printer size={16} style={{ marginLeft: 6 }} /> {t.print}</Button>
           </div>
           <div className="text-sm text-muted-foreground">{typeName(selected.violation_type, selected.custom_type, isAr)}</div>
           <div className="text-sm whitespace-pre-wrap leading-relaxed">{selected.allegations}</div>
@@ -328,7 +357,7 @@ export default function Investigations() {
             const names = parseParties(r.parties).filter((p) => p.role !== "witness").map((p) => labelOf(p.employee_id, p.employee_name)).join(" · ");
             const st = STATUS[r.status] || STATUS.awaiting_subjects;
             return (
-              <button key={r.id} type="button" onClick={() => { setSelected(r); setRecommendation(r.recommendation || ""); }} className="w-full text-right bg-white rounded-2xl border border-border p-4 hover:border-violet-300">
+              <button key={r.id} type="button" onClick={() => { setSelected(r); setRecommendation(r.recommendation || ""); }} className="w-full text-right bg-white rounded-2xl border border-border p-4">
                 <div className="flex items-center justify-between gap-3">
                   <div className="font-bold">{r.ref_no}</div>
                   <span className={cn("text-[11px] px-2 py-0.5 rounded-full", st.cls)}>{isAr ? st.ar : st.en}</span>
