@@ -62,6 +62,18 @@ CREATE INDEX IF NOT EXISTS idx_vault_documents_tenant ON vault_documents(tenant_
 CREATE INDEX IF NOT EXISTS idx_vault_documents_emp ON vault_documents(emp_ref);
 CREATE INDEX IF NOT EXISTS idx_vault_documents_type ON vault_documents(tenant_id, doc_type);
 
+-- ترحيل آمن: يضمن أن جدول vault_documents يمتلك كل الأعمدة المتوقعة حتى لو أُنشئ
+-- بنسخة schema قديمة (كان سبب خطأ PostgreSQL 42703 على مسار رابط المستند).
+ALTER TABLE vault_documents ADD COLUMN IF NOT EXISTS doc_ref TEXT;
+ALTER TABLE vault_documents ADD COLUMN IF NOT EXISTS tenant_id TEXT;
+ALTER TABLE vault_documents ADD COLUMN IF NOT EXISTS emp_ref TEXT;
+ALTER TABLE vault_documents ADD COLUMN IF NOT EXISTS doc_type TEXT;
+ALTER TABLE vault_documents ADD COLUMN IF NOT EXISTS file_name TEXT;
+ALTER TABLE vault_documents ADD COLUMN IF NOT EXISTS mime_type TEXT;
+ALTER TABLE vault_documents ADD COLUMN IF NOT EXISTS file_path TEXT;
+ALTER TABLE vault_documents ADD COLUMN IF NOT EXISTS sha256 TEXT;
+ALTER TABLE vault_documents ADD COLUMN IF NOT EXISTS created_at TIMESTAMPTZ DEFAULT now();
+
 -- ============================================================
 -- الجداول الموسّعة — السجل الكامل مشفّر كـ JSON في data_enc
 -- Base44 يحتفظ بالـ ref + البيانات الوصفية للفلترة فقط

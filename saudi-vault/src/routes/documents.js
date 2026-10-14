@@ -37,22 +37,37 @@ router.post('/', requireApiKey, upload.single('file'), async (req, res, next) =>
   } catch (e) { next(e); }
 });
 
+async function issueDocLink(req, res) {
+  const tenantId = String(req.headers['x-tenant-id'] || '').trim();
+  if (!tenantId) return res.status(400).json({ error: 'tenant_required' });
+  let rows;
+  try {
+    rows = (await query(
+      'SELECT doc_ref FROM vault_documents WHERE doc_ref=$1 AND tenant_id=$2',
+      [req.params.docRef, tenantId]
+    )).rows;
+  } catch (e) {
+    console.error('[vault:documents/link] select failed:', e.message);
+    return res.status(500).json({ error: 'db_error', detail: String(e.message || '').slice(0, 120) });
+  }
+  if (!rows.length) return res.status(404).json({ error: 'not_found' });
+  let token;
+  try {
+    token = signDocToken(req.params.docRef);
+  } catch (e) {
+    console.error('[vault:documents/link] sign failed:', e.message);
+    return res.status(500).json({ error: 'token_error', detail: String(e.message || '').slice(0, 120) });
+  }
+  res.json({ token, expires_in: config.docTokenTtlSeconds });
+}
+
 /**
  * POST /api/vault/documents/:docRef/link
- * يُولّد رابط تنزيل مؤقت (JWT 5 دقائق) — Base44 يعرضه للمستخدم النهائي
+ * يُولّد رابط تنزيل مؤقت (JWT 5 دقائق) — Base44 يعرضه للمستخدم النهائي.
+ * يقبل GET أيضاً احتياطاً (بعض الوسطاء يحوّلون POST بلا جسم).
  */
-router.post('/:docRef/link', requireApiKey, async (req, res, next) => {
-  try {
-    const tenantId = req.headers['x-tenant-id'];
-    const { rows } = await query(
-      'SELECT * FROM vault_documents WHERE doc_ref=$1 AND tenant_id=$2',
-      [req.params.docRef, tenantId]
-    );
-    if (!rows.length) return res.status(404).json({ error: 'not_found' });
-    const token = signDocToken(req.params.docRef);
-    res.json({ token, expires_in: config.docTokenTtlSeconds });
-  } catch (e) { next(e); }
-});
+router.post('/:docRef/link', requireApiKey, issueDocLink);
+router.get('/:docRef/link', requireApiKey, issueDocLink);
 
 /**
  * GET /api/vault/documents/download/:token

@@ -143,9 +143,10 @@ export default async function (req: Request): Promise<Response> {
     }
     return Response.json({ ok: true, data: result });
   } catch (error: any) {
-    // لا نُسجّل أي حمولة — رمز الخطأ فقط
+    // لا نُسجّل أي حمولة — رمز الخطأ فقط، مع تفصيل الخزنة الآمن إن وُجد
     const code = vaultErrorCode(error);
-    console.error("[vaultProxy]", code, String(error?.message || "").slice(0, 120));
-    return Response.json({ error: code }, { status: vaultErrorStatus(code) });
+    const detail = String(error?.vaultDetail || "").slice(0, 80);
+    console.error("[vaultProxy]", code, String(error?.message || "").slice(0, 120), detail || "");
+    return Response.json({ error: code, detail: detail || undefined }, { status: vaultErrorStatus(code) });
   }
 }

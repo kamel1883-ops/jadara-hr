@@ -93,8 +93,12 @@ async function callVault(path, tenantId, options: { timeoutMs?: number; method?:
     let body;
     try { body = text ? JSON.parse(text) : null; } catch { body = { raw: text }; }
     if (!res.ok) {
-      // لا نُسجّل الحمولة — قد تحوي قيماً حساسة
-      throw vaultFail(res.status, path);
+      // نُرفق رمز الخطأ الذي أعاده سيرفر الخزنة (آمن — لا يحوي بيانات حساسة) للتشخيص،
+      // بدل ابتلاعه وإظهار «تعذّر الوصول» بلا سبب. نُخزّنه على كائن الخطأ لا في الرسالة.
+      const err = vaultFail(res.status, path);
+      const detail = String(body?.error || body?.code || body?.raw || "").slice(0, 80);
+      if (detail && !err.vaultDetail) err.vaultDetail = detail;
+      throw err;
     }
     return body;
   } catch (e: any) {
@@ -412,9 +416,14 @@ export async function storeDocument(tenantId, fileBuffer, fileName, mimeType, em
   return res.json();
 }
 
-/** يولّد رابط تنزيل مؤقت (JWT) — يُعرض للمستخدم النهائي */
+/** يولّد رابط تنزيل مؤقت (JWT) — يُعرض للمستخدم النهائي.
+ *  يُرسل جسم JSON فارغ لأن بعض خوادم الوسيط/body-parser تُسقط POST بلا جسم
+ *  عندما يكون Content-Type: application/json (كان سبب خطأ 500 على مسار المستندات). */
 export async function getDocumentLink(tenantId, docRef) {
-  return callVault(`/api/vault/documents/${docRef}/link`, tenantId, { method: "POST" });
+  return callVault(`/api/vault/documents/${docRef}/link`, tenantId, {
+    method: "POST",
+    body: JSON.stringify({}),
+  });
 }
 
 /** يبحث عن المستند تحت مفاتيح منشأة الموظف، لا تحت حساب الفاتح فقط */
