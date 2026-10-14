@@ -15,6 +15,9 @@ import { todayISO } from "@/lib/hr";
 import { VIOLATION_CATEGORIES } from "@/lib/laborPolicy";
 import { makeInvestigationRef, nextInvestigationStatus, parseParties } from "@/lib/investigation";
 import VaultDocLink from "@/components/VaultDocLink";
+import InvestigationDoc from "@/components/docs/InvestigationDoc";
+import { fetchOrg } from "@/lib/printBrand";
+import { preloadLogo, whenImagesReady } from "@/lib/safePrint";
 
 const STATUS = {
   awaiting_subjects: { ar: "بانتظار رد الموظفين", en: "Awaiting employees", cls: "bg-amber-50 text-amber-700" },
@@ -29,15 +32,6 @@ function typeName(id, custom, isAr) {
   return cat ? (isAr ? cat.ar : cat.en) : (id || "—");
 }
 
-function escapeHtml(str) {
-  if (!str && str !== 0) return "";
-  return String(str)
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;")
-    .replace(/\"/g, "&quot;")
-    .replace(/'/g, "&#39;");
-}
 
 export default function Investigations() {
   const { lang } = useI18n();
@@ -125,6 +119,7 @@ export default function Investigations() {
   const [witnessIds, setWitnessIds] = useState([]);
   const [recommendation, setRecommendation] = useState("");
   const [copied, setCopied] = useState(false);
+  const [printInv, setPrintInv] = useState(null); // محضر جاهز للطباعة (مستند خارج الشاشة)
 
   const load = async () => {
     setLoading(true);
@@ -148,6 +143,19 @@ export default function Investigations() {
     }
   };
   useEffect(() => { load(); }, []);
+
+  // بعد رسم مستند الطباعة ننتظر اكتمال تحميل صور الشعارات ثم نطلق نافذة الطباعة
+  // (بدل مؤقّت ثابت كان يطبع قبل ظهور شعار المنشأة وشعار جداره).
+  useEffect(() => {
+    if (!printInv) return undefined;
+    let cancelled = false;
+    (async () => {
+      await new Promise((r) => setTimeout(r, 60));
+      await whenImagesReady(document.querySelector(".print-mount"));
+      if (!cancelled) window.print();
+    })();
+    return () => { cancelled = true; };
+  }, [printInv]);
 
   const empOf = (id) => employees.find((e) => e.id === id);
   const labelOf = (id, fallback) => {
@@ -272,97 +280,16 @@ export default function Investigations() {
     } catch { /* النسخ اختياري */ }
   };
 
-  // Build a clean print-only HTML in the requested order, and include header with company + jadara branding
-  const printInvestigation = () => {
+  // طباعة المحضر بالآلية الموحّدة نفسها في النظام: يُرفع المستند في حاوية print-mount خارج الشاشة
+  // بترويسة BrandHeader (شعار المنشأة واسمها ورقمها الموحد يميناً + شعار جداره يساراً)،
+  // ثم تُفتح نافذة الطباعة بعد اكتمال تحميل الشعارات.
+  const printInvestigation = async () => {
     if (!selected) { alert(isAr ? 'لا يوجد محضر مختار للطباعة.' : 'No investigation selected to print.'); return; }
-
-    const parties = parseParties(selected.parties || '[]');
-    const subjects = parties.filter((p) => p.role !== 'witness');
-    const witnesses = parties.filter((p) => p.role === 'witness');
-
-    const docTitle = isAr ? 'محضر التحقيق' : 'Investigation Report';
-    const ref = escapeHtml(selected.ref_no || '');
-    const violation = escapeHtml(typeName(selected.violation_type, selected.custom_type, isAr));
-    const allegations = escapeHtml(selected.allegations || '');
-    const rec = escapeHtml(selected.recommendation || '');
-
-    const orgName = org?.name || selected.unified_number || '';
-    const orgUnified = org?.unified_number || selected.unified_number || '';
-    const orgLogo = org?.logo_url || org?.logo || ''; // fallback - replace with actual logo field if available
-
-    // Jadara public logo (used across the app) — keep in sync with emailFooter/SplashScreen
-    const JADARA_LOGO = "https://media.base44.com/images/public/6a74edc8f347046365c2e1a4/90516d3dc_.jpeg";
-
-    // Header: left = Jadara system logo, right = company name + unified number + company logo
-    let header = `<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;">`;
-    // left: Jadara branding (logo image)
-    header += `<div style="text-align:left;flex:0 0 40%;display:flex;align-items:center;gap:10px">`;
-    header += `<img src="${JADARA_LOGO}" alt="جداره" style="height:56px;width:auto;border-radius:8px;" />`;
-    header += `<div style="font-weight:700;font-size:14px;color:#111827;margin-right:6px">جدارة لإدارة الموارد البشرية</div>`;
-    header += `</div>`;
-    // right: company (logo + name + unified number)
-    header += `<div style="text-align:right;flex:0 0 55%;display:flex;flex-direction:column;align-items:flex-end;">`;
-    if (orgLogo) header += `<img src="${escapeHtml(orgLogo)}" alt="logo" style="height:56px;width:auto;border-radius:6px;margin-bottom:4px" />`;
-    header += `<div style="font-weight:700;font-size:16px;color:#111827;">${escapeHtml(orgName)}</div>`;
-    header += `<div style="font-size:12px;color:#6b7280">${escapeHtml(isAr? 'الرقم الموحد' : 'Unified No')}: ${escapeHtml(orgUnified)}</div>`;
-    header += `</div>`;
-    header += `</div>`;
-
-    let body = '';
-    body += header;
-    body += `<div style="border-top:1px solid #e5e7eb;margin-top:6px;padding-top:8px"></div>`;
-    body += `<div style="margin-top:8px;"><h1 style="font-size:20px;margin:0 0 6px 0">${escapeHtml(docTitle)}</h1><div style="margin-bottom:6px"><strong>${escapeHtml(t.ref)}:</strong> ${ref}</div><div style="margin-bottom:6px"><strong>${escapeHtml(isAr? 'نوع المخالفة' : 'Violation')}:</strong> ${violation}</div><hr/></div>`;
-
-    // 1. السبب / الادعاء
-    body += `<section><h2 style="font-size:14px;margin-top:12px;margin-bottom:6px">${escapeHtml(isAr? 'الادعاء / سبب المحضر' : 'Allegation')}</h2><div class="allegations">${allegations || '—'}</div></section>`;
-
-    // 2. إفادات الموظفين (subjects)
-    body += `<section><h2 style="font-size:14px;margin-top:12px;margin-bottom:6px">${escapeHtml(t.subjects)}</h2>`;
-    if (subjects.length === 0) {
-      body += `<div>—</div>`;
-    } else {
-      for (const p of subjects) {
-        const name = escapeHtml(labelOf(p.employee_id, p.employee_name));
-        const reply = escapeHtml(p.reply || '—');
-        body += `<div class="party" style="border:1px solid #e6e6e6;padding:10px;border-radius:6px;margin-bottom:8px"><div class="party-name" style="margin-bottom:6px"><strong>${name}</strong></div><div class="party-reply"><strong>${escapeHtml(t.reply)}:</strong> ${reply}</div></div>`;
-      }
-    }
-    body += `</section>`;
-
-    // 3. إفادات الشهود
-    body += `<section><h2 style="font-size:14px;margin-top:12px;margin-bottom:6px">${escapeHtml(t.witnesses)}</h2>`;
-    if (witnesses.length === 0) {
-      body += `<div>—</div>`;
-    } else {
-      for (const p of witnesses) {
-        const name = escapeHtml(labelOf(p.employee_id, p.employee_name));
-        const reply = escapeHtml(p.reply || '—');
-        body += `<div class="party" style="border:1px solid #e6e6e6;padding:10px;border-radius:6px;margin-bottom:8px"><div class="party-name" style="margin-bottom:6px"><strong>${name}</strong></div><div class="party-reply"><strong>${escapeHtml(t.reply)}:</strong> ${reply}</div></div>`;
-      }
-    }
-    body += `</section>`;
-
-    // 4. التوصية
-    body += `<section><h2 style="font-size:14px;margin-top:12px;margin-bottom:6px">${escapeHtml(t.recommendation)}</h2><div class="recommendation">${rec || '—'}</div></section>`;
-
-    // Footer with date
-    const dateStr = escapeHtml(new Date().toLocaleString(isAr ? 'ar-SA' : 'en-US'));
-    body += `<footer style="margin-top:20px;border-top:1px solid #e5e7eb;padding-top:8px;font-size:12px;color:#6b7280;">${escapeHtml(isAr? 'تاريخ الطباعة' : 'Printed')}: ${dateStr}</footer>`;
-
-    const style = `
-      <style>
-        @media print { @page { size: A4; margin: 20mm; } }
-        body { font-family: "Tajawal", "Arial", sans-serif; direction: ${isAr ? 'rtl' : 'ltr'}; color: #111827; padding: 20px; }
-        h1 { font-size: 20px; margin-bottom: 6px; }
-        h2 { font-size: 14px; margin-top: 14px; margin-bottom: 6px; }
-        .allegations, .recommendation { white-space: pre-wrap; }
-      </style>`;
-
-    const win = window.open('', '_blank', 'width=900,height=700');
-    win.document.open();
-    win.document.write(`<html><head><meta charset="utf-8"/>${style}</head><body>${body}</body></html>`);
-    win.document.close();
-    setTimeout(() => { win.focus(); win.print(); }, 500);
+    const orgData = org || (await fetchOrg());
+    if (!orgData) { alert(isAr ? 'تعذّر تحميل بيانات المنشأة للطباعة.' : 'Could not load establishment data for printing.'); return; }
+    if (!org) setOrg(orgData);
+    preloadLogo(orgData.logo_url);
+    setPrintInv({ record: selected, org: orgData });
   };
 
   const parties = parseParties(selected?.parties || '[]');
@@ -518,6 +445,19 @@ export default function Investigations() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* مستند الطباعة — يبقى خارج الشاشة في print-mount ويظهر عند فتح نافذة الطباعة */}
+      {printInv && (
+        <div className="print-mount" aria-hidden="true">
+          <InvestigationDoc
+            record={printInv.record}
+            org={printInv.org}
+            isAr={isAr}
+            typeLabel={typeName(printInv.record.violation_type, printInv.record.custom_type, isAr)}
+            labelOf={labelOf}
+          />
+        </div>
+      )}
     </div>
   );
 }

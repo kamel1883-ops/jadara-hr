@@ -301,6 +301,12 @@ main .hover\:bg-slate-100:hover { background-color: hsl(var(--muted)); }
   .print-complaint { position: absolute; top: 0; right: 0; left: 0; width: 100%; margin: 0; padding: 24px; background: #fff; color: #111; }
   .print-complaint .no-print { display: none !important; }
 
+  .print-investigation, .print-investigation * { visibility: visible !important; }
+  .print-investigation { position: absolute; top: 0; right: 0; left: 0; width: 100%; margin: 0; padding: 24px; background: #fff; color: #111; }
+  .print-investigation .no-print { display: none !important; }
+  /* بطاقة كل طرف (معني/شاهد) تبقى كاملة داخل الصفحة دون انقسام */
+  .print-investigation .inv-party { break-inside: avoid; page-break-inside: avoid; }
+
   .print-attendance, .print-attendance * { visibility: visible !important; }
   .print-attendance { position: absolute; top: 0; right: 0; left: 0; width: 100%; margin: 0; padding: 0; background: #fff; color: #111; }
   .print-attendance .no-print { display: none !important; }
