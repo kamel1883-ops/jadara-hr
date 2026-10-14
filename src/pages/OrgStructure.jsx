@@ -23,7 +23,10 @@ export default function OrgStructure() {
     reportsTo: "يرفع تقاريره إلى", deptMgr: "مدير الإدارة", noMgr: "غير محدد",
     members: "أعضاء", orphans: "بدون مدير مباشر",
     refresh: "تحديث", legend: "مفتاح المستويات",
-    exportPdf: "طباعة PDF", exportWord: "تصدير Word",
+    exportPdf: "طباعة كامل الهيكل", exportStructure: "طباعة الإدارات والأقسام",
+    exportPdfHint: "يطبع الهيكل كاملاً بجميع الموظفين في كل الإدارات والأقسام",
+    exportStructureHint: "يطبع الإدارات ورؤساء الأقسام فقط دون الموظفين",
+    exportWord: "تصدير Word",
     roleCount: (label, n) => `${label}: ${n}`,
   } : {
     title: "Organizational structure", subtitle: "Auto-built from employee data: Owner → Executive → Department managers → Supervisors → Staff & workers.",
@@ -33,7 +36,10 @@ export default function OrgStructure() {
     reportsTo: "Reports to", deptMgr: "Department manager", noMgr: "Not set",
     members: "members", orphans: "No direct manager",
     refresh: "Refresh", legend: "Role legend",
-    exportPdf: "Print PDF", exportWord: "Export Word",
+    exportPdf: "Print full chart", exportStructure: "Print departments & sections",
+    exportPdfHint: "Prints the full chart with every employee in all departments and sections",
+    exportStructureHint: "Prints departments and section heads only, without employees",
+    exportWord: "Export Word",
     roleCount: (label, n) => `${label}: ${n}`,
   };
 
@@ -107,8 +113,9 @@ export default function OrgStructure() {
         subtitle={t.subtitle}
         action={
           <div className="flex flex-wrap items-center gap-2">
-            <Button variant="outline" onClick={() => printOrgChartPDF(exportOpts)} disabled={loading || employees.length === 0} className="gap-2"><FileText size={16} /> {t.exportPdf}</Button>
-            <Button variant="outline" onClick={() => downloadOrgWord(exportOpts)} disabled={loading || employees.length === 0} className="gap-2"><FileType2 size={16} /> {t.exportWord}</Button>
+            <Button variant="outline" onClick={() => printOrgChartPDF(exportOpts)} disabled={loading || employees.length === 0} className="gap-2" title={t.exportPdfHint}><FileText size={16} /> {t.exportPdf}</Button>
+            <Button variant="outline" onClick={() => printOrgChartPDF({ ...exportOpts, structure: true })} disabled={loading || employees.length === 0} className="gap-2" title={t.exportStructureHint}><Network size={16} /> {t.exportStructure}</Button>
+            <Button variant="outline" onClick={() => downloadOrgWord(exportOpts)} disabled={loading || employees.length === 0} className="gap-2" title={t.exportWord}><FileType2 size={16} /> {t.exportWord}</Button>
             <Button variant="outline" onClick={load} className="gap-2"><RefreshCw size={16} /> {t.refresh}</Button>
           </div>
         }

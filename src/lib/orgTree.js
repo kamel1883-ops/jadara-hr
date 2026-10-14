@@ -137,9 +137,14 @@ export const managerCandidates = (employees, excludeId = null) =>
 // نموذج المخطط التنظيمي العمودي: القمة (المالك والتنفيذي) ثم عمود لكل إدارة —
 // صندوق الإدارة في الأعلى وأسفله الموظفون التابعون لها من الأعلى إلى الأسفل،
 // بدل التفرّع الأفقي الذي يجعل العرض أقصى اليمين وأقصى اليسار ولا يتّسع لورقة A4.
-export const buildChartModel = (employees) => {
+// options.structureOnly: وضع "الإدارات والأقسام" — يُعرض رؤوس الإدارات ورؤساء الأقسام
+// (مدير/مشرف) دون الموظفين والعمال، فيبقى هيكل الإدارات والأقسام وحده.
+export const buildChartModel = (employees, options = {}) => {
+  const structureOnly = !!(options && options.structureOnly);
   const list = employees || [];
   const byId = new Map(list.map((e) => [e.id, e]));
+  // المستويات التي تُمثّل رؤوس الإدارات والأقسام في وضع structureOnly
+  const LEADERSHIP = ["owner", "executive", "manager", "supervisor"];
 
   // الجذور: بلا مدير أو بمدير غير موجود في القائمة
   const roots = list.filter((e) => !e.manager_id || !byId.has(e.manager_id));
@@ -168,31 +173,38 @@ export const buildChartModel = (employees) => {
   const top = sortSiblings(list.filter((e) => topIds.has(e.id)));
 
   // تجميع البقية بحسب الإدارة (وبلا إدارة يدخلون عمود "أخرى")
-  const groups = new Map();
+  const totals = new Map(); // عدد أفراد كل إدارة
+  const shown = new Map(); // من سيُرسم في العمود
   list.forEach((e) => {
     if (topIds.has(e.id)) return;
     const key = (e.department && String(e.department).trim()) || "__none__";
-    if (!groups.has(key)) groups.set(key, []);
-    groups.get(key).push(e);
+    totals.set(key, (totals.get(key) || 0) + 1);
+    if (structureOnly && !LEADERSHIP.includes(e.role_level)) return;
+    if (!shown.has(key)) shown.set(key, []);
+    shown.get(key).push(e);
   });
 
-  const columns = Array.from(groups.entries()).map(([key, members]) => {
+  const columns = Array.from(totals.keys()).map((key) => {
+    const members = shown.get(key) || [];
     const sorted = sortSiblings(members);
     // رأس العمود: مدير الإدارة، وإلا المشرف الأعلى، وإلا لا أحد (تظهر الإدارة "بلا مدير")
     let headIdx = sorted.findIndex((m) => ["manager", "executive", "owner"].includes(m.role_level));
     if (headIdx === -1) headIdx = sorted.findIndex((m) => m.role_level === "supervisor");
     const manager = headIdx === -1 ? null : sorted[headIdx];
     const rest = manager ? sorted.filter((m) => m.id !== manager.id) : sorted;
-    return { key, name: key === "__none__" ? "" : key, manager, members: rest, count: members.length };
+    return { key, name: key === "__none__" ? "" : key, manager, members: rest, count: totals.get(key) };
   });
 
+  // في وضع "الإدارات والأقسام": إدارة بلا رأس تبقى باسمها، أما العمود بلا اسم (أخرى) ولا رأس فلا معنى له
+  const kept = structureOnly ? columns.filter((c) => c.manager || c.members.length || c.name) : columns;
+
   // ترتيب الأعمدة: إدارة بمدير أعلى أولاً، ثم حسب اسم الإدارة
-  columns.sort((a, b) => {
+  kept.sort((a, b) => {
     const ar = a.manager ? roleRank(a.manager.role_level) : 9;
     const br = b.manager ? roleRank(b.manager.role_level) : 9;
     if (ar !== br) return ar - br;
     return (a.name || "\uFFFF").localeCompare(b.name || "\uFFFF", "ar");
   });
 
-  return { top, columns };
+  return { top, columns: kept, structureOnly };
 };

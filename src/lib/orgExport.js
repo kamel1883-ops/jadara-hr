@@ -54,8 +54,9 @@ function renderMemberBox(node, lang) {
 }
 
 // المخطط العمودي: صندوق الإدارة في الأعلى وتحته في نفس العمود موظفوها
-function renderChart(employees, lang, noneLabel, noManagerLabel) {
-  const model = buildChartModel(employees);
+// وفي وضع "الإدارات والأقسام" تُعرض رؤوس الإدارات ورؤساء الأقسام دون الموظفين
+function renderChart(employees, lang, noneLabel, noManagerLabel, structureOnly) {
+  const model = buildChartModel(employees, { structureOnly });
   const top = model.top || [];
   const cols = model.columns || [];
   if (!top.length && !cols.length) return "";
@@ -98,10 +99,16 @@ export function buildOrgHTML(_ref) {
   const orgName = _ref.orgName || "";
   const logoUrl = _ref.logoUrl || "";
   const orgUnified = _ref.unifiedNumber || "";
+  const structureOnly = !!_ref.structure;
   const isAr = lang === "ar";
   const stats = orgStats(employees);
 
-  const title = isAr ? "الهيكل التنظيمي" : "Organizational Structure";
+  const title = structureOnly
+    ? (isAr ? "الهيكل التنظيمي — الإدارات والأقسام" : "Org Structure — Departments & Sections")
+    : (isAr ? "الهيكل التنظيمي" : "Organizational Structure");
+  const scopeNote = structureOnly
+    ? (isAr ? "النطاق: الإدارات ورؤساء الأقسام فقط دون الموظفين" : "Scope: departments and section heads only, without employees")
+    : "";
   const dateL = isAr ? "تاريخ الإصدار" : "Issue date";
   const noneLabel = isAr ? "أخرى" : "Others";
   const noManagerLabel = isAr ? "بلا مدير" : "No manager";
@@ -120,7 +127,7 @@ export function buildOrgHTML(_ref) {
     "</td>"
   ).join("");
 
-  const treeHtml = renderChart(employees, lang, noneLabel, noManagerLabel);
+  const treeHtml = renderChart(employees, lang, noneLabel, noManagerLabel, structureOnly);
 
   const logo = logoUrl
     ? "<img src=\"" + escapeHtml(logoUrl) + "\" style=\"" + CLIENT_LOGO_CSS + "\" />"
@@ -196,6 +203,7 @@ export function buildOrgHTML(_ref) {
       "<div style=\"text-align:center;margin-bottom:8px;\">" +
         "<h1>" + escapeHtml(title) + "</h1>" +
         "<div class=\"sub\">" + escapeHtml(dateL) + ": " + escapeHtml(formatDate(lang)) + "</div>" +
+        (scopeNote ? "<div class=\"sub\" style=\"font-weight:700;color:#7c3aed;\">" + escapeHtml(scopeNote) + "</div>" : "") +
       "</div>" +
       "<table class=\"stats\"><tr>" + statsCells + "</tr></table>" +
       treeHtml +
@@ -222,7 +230,7 @@ export function downloadOrgWord(opts) {
   const url = URL.createObjectURL(blob);
   const a = document.createElement("a");
   a.href = url;
-  a.download = "org-chart.doc";
+  a.download = opts && opts.structure ? "org-chart-departments.doc" : "org-chart.doc";
   document.body.appendChild(a);
   a.click();
   a.remove();
