@@ -35,14 +35,14 @@ export async function resolveCompanyContext(base44, user) {
   const uid = String(user?.id || '').trim();
   if (!uid) scopeDenied();
   const tenants = base44.asServiceRole.entities.Tenant;
-  const owned = await tenants.filter({ admin_user_id: uid }, { limit: 2 });
-  if (owned.items.length > 1 || owned.has_more) scopeDenied();
-  let tenant = owned.items[0];
+  const owned = asList(await tenants.filter({ admin_user_id: uid }, { limit: 2 }));
+  if (owned.length > 1) scopeDenied();
+  let tenant = owned[0];
   const email = String(user.email || '').trim().toLowerCase();
   if (!tenant && email) {
-    const matches = await tenants.filter({ $or: [{ contact_email: email }, { admin_email: email }] }, { limit: 2 });
-    if (matches.items.length > 1 || matches.has_more) scopeDenied();
-    const candidate = matches.items[0];
+    const matches = asList(await tenants.filter({ $or: [{ contact_email: email }, { admin_email: email }] }, { limit: 2 }));
+    if (matches.length > 1) scopeDenied();
+    const candidate = matches[0];
     if (candidate && candidate.admin_user_id && candidate.admin_user_id !== uid) scopeDenied();
     tenant = candidate;
   }
@@ -50,14 +50,14 @@ export async function resolveCompanyContext(base44, user) {
   if (!tenant) {
     const employees = base44.asServiceRole.entities.Employee;
     const query = { unified_number: { $nin: ['', null] } };
-    let page = await employees.filter({ ...query, user_id: uid }, { distinct: 'unified_number', limit: 2 });
-    if (!page.items.length && email) page = await employees.filter({ ...query, email }, { distinct: 'unified_number', limit: 2 });
-    if (page.items.length > 1 || page.has_more) scopeDenied();
-    unified = String(page.items[0] || '').trim();
+    let distinct = asList(await employees.filter({ ...query, user_id: uid }, { distinct: 'unified_number', limit: 2 }));
+    if (!distinct.length && email) distinct = asList(await employees.filter({ ...query, email }, { distinct: 'unified_number', limit: 2 }));
+    if (distinct.length > 1) scopeDenied();
+    unified = String(distinct[0] || '').trim();
     if (unified) {
-      const matches = await tenants.filter({ unified_number: unified }, { limit: 2 });
-      if (matches.items.length > 1 || matches.has_more) scopeDenied();
-      tenant = matches.items[0];
+      const matches = asList(await tenants.filter({ unified_number: unified }, { limit: 2 }));
+      if (matches.length > 1) scopeDenied();
+      tenant = matches[0];
     }
   }
   if (!unified) return { keys: [uid], unified: '' };
@@ -76,11 +76,11 @@ export async function tenantKeysForRead(base44, user, empRefs = []) {
   if (!unified) return keys;
   const query = { unified_number: unified };
   if (empRefs.length) query.emp_ref = { $in: empRefs };
-  const page = await base44.asServiceRole.entities.Employee.filter(query, {
+  const creators = asList(await base44.asServiceRole.entities.Employee.filter(query, {
     distinct: 'created_by_id', limit: 24,
-  });
-  if (page.has_more) scopeDenied();
-  const legacy = await companyLegacyKeys(base44, unified, page.items);
+  }));
+  if (creators.length >= 24) scopeDenied();
+  const legacy = await companyLegacyKeys(base44, unified, creators);
   return [...new Set([...keys, ...legacy])].slice(0, 24);
 }
 
@@ -101,14 +101,14 @@ export async function companyVaultKey(base44, user) {
 export async function tenantKeysForEmployee(base44, emp) {
   const unified = String(emp?.unified_number || '').trim();
   if (!unified) scopeDenied();
-  const page = await base44.asServiceRole.entities.Tenant.filter({ unified_number: unified }, { limit: 2 });
-  if (page.items.length > 1 || page.has_more) scopeDenied();
-  const tenant = page.items[0];
-  const creators = await base44.asServiceRole.entities.Employee.filter({ unified_number: unified }, {
+  const tenants = asList(await base44.asServiceRole.entities.Tenant.filter({ unified_number: unified }, { limit: 2 }));
+  if (tenants.length > 1) scopeDenied();
+  const tenant = tenants[0];
+  const creators = asList(await base44.asServiceRole.entities.Employee.filter({ unified_number: unified }, {
     distinct: 'created_by_id', limit: 24,
-  });
-  if (creators.has_more) scopeDenied();
-  const legacy = await companyLegacyKeys(base44, unified, [emp.created_by_id, tenant?.admin_user_id, ...creators.items]);
+  }));
+  if (creators.length >= 24) scopeDenied();
+  const legacy = await companyLegacyKeys(base44, unified, [emp.created_by_id, tenant?.admin_user_id, ...creators]);
   return [...new Set([unified, tenant?.id, ...legacy].filter(Boolean))].slice(0, 24);
 }
 
