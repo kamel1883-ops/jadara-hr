@@ -133,3 +133,66 @@ export const uniqueDepartments = (employees) =>
 // المرشحون ليكونوا مدراء مباشرين — أي موظف في الشركة (يستثنى الموظف نفسه)، لضمان حرية ربط كل موظف بمديره المباشر.
 export const managerCandidates = (employees, excludeId = null) =>
   employees.filter((e) => e.id !== excludeId);
+
+// نموذج المخطط التنظيمي العمودي: القمة (المالك والتنفيذي) ثم عمود لكل إدارة —
+// صندوق الإدارة في الأعلى وأسفله الموظفون التابعون لها من الأعلى إلى الأسفل،
+// بدل التفرّع الأفقي الذي يجعل العرض أقصى اليمين وأقصى اليسار ولا يتّسع لورقة A4.
+export const buildChartModel = (employees) => {
+  const list = employees || [];
+  const byId = new Map(list.map((e) => [e.id, e]));
+
+  // الجذور: بلا مدير أو بمدير غير موجود في القائمة
+  const roots = list.filter((e) => !e.manager_id || !byId.has(e.manager_id));
+
+  // القمة: المالك والتنفيذيون (ومن يتبعهم مباشرة من المستوى نفسه)
+  const topIds = new Set();
+  const collectTop = (nodes) => {
+    nodes.forEach((n) => {
+      if (!n || topIds.has(n.id)) return;
+      if (n.role_level !== "owner" && n.role_level !== "executive") return;
+      topIds.add(n.id);
+      collectTop(list.filter((c) => c.manager_id === n.id));
+    });
+  };
+  collectTop(roots);
+
+  const sortSiblings = (l) =>
+    l.slice().sort((a, b) => {
+      const r = roleRank(a.role_level) - roleRank(b.role_level);
+      if (r !== 0) return r;
+      const d = (a.department || "").localeCompare(b.department || "");
+      if (d !== 0) return d;
+      return employeeDisplayName(a).localeCompare(employeeDisplayName(b), "ar");
+    });
+
+  const top = sortSiblings(list.filter((e) => topIds.has(e.id)));
+
+  // تجميع البقية بحسب الإدارة (وبلا إدارة يدخلون عمود "أخرى")
+  const groups = new Map();
+  list.forEach((e) => {
+    if (topIds.has(e.id)) return;
+    const key = (e.department && String(e.department).trim()) || "__none__";
+    if (!groups.has(key)) groups.set(key, []);
+    groups.get(key).push(e);
+  });
+
+  const columns = Array.from(groups.entries()).map(([key, members]) => {
+    const sorted = sortSiblings(members);
+    // رأس العمود: مدير الإدارة، وإلا المشرف الأعلى، وإلا لا أحد (تظهر الإدارة "بلا مدير")
+    let headIdx = sorted.findIndex((m) => ["manager", "executive", "owner"].includes(m.role_level));
+    if (headIdx === -1) headIdx = sorted.findIndex((m) => m.role_level === "supervisor");
+    const manager = headIdx === -1 ? null : sorted[headIdx];
+    const rest = manager ? sorted.filter((m) => m.id !== manager.id) : sorted;
+    return { key, name: key === "__none__" ? "" : key, manager, members: rest, count: members.length };
+  });
+
+  // ترتيب الأعمدة: إدارة بمدير أعلى أولاً، ثم حسب اسم الإدارة
+  columns.sort((a, b) => {
+    const ar = a.manager ? roleRank(a.manager.role_level) : 9;
+    const br = b.manager ? roleRank(b.manager.role_level) : 9;
+    if (ar !== br) return ar - br;
+    return (a.name || "\uFFFF").localeCompare(b.name || "\uFFFF", "ar");
+  });
+
+  return { top, columns };
+};

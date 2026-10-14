@@ -1,4 +1,4 @@
-import { orgStats, buildOrgTree, chartColors, chartNodeText } from "@/lib/orgTree";
+import { orgStats, buildChartModel, chartColors, chartNodeText, employeeDisplayName, roleLabel } from "@/lib/orgTree";
 import { genDateBoth } from "@/lib/printDate";
 import { CLIENT_LOGO_CSS, PRINT_MARK_PX } from "@/lib/printBrand";
 
@@ -27,39 +27,69 @@ function formatDate(lang) {
   return genDateBoth(lang === "ar");
 }
 
-function renderChartNode(node, lang, rtl) {
-  const colors = chartColors(node.role_level);
-  const text = chartNodeText(node, lang);
-  const kids = node._children || [];
-  const ordered = rtl ? kids.slice().reverse() : kids;
-  const sub = [text.name && text.name !== text.title ? text.name : "", text.num].filter(Boolean).join(" ");
-  const box =
-    "<div class=\"box\" dir=\"" + (rtl ? "rtl" : "ltr") + "\" style=\"background:" + colors.bg + ";border-color:" + colors.border + ";color:" + colors.color + ";\">" +
-      "<div class=\"box-title\">" + escapeHtml(text.title) + "</div>" +
+// أبعاد صناديق الطباعة (أصغر قليلاً من الشاشة لتناسب A4)
+const PRINT_COL_W = 140;
+
+function printBox(cls, colors, title, sub) {
+  return (
+    "<div class=\"" + cls + "\" style=\"background:" + colors.bg + ";border-color:" + colors.border + ";color:" + colors.color + ";\">" +
+      "<div class=\"box-title\">" + escapeHtml(title) + "</div>" +
       (sub ? "<div class=\"box-sub\">" + escapeHtml(sub) + "</div>" : "") +
-    "</div>";
-  const childHtml = ordered.length
-    ? "<ul>" + ordered.map((child) => renderChartNode(child, lang, rtl)).join("") + "</ul>"
-    : "";
-  return "<li>" + box + childHtml + "</li>";
+    "</div>"
+  );
 }
 
-function renderChart(employees, lang, orgName) {
-  const rtl = lang === "ar";
-  const roots = buildOrgTree(employees);
-  if (!roots.length) return "";
-  let top = roots;
-  if (roots.length > 1) {
-    top = [{
-      id: "org-root",
-      role_level: "owner",
-      position: orgName || (rtl ? "الإدارة العليا" : "Top management"),
-      full_name: "",
-      _children: roots,
-    }];
-  }
-  const ordered = rtl ? top.slice().reverse() : top;
-  return "<div class=\"oc\"><ul>" + ordered.map((node) => renderChartNode(node, lang, rtl)).join("") + "</ul></div>";
+function renderTopBox(node, lang) {
+  const colors = chartColors(node.role_level);
+  const text = chartNodeText(node, lang);
+  const sub = [text.name && text.name !== text.title ? text.name : "", text.num].filter(Boolean).join(" ");
+  return printBox("box box-top", colors, text.title, sub);
+}
+
+function renderMemberBox(node, lang) {
+  const colors = chartColors(node.role_level);
+  const text = chartNodeText(node, lang);
+  const sub = [text.name && text.name !== text.title ? text.name : "", text.num].filter(Boolean).join(" ");
+  return printBox("box box-sm", colors, text.title, sub);
+}
+
+// المخطط العمودي: صندوق الإدارة في الأعلى وتحته في نفس العمود موظفوها
+function renderChart(employees, lang, noneLabel, noManagerLabel) {
+  const model = buildChartModel(employees);
+  const top = model.top || [];
+  const cols = model.columns || [];
+  if (!top.length && !cols.length) return "";
+
+  const topHtml = top.length
+    ? "<div class=\"oc-top\">" +
+        top.map((node, i) => (i > 0 ? "<div class=\"oc-stem\"></div>" : "") + renderTopBox(node, lang)).join("") +
+      "</div>"
+    : "";
+
+  const busHalf = ((cols.length - 1) * PRINT_COL_W) / 2;
+  const busHtml = cols.length > 1
+    ? "<div class=\"oc-bus\" style=\"left:calc(50% - " + busHalf + "px);right:calc(50% - " + busHalf + "px);\"></div>"
+    : "";
+
+  const colsHtml = cols.map((col) => {
+    const colors = col.manager ? chartColors(col.manager.role_level) : chartColors("manager");
+    const head = col.name || noneLabel;
+    const sub = col.manager
+      ? employeeDisplayName(col.manager) + (col.manager.role_level ? " \u2022 " + roleLabel(col.manager.role_level, lang) : "")
+      : noManagerLabel;
+    const members = col.members
+      .map((m) => "<div class=\"oc-stub\"></div>" + renderMemberBox(m, lang))
+      .join("");
+    return "<div class=\"oc-col\" style=\"width:" + PRINT_COL_W + "px;\">" +
+      "<div class=\"oc-stem\"></div>" + printBox("box box-head", colors, head, sub) + members +
+    "</div>";
+  }).join("");
+
+  const link = top.length && cols.length ? "<div class=\"oc-stem\"></div>" : "";
+  return "<div class=\"oc-wrap\"><div class=\"oc\" dir=\"" + (lang === "ar" ? "rtl" : "ltr") + "\">" +
+    topHtml + link +
+    "<div class=\"oc-row\">" + busHtml + colsHtml + "</div>" +
+  "</div></div>";
 }
 
 export function buildOrgHTML(_ref) {
@@ -73,6 +103,8 @@ export function buildOrgHTML(_ref) {
 
   const title = isAr ? "الهيكل التنظيمي" : "Organizational Structure";
   const dateL = isAr ? "تاريخ الإصدار" : "Issue date";
+  const noneLabel = isAr ? "أخرى" : "Others";
+  const noManagerLabel = isAr ? "بلا مدير" : "No manager";
   const statsRows = isAr
     ? [["إجمالي القوى العاملة", stats.total], ["عدد الإدارات", stats.departments.length],
        ["المدراء", stats.byLevel.manager + stats.byLevel.executive + stats.byLevel.owner],
@@ -88,7 +120,7 @@ export function buildOrgHTML(_ref) {
     "</td>"
   ).join("");
 
-  const treeHtml = renderChart(employees, lang, orgName);
+  const treeHtml = renderChart(employees, lang, noneLabel, noManagerLabel);
 
   const logo = logoUrl
     ? "<img src=\"" + escapeHtml(logoUrl) + "\" style=\"" + CLIENT_LOGO_CSS + "\" />"
@@ -99,7 +131,7 @@ export function buildOrgHTML(_ref) {
   const foot = isAr ? "تم إنشاء هذا المستند عبر نظام جداره للموارد البشرية" : "Generated by Jadara HR System";
 
   const style =
-    "@page { size: A3 landscape; margin: 8mm; }" +
+    "@page { size: A4 portrait; margin: 6mm; }" +
     "body { font-family: 'Tajawal','IBM Plex Sans Arabic','Arial',sans-serif; color:#0f172a; margin:0; }" +
     ".doc { width:100%; margin:0 auto; }" +
     ".head { display:flex; align-items:flex-start; justify-content:space-between; gap:16px; padding-bottom:12px; border-bottom:2px solid #0b1120; margin-bottom:16px; }" +
@@ -113,29 +145,38 @@ export function buildOrgHTML(_ref) {
     ".brand-sub { font-size:10px; color:#1a1a2e; opacity:.75; margin-top:1px; }" +
     ".head h1 { font-size:20px; margin:0; text-align:center; }" +
     ".head .sub { font-size:11px; color:#64748b; margin-top:4px; text-align:center; }" +
-    ".stats { width:100%; border-collapse:collapse; margin:14px 0 22px; }" +
-    ".foot { margin-top:28px; padding-top:10px; border-top:1px solid #e2e8f0; font-size:10px; color:#94a3b8; text-align:center; }" +
-    ".oc { display:flex; justify-content:center; padding:8px 0 0; direction:ltr; }" +
-    ".oc ul { display:flex; flex-wrap:nowrap; justify-content:center; position:relative; list-style:none; margin:0; padding:22px 0 0; }" +
-    ".oc > ul { padding-top:0; }" +
-    ".oc li { display:flex; flex-direction:column; align-items:center; position:relative; padding:22px 6px 0; }" +
-    ".oc > ul > li { padding-top:0; }" +
-    ".oc > ul > li::before, .oc > ul > li::after { display:none; }" +
-    ".oc li::before, .oc li::after { content:''; position:absolute; top:0; width:50%; height:22px; border-top:2px solid #1e293b; }" +
-    ".oc li::before { left:0; }" +
-    ".oc li::after { right:0; left:auto; border-left:2px solid #1e293b; }" +
-    ".oc li:first-child::before { border-top:0; }" +
-    ".oc li:last-child::after { border-top:0; }" +
-    ".oc li:last-child::before { border-right:2px solid #1e293b; }" +
-    ".oc li:first-child::after { border-radius:6px 0 0 0; }" +
-    ".oc li:only-child::before, .oc li:only-child::after { display:none; }" +
-    ".oc li:only-child { padding-top:0; }" +
-    ".oc ul ul::before { content:''; position:absolute; top:0; left:50%; border-left:2px solid #1e293b; width:0; height:22px; }" +
-    ".oc > ul::before { display:none; }" +
-    ".box { width:132px; height:72px; box-sizing:border-box; border:2px solid #1e293b; border-radius:8px; padding:6px; text-align:center; overflow:hidden; box-shadow:0 1px 2px rgba(15,23,42,.08); }" +
-    ".box-title { font-size:11px; font-weight:800; line-height:1.25; max-height:2.5em; overflow:hidden; }" +
-    ".box-sub { font-size:9px; line-height:1.25; margin-top:2px; max-height:2.5em; overflow:hidden; }" +
-    "@media print { body { print-color-adjust:exact; -webkit-print-color-adjust:exact; } .oc ul { flex-wrap:nowrap; } }";
+    ".stats { width:100%; border-collapse:collapse; margin:14px 0 18px; }" +
+    ".foot { margin-top:24px; padding-top:10px; border-top:1px solid #e2e8f0; font-size:10px; color:#94a3b8; text-align:center; }" +
+    // المخطط العمودي: الإدارة فوق وموظفوها أسفلها في عمود واحد
+    ".oc-wrap { display:flex; justify-content:center; padding-top:4px; }" +
+    ".oc { flex:0 0 auto; display:inline-flex; flex-direction:column; align-items:center; }" +
+    ".oc-top { display:flex; flex-direction:column; align-items:center; }" +
+    ".oc-row { display:flex; align-items:flex-start; justify-content:center; position:relative; }" +
+    ".oc-col { display:flex; flex-direction:column; align-items:center; }" +
+    ".oc-bus { position:absolute; top:0; height:2px; background:#1e293b; }" +
+    ".oc-stem { width:2px; height:12px; background:#1e293b; }" +
+    ".oc-stub { width:2px; height:8px; background:#1e293b; }" +
+    ".box { box-sizing:border-box; border:2px solid #1e293b; border-radius:7px; padding:5px 4px; text-align:center; overflow:hidden; display:flex; flex-direction:column; align-items:center; justify-content:center; box-shadow:0 1px 2px rgba(15,23,42,.08); }" +
+    ".box-head { width:130px; height:58px; }" +
+    ".box-top { width:136px; height:58px; }" +
+    ".box-sm { width:120px; height:40px; }" +
+    ".box-title { font-size:10px; font-weight:800; line-height:1.2; max-height:2.4em; overflow:hidden; }" +
+    ".box-sub { font-size:8.5px; line-height:1.2; margin-top:2px; max-height:2.4em; overflow:hidden; }" +
+    ".box-sm .box-title { font-size:9px; }" +
+    "@media print { body { print-color-adjust:exact; -webkit-print-color-adjust:exact; } }";
+
+  // ملاءمة المخطط على ورقة A4 واحدة: قياس المحتوى ثم تصغيره واختيار الاتجاه المناسب
+  const fitScript =
+    "function fitOrg(){var doc=document.querySelector('.doc');if(!doc)return;" +
+    "doc.style.zoom='1';doc.style.width='max-content';" +
+    "var W=Math.max(doc.offsetWidth||0,1);var H=Math.max(doc.offsetHeight||0,1);doc.style.width='';" +
+    "var LW=1077,LH=748,PW=748,PH=1077;" +
+    "var zL=Math.min(LW/W,LH/H,1);var zP=Math.min(PW/W,PH/H,1);" +
+    "var land=zL>=zP;var z=(land?zL:zP);if(z<0.3)z=0.3;" +
+    "var st=document.getElementById('org-page');if(!st){st=document.createElement('style');st.id='org-page';document.head.appendChild(st);}" +
+    "st.textContent='@page{size:A4 '+(land?'landscape':'portrait')+';margin:6mm;}';" +
+    "doc.style.zoom=String(z);}" +
+    "window.addEventListener('load',fitOrg);window.addEventListener('beforeprint',fitOrg);";
 
   return "<!DOCTYPE html>" +
     "<html xmlns:o=\"urn:schemas-microsoft-com:office:office\" xmlns:w=\"urn:schemas-microsoft-com:office:word\" xmlns=\"http://www.w3.org/TR/REC-html40\" dir=\"" + (isAr ? "rtl" : "ltr") + "\" lang=\"" + (isAr ? "ar" : "en") + "\">" +
@@ -160,7 +201,7 @@ export function buildOrgHTML(_ref) {
       treeHtml +
       "<div class=\"foot\">" + foot + "</div>" +
     "</div>" +
-    "<script>function fitOrg(){var chart=document.querySelector('.oc');if(!chart)return;chart.style.zoom='1';var avail=Math.max((document.documentElement.clientWidth||1400)-24,1100);var need=chart.scrollWidth||1;if(need>avail)chart.style.zoom=String(Math.max(0.28,avail/need));}window.addEventListener('load',fitOrg);window.addEventListener('beforeprint',fitOrg);<\/script>" +
+    "<script>" + fitScript + "<\/script>" +
     "</body></html>";
 }
 
@@ -172,7 +213,7 @@ export function printOrgChartPDF(opts) {
   w.document.write(html);
   w.document.close();
   w.focus();
-  setTimeout(function () { try { w.print(); } catch (e) {} }, 500);
+  setTimeout(function () { try { w.print(); } catch (e) {} }, 600);
 }
 
 export function downloadOrgWord(opts) {

@@ -8,7 +8,7 @@ import {
 } from "@/components/ui/select";
 import { Network, Users, Crown, Briefcase, ClipboardList, RefreshCw, FileText, FileType2 } from "lucide-react";
 import { useI18n } from "@/lib/i18n";
-import { buildOrgTree, orgStats, ROLE_LABELS, ROLE_ORDER, ROLE_STYLES, roleLabel } from "@/lib/orgTree";
+import { buildOrgTree, buildChartModel, orgStats, ROLE_LABELS, ROLE_ORDER, ROLE_STYLES, roleLabel } from "@/lib/orgTree";
 import OrgChart from "@/components/OrgChart";
 import { printOrgChartPDF, downloadOrgWord } from "@/lib/orgExport";
 
@@ -57,6 +57,7 @@ export default function OrgStructure() {
   const exportOpts = { employees, lang, orgName: org?.name || "", logoUrl: org?.logo_url || "", unifiedNumber: org?.unified_number || "" };
 
   const tree = buildOrgTree(employees);
+  const chartModel = buildChartModel(employees);
   const stats = orgStats(employees);
   const employeeName = (e) => e.full_name || e.position || e.employee_number || "—";
   const employeeSub = (e) => {
@@ -156,17 +157,13 @@ export default function OrgStructure() {
           <div className="absolute -bottom-12 left-1/4 w-72 h-72 rounded-full bg-amber-300/35 blur-3xl" />
           <div className="absolute top-1/2 left-1/2 w-80 h-80 -translate-x-1/2 -translate-y-1/2 rounded-full bg-violet-300/25 blur-3xl" />
           <div className="relative">
-            <OrgChart roots={tree} lang={lang} dir={isAr ? "rtl" : "ltr"} />
-            {orphanNodes.length > 0 && (
-              <div className="mt-8 pt-4 border-t border-white/60">
-                <div className="text-sm font-medium text-slate-700/80 mb-2">{t.orphans} ({orphanNodes.length})</div>
-                <div className="flex flex-wrap gap-2">
-                  {orphanNodes.map((e) => (
-                    <span key={e.id} className="text-xs px-3 py-1.5 rounded-xl bg-white/40 backdrop-blur-md border border-white/80 shadow-sm text-slate-700">{employeeName(e)}</span>
-                  ))}
-                </div>
-              </div>
-            )}
+            <OrgChart
+              model={chartModel}
+              lang={lang}
+              dir={isAr ? "rtl" : "ltr"}
+              noneLabel={isAr ? "أخرى" : "Others"}
+              noManagerLabel={isAr ? "بلا مدير" : "No manager"}
+            />
           </div>
         </div>
       ) : view === "tree" ? (
