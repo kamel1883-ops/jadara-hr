@@ -140,7 +140,8 @@ router.post('/find', async (req, res, next) => {
  */
 router.get('/:empRef', async (req, res, next) => {
   try {
-    const tenantId = req.headers['x-tenant-id'];
+    const tenantId = String(req.headers['x-tenant-id'] || '').trim();
+    if (!tenantId) return res.status(400).json({ error: 'tenant_required' });
     const { rows } = await query(
       'SELECT * FROM vault_employees WHERE emp_ref=$1 AND tenant_id=$2',
       [req.params.empRef, tenantId]
@@ -161,7 +162,8 @@ router.get('/:empRef', async (req, res, next) => {
  */
 router.put('/:empRef', async (req, res, next) => {
   try {
-    const tenantId = req.headers['x-tenant-id'];
+    const tenantId = String(req.headers['x-tenant-id'] || '').trim();
+    if (!tenantId) return res.status(400).json({ error: 'tenant_required' });
     const sets = [];
     const vals = [];
     let i = 1;
@@ -188,7 +190,8 @@ router.put('/:empRef', async (req, res, next) => {
  */
 router.delete('/:empRef', async (req, res, next) => {
   try {
-    const tenantId = req.headers['x-tenant-id'];
+    const tenantId = String(req.headers['x-tenant-id'] || '').trim();
+    if (!tenantId) return res.status(400).json({ error: 'tenant_required' });
     const { rowCount } = await query(
       'DELETE FROM vault_employees WHERE emp_ref=$1 AND tenant_id=$2',
       [req.params.empRef, tenantId]

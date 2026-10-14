@@ -40,8 +40,8 @@ export function generateRef(prefix = 'ref') {
 /**
  * توقيع JWT قصير العمر لرابط تنزيل مستند — يُستخدم بدلاً من كشف مفتاح API في المتصفح.
  */
-export function signDocToken(docRef) {
-  return jwt.sign({ doc_ref: docRef, scope: 'doc' }, config.jwtSecret, { expiresIn: '5m' });
+export function signDocToken(docRef, tenantId) {
+  return jwt.sign({ doc_ref: docRef, tenant_id: tenantId || '', scope: 'doc' }, config.jwtSecret, { expiresIn: '5m' });
 }
 
 export function verifyDocToken(token) {

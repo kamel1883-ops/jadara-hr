@@ -12,6 +12,17 @@ export function requireApiKey(req, res, next) {
 }
 
 /**
+ * يرفض أي طلب بيانات لم يُحدّد فيه الرقم الموحد للمنشأة (X-Tenant-Id).
+ * يمنع وصولاً عرضياً لبيانات منشأة أخرى عند غياب الترويسة.
+ * المسارات العامة (download/:token, /health) لا تمرّ من هنا.
+ */
+export function requireTenant(req, res, next) {
+  const tenantId = String(req.headers['x-tenant-id'] || '').trim();
+  if (!tenantId) return res.status(400).json({ error: 'tenant_required' });
+  next();
+}
+
+/**
  * تسجيل الطلب دون تسجيل الجسم — الجسم قد يحوي بيانات حساسة (هوية/راتب/مستند)
  */
 export function safeRequestLog(req, res, next) {

@@ -53,7 +53,7 @@ async function issueDocLink(req, res) {
   if (!rows.length) return res.status(404).json({ error: 'not_found' });
   let token;
   try {
-    token = signDocToken(req.params.docRef);
+    token = signDocToken(req.params.docRef, tenantId);
   } catch (e) {
     console.error('[vault:documents/link] sign failed:', e.message);
     return res.status(500).json({ error: 'token_error', detail: String(e.message || '').slice(0, 120) });
@@ -77,7 +77,9 @@ router.get('/:docRef/link', requireApiKey, issueDocLink);
 router.get('/download/:token', async (req, res, next) => {
   try {
     const payload = verifyDocToken(req.params.token);
-    const { rows } = await query('SELECT * FROM vault_documents WHERE doc_ref=$1', [payload.doc_ref]);
+    const docTenant = String(payload.tenant_id || '').trim();
+    if (!docTenant) return res.status(403).json({ error: 'invalid_token' });
+    const { rows } = await query('SELECT * FROM vault_documents WHERE doc_ref=$1 AND tenant_id=$2', [payload.doc_ref, docTenant]);
     if (!rows.length) return res.status(404).json({ error: 'not_found' });
     const doc = rows[0];
     if (!fs.existsSync(doc.file_path)) return res.status(410).json({ error: 'file_missing' });

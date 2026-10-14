@@ -1,6 +1,6 @@
 import { Router } from 'express';
 import { createCrudRouter } from '../lib/crudFactory.js';
-import { requireApiKey } from '../middleware/index.js';
+import { requireApiKey, requireTenant } from '../middleware/index.js';
 
 const router = Router();
 
@@ -26,7 +26,7 @@ const MODULES = [
 ];
 
 for (const m of MODULES) {
-  router.use(`/${m.path}`, requireApiKey, createCrudRouter(m));
+  router.use(`/${m.path}`, requireApiKey, requireTenant, createCrudRouter(m));
 }
 
 export default router;

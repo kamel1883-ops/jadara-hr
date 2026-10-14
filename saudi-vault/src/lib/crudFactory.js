@@ -59,7 +59,8 @@ export function createCrudRouter({ table, refCol, refPrefix }) {
 
   router.get('/:refId', async (req, res, next) => {
     try {
-      const tenantId = req.headers['x-tenant-id'];
+      const tenantId = String(req.headers['x-tenant-id'] || '').trim();
+      if (!tenantId) return res.status(400).json({ error: 'tenant_required' });
       const { rows } = await query(
         `SELECT * FROM ${table} WHERE ${refCol}=$1 AND tenant_id=$2`,
         [req.params.refId, tenantId]
@@ -73,7 +74,8 @@ export function createCrudRouter({ table, refCol, refPrefix }) {
 
   router.put('/:refId', async (req, res, next) => {
     try {
-      const tenantId = req.headers['x-tenant-id'];
+      const tenantId = String(req.headers['x-tenant-id'] || '').trim();
+      if (!tenantId) return res.status(400).json({ error: 'tenant_required' });
       const incoming = req.body.data || req.body;
       const { rows } = await query(
         `SELECT data_enc FROM ${table} WHERE ${refCol}=$1 AND tenant_id=$2`,
@@ -103,7 +105,8 @@ export function createCrudRouter({ table, refCol, refPrefix }) {
 
   router.delete('/:refId', async (req, res, next) => {
     try {
-      const tenantId = req.headers['x-tenant-id'];
+      const tenantId = String(req.headers['x-tenant-id'] || '').trim();
+      if (!tenantId) return res.status(400).json({ error: 'tenant_required' });
       const { rowCount } = await query(
         `DELETE FROM ${table} WHERE ${refCol}=$1 AND tenant_id=$2`,
         [req.params.refId, tenantId]
