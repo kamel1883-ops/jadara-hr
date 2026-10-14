@@ -117,9 +117,9 @@ router.post('/find', async (req, res, next) => {
     const tenantIds = Array.isArray(req.body?.tenant_ids)
       ? [...new Set(req.body.tenant_ids.map((r) => String(r || '').trim()).filter(Boolean))].slice(0, 64)
       : [];
-    const { rows } = tenantIds.length
-      ? await query('SELECT emp_ref, national_id_enc, birth_date_enc FROM vault_employees WHERE tenant_id = ANY($1::text[])', [tenantIds])
-      : await query('SELECT emp_ref, national_id_enc, birth_date_enc FROM vault_employees');
+    // لا نبحث أبداً دون تحديد المنشآت — يمنع تسرّب emp_ref لمنشآت أخرى
+    if (!tenantIds.length) return res.status(400).json({ error: 'tenant_ids_required' });
+    const { rows } = await query('SELECT emp_ref, national_id_enc, birth_date_enc FROM vault_employees WHERE tenant_id = ANY($1::text[])', [tenantIds]);
     const matches = [];
     for (const r of rows) {
       const id = String(decrypt(r.national_id_enc) || '').replace(/[٠-٩]/g, (d) => String('٠١٢٣٤٥٦٧٨٩'.indexOf(d))).replace(/\D/g, '');

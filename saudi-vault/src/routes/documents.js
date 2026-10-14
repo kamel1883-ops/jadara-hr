@@ -19,7 +19,8 @@ const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 25 
  */
 router.post('/', requireApiKey, upload.single('file'), async (req, res, next) => {
   try {
-    const tenantId = req.headers['x-tenant-id'];
+    const tenantId = String(req.headers['x-tenant-id'] || '').trim();
+    if (!tenantId) return res.status(400).json({ error: 'tenant_required' });
     if (!req.file) return res.status(400).json({ error: 'file_required' });
     const docRef = generateRef('doc');
     const dir = path.join(config.storageDir, tenantId);
