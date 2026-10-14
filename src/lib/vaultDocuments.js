@@ -90,12 +90,34 @@ export async function getVaultDocLinkResult(docRef) {
   try {
     const res = await base44.functions.invoke("vaultProxy", { action: "getDocumentLink", docRef: ref });
     const body = res?.data || {};
-    if (body.error) return { url: null, code: vaultCodeFromResponse(body) };
+    if (body.error) {
+      const code = vaultCodeFromResponse(body);
+      if (code === "unreachable" || code === "timeout" || code === "not_configured") {
+        try {
+          const pr = await portalDocLink(ref);
+          if (pr.url) return pr;
+          return { url: null, code: pr.code || code };
+        } catch {
+          return { url: null, code };
+        }
+      }
+      return { url: null, code };
+    }
     const data = body.data || {};
     const url = data.download_url || "";
     return url ? { url, code: "" } : { url: null, code: "not_found" };
   } catch (e) {
-    return { url: null, code: codeFromThrown(e) };
+    const code = codeFromThrown(e);
+    if (code === "unreachable" || code === "timeout" || code === "not_configured") {
+      try {
+        const pr = await portalDocLink(ref);
+        if (pr.url) return pr;
+        return { url: null, code: pr.code || code };
+      } catch {
+        return { url: null, code };
+      }
+    }
+    return { url: null, code };
   }
 }
 
