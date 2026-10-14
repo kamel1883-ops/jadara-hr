@@ -145,13 +145,14 @@ export async function vaultHealthCheck() {
 /** نص جاهز للعرض عند فشل الفتح: السبب، وإذا كان عطلاً عاماً يُضاف تشخيص مباشر */
 export async function vaultFailureMessage(code, isAr = true) {
   let text = vaultErrorText(code, isAr);
-  if (code === "not_configured" || code === "unauthorized" || code === "unreachable" || code === "timeout") {
+  if (["not_configured", "unauthorized", "unreachable", "timeout", "schema_mismatch"].includes(code)) {
     const h = await vaultHealthCheck();
     if (h) {
       const bits = [];
       bits.push(isAr ? `النطاق: ${h.host || "—"}` : `host: ${h.host || "—"}`);
       bits.push(isAr ? `الأسرار: ${h.configured ? "مُضبطة" : "ناقصة"}` : `secrets: ${h.configured ? "ok" : "missing"}`);
-      bits.push(isAr ? `فحص /health: ${h.reachable ? "ناجح" : "فاشل"} (${h.vault_status})` : `/health: ${h.reachable ? "ok" : "failed"} (${h.vault_status})`);
+      bits.push(isAr ? `فحص الاتصال: ${h.reachable ? "ناجح" : "فاشل"} (${h.vault_status})` : `Connectivity: ${h.reachable ? "ok" : "failed"} (${h.vault_status})`);
+      if (typeof h.documents_ready === "boolean") bits.push(isAr ? `فحص المستندات: ${h.documents_ready ? "ناجح" : "فاشل"} (${h.document_status})` : `Documents: ${h.documents_ready ? "ok" : "failed"} (${h.document_status})`);
       text += "\n" + (isAr ? "تشخيص: " : "Diagnostics: ") + bits.join(" · ");
     }
   }

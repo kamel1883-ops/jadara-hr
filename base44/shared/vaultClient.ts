@@ -51,20 +51,28 @@ export function vaultConfigured(): { ok: boolean; url: boolean; key: boolean; ho
   return { ok: !!(apiKey && baseUrl), url: !!baseUrl, key: !!apiKey, host };
 }
 
-/** فحص صحة سيرفر الخزنة (/health) — لتشخيص سبب عدم فتح المستندات */
-export async function vaultHealth(): Promise<{ ok: boolean; status: number }> {
+/** فحص الاتصال وقراءة جدول المستندات. نجاح /health وحده لا يعني أن المستندات تعمل. */
+export async function vaultHealth(tenantId) {
+  const result = { ok: false, status: 0, documents_ready: false, document_status: 0, document_error: "" };
   let baseUrl = "";
-  try { baseUrl = getVaultConfig().baseUrl; } catch { return { ok: false, status: 0 }; }
-  const ctrl = new AbortController();
-  const timer = setTimeout(() => ctrl.abort(), 8000);
+  try { baseUrl = getVaultConfig().baseUrl; } catch { return result; }
   try {
-    const res = await fetch(`${baseUrl}/health`, { signal: ctrl.signal });
-    return { ok: res.ok, status: res.status };
-  } catch {
-    return { ok: false, status: 0 };
-  } finally {
-    clearTimeout(timer);
+    const res = await fetch(`${baseUrl}/health`, { signal: AbortSignal.timeout(8000) });
+    result.ok = res.ok;
+    result.status = res.status;
+  } catch { return result; }
+  if (!result.ok || !tenantId) return result;
+  // مرجع غير موجود مقصود: 404 not_found يثبت أن استعلام المستندات نجح دون رفع أو تعديل بيانات.
+  try {
+    await getDocumentLink(tenantId, "doc_healthcheck_nonexistent");
+    result.document_status = 200;
+    result.documents_ready = true;
+  } catch (error) {
+    result.document_status = error?.status || 0;
+    result.documents_ready = error?.vaultCode === "not_found" && error?.vaultDetail === "not_found";
+    result.document_error = result.documents_ready ? "" : (error?.vaultCode || "unknown");
   }
+  return result;
 }
 
 /** ترويسات موحدة لكل مكالمة — مفتاح API + المستأجر */
@@ -96,7 +104,8 @@ async function callVault(path, tenantId, options: { timeoutMs?: number; method?:
       // نُرفق رمز الخطأ الذي أعاده سيرفر الخزنة (آمن — لا يحوي بيانات حساسة) للتشخيص،
       // بدل ابتلاعه وإظهار «تعذّر الوصول» بلا سبب. نُخزّنه على كائن الخطأ لا في الرسالة.
       const err = vaultFail(res.status, path);
-      const detail = String(body?.error || body?.code || body?.raw || "").slice(0, 80);
+      const detail = String(body?.code || body?.error || body?.raw || "").slice(0, 80);
+      if (detail === "42703" || detail === "42P01") err.vaultCode = "schema_mismatch";
       if (detail && !err.vaultDetail) err.vaultDetail = detail;
       throw err;
     }

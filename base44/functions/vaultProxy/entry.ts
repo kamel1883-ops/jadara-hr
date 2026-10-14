@@ -51,7 +51,7 @@ export default async function (req: Request): Promise<Response> {
       // تشخيص فوري لسبب عدم فتح المستندات — لا يُعيد أي سرّ، فقط الحالة والنطاق
       case "health": {
         const cfg = vaultConfigured();
-        const probe = cfg.ok ? await vaultHealth() : { ok: false, status: 0 };
+        const probe = cfg.ok ? await vaultHealth(tenant) : { ok: false, status: 0, documents_ready: false, document_status: 0, document_error: "not_configured" };
         result = {
           configured: cfg.ok,
           has_url: cfg.url,
@@ -59,6 +59,9 @@ export default async function (req: Request): Promise<Response> {
           host: cfg.host,
           reachable: probe.ok,
           vault_status: probe.status,
+          documents_ready: probe.documents_ready,
+          document_status: probe.document_status,
+          document_error: probe.document_error,
         };
         break;
       }

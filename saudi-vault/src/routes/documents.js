@@ -49,7 +49,7 @@ async function issueDocLink(req, res) {
     )).rows;
   } catch (e) {
     console.error('[vault:documents/link] select failed:', e.message);
-    return res.status(500).json({ error: 'db_error', detail: String(e.message || '').slice(0, 120) });
+    return res.status(500).json({ error: 'db_error', code: e.code || 'internal_error' });
   }
   if (!rows.length) return res.status(404).json({ error: 'not_found' });
   let token;

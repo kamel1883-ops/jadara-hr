@@ -11,6 +11,7 @@ export type VaultErrorCode =
   | "not_configured"
   | "unauthorized"
   | "not_found"
+  | "schema_mismatch"
   | "timeout"
   | "unreachable"
   | "invalid"
@@ -18,6 +19,8 @@ export type VaultErrorCode =
 
 /** يقرأ الرمز الذي ضبطه vaultClient على كائن الخطأ، وإلا يصنّفه من الرسالة */
 export function vaultErrorCode(error: any): VaultErrorCode {
+  const detail = String(error?.vaultDetail || "");
+  if (detail === "42703" || detail === "42P01") return "schema_mismatch";
   const explicit = String(error?.vaultCode || "");
   if (explicit) return explicit as VaultErrorCode;
   const msg = String(error?.message || error || "");
@@ -36,6 +39,7 @@ export function vaultErrorStatus(code: VaultErrorCode): number {
     case "not_configured": return 503;
     case "unauthorized": return 502;
     case "not_found": return 404;
+    case "schema_mismatch": return 502;
     case "timeout": return 504;
     case "invalid": return 400;
     default: return 502;
