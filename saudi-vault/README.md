@@ -95,6 +95,19 @@ curl https://vault.jadara.sa/health
 | POST | `/documents` | رفع مستند (multipart) → `doc_ref` |
 | POST | `/documents/:docRef/link` | توليد رابط تنزيل مؤقت |
 | GET | `/documents/download/:token` | تنزيل عام بالرمز المؤقت |
+| POST | `/modules/:module` | تخزين سجل وحدة حساسة → `<module>_ref` |
+| GET | `/modules/:module/:ref` | استرجاع سجل مفكوك التشفير |
+| PUT | `/modules/:module/:ref` | تحديث **بالدمج** (انظر أدناه) |
+| DELETE | `/modules/:module/:ref` | حذف سجل |
+
+### سلوك PUT: دمج لا استبدال
+
+`PUT /modules/:module/:ref` **يدمج** الحمولة الواردة مع السجل المخزَّن ويرجع `{ "merged": true }`،
+فلا يمحو تحديثٌ جزئي (ملاحظة مالية، إرجاع عهدة، إضافة مرفق) بقية الحقول الحسّاسة.
+
+- `documents` (مصفوفة رموز مرفقات) تُحدَّث كاملة عند إرسالها: `[]` يحذف كل المرفقات.
+- للاستبدال الكامل المتعمّد أرسل `{"data": {...}, "replace": true}` → يرجع `merged: false`.
+- عند تعذّر فك تشفير سجل تالف يُتجاهل القديم ويُحفظ الجديد بدل إسقاط الطلب.
 
 ### مثال (تخزين موظف)
 ```bash
@@ -105,6 +118,15 @@ curl -X POST https://vault.jadara.sa/api/vault/employees \
   -d '{"full_name":"محمد","national_id":"1098765432","bank_account":"SA12345"}'
 # → {"emp_ref":"emp_a1b2c3..."}
 ```
+
+---
+
+## الاختبارات
+```bash
+npm test          # node --test "test/**/*.test.mjs"
+```
+يشمل اختبار `crud-put-merge.test.mjs` سلوك الدمج أعلاه (تحديث جزئي، تسلسل خطوات نهاية الخدمة، المرفقات، `replace`، 404، سجل تالف)
+على كود `src/lib/crudFactory.js` الفعلي بأبدال لطبقة قاعدة البيانات والتشفير — بلا حاجة إلى PostgreSQL.
 
 ---
 

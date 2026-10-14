@@ -16,6 +16,7 @@ import { todayISO } from "@/lib/hr";
 import PullToRefresh from "@/components/PullToRefresh";
 import EquipmentHandoverDoc from "@/components/docs/EquipmentHandoverDoc";
 import { writeRecordToVault, enrichRecordsWithVault, VAULT_MODULES } from "@/lib/vaultGeneric";
+import VaultAttachments, { VaultDocsView } from "@/components/VaultAttachments";
 
 const ITEM_TYPES = [
   { value: "laptop", ar: "لابتوب" }, { value: "phone", ar: "جوال" }, { value: "work_phone", ar: "جوال عمل" },
@@ -51,6 +52,7 @@ export default function Equipment() {
     rejectTitle: "رفض الطلب", rejectReason: "سبب الرفض", confirmReject: "تأكيد الرفض",
     hrTitle: "اعتماد طلب العهدة — الموارد البشرية", hrWarn: "عند الاعتماد يُنشأ سند العهدة ويُسجّل في ملف الموظف ويُؤرشف المستند بين الأطراف.",
     reqFrom: "طلب العهدة", delCust: "حذف", retCust: "إرجاع",
+    attach: "مرفقات العهدة (صور السند/الإقرار — اختياري)",
   } : {
     title: "Custody & Expenses", subtitle: "Equipment requests (manager ← HR) + assigned custody",
     tabReq: (n) => `Requests (${n})`, tabCust: (n) => `Custody (${n})`,
@@ -62,6 +64,7 @@ export default function Equipment() {
     rejectTitle: "Reject", rejectReason: "Reason", confirmReject: "Confirm",
     hrTitle: "Approve equipment — HR", hrWarn: "On approval a custody voucher is created, saved to the employee file, and archived.",
     reqFrom: "Request", delCust: "Delete", retCust: "Return",
+    attach: "Custody attachments (voucher/receipt — optional)",
   };
 
   const [reqs, setReqs] = useState([]);
@@ -76,7 +79,7 @@ export default function Equipment() {
   const [busy, setBusy] = useState(false);
   const [custOpen, setCustOpen] = useState(false);
   const [printEq, setPrintEq] = useState(null);
-  const [custForm, setCustForm] = useState({ employee_id: "", item_type: "laptop", custom_type: "", item_label: "", serial_number: "", assigned_date: todayISO(), cost: 0, condition_note: "", notes: "" });
+  const [custForm, setCustForm] = useState({ employee_id: "", item_type: "laptop", custom_type: "", item_label: "", serial_number: "", assigned_date: todayISO(), cost: 0, condition_note: "", notes: "", documents: [] });
 
   const load = async () => {
     setLoading(true);
@@ -89,7 +92,7 @@ export default function Equipment() {
     setReqs(r); setCustody(c); setEmployees(emps); setOrg(orgs[0]);
     try { setMe(await base44.auth.me()); } catch {}
     setLoading(false);
-    enrichRecordsWithVault(c, VAULT_MODULES.equipment, "equip_ref", ["item_label", "custom_type", "serial_number", "condition_note", "return_note", "notes", "cost"]).then(setCustody);
+    enrichRecordsWithVault(c, VAULT_MODULES.equipment, "equip_ref", ["item_label", "custom_type", "serial_number", "condition_note", "return_note", "notes", "cost", "documents"]).then(setCustody);
   };
   useEffect(() => { load(); }, []);
 
@@ -188,10 +191,14 @@ export default function Equipment() {
       item_type: custForm.item_type, custom_type: custForm.custom_type,
       item_label: custForm.item_label, serial_number: custForm.serial_number,
       condition_note: custForm.condition_note, notes: custForm.notes, cost: Number(custForm.cost) || 0,
+      // مرفقات العهدة (صور السند/الإقرار) تُخزَّن في الخزنة داخل سجل العهدة
+      documents: custForm.documents || [],
     };
     const equipRef = await writeRecordToVault(VAULT_MODULES.equipment, null, vaultData);
+    // المرفقات لا تُرسل إلى Base44 — تُخزَّن في الخزنة فقط
+    const { documents: _docs, ...restCust } = custForm; // eslint-disable-line no-unused-vars
     await base44.entities.Equipment.create({
-      ...custForm,
+      ...restCust,
       item_label: equipRef ? "" : custForm.item_label,
       serial_number: equipRef ? "" : custForm.serial_number,
       condition_note: equipRef ? "" : custForm.condition_note,
@@ -272,6 +279,7 @@ export default function Equipment() {
                         <div className="text-xs text-muted-foreground mt-1">{typeLabel(c.item_type)}{c.custom_type ? ` — ${c.custom_type}` : ""} · {c.item_label}</div>
                         <div className="text-[11px] text-muted-foreground mt-0.5">تاريخ التسليم: <b className="text-foreground tabular-nums">{c.assigned_date || "—"}</b>{c.serial_number ? ` · سريال: ${c.serial_number}` : ""}{c.cost ? ` · ${c.cost} ر.س` : ""}</div>
                         {c.prepared_by_name && <div className="text-[11px] text-violet-700 mt-0.5">أُعدّت بواسطة: {c.prepared_by_name}{c.prepared_by_id ? ` — ${c.prepared_by_id}` : ""}</div>}
+                        <VaultDocsView value={c.documents} isAr={isAr} className="mt-1.5" />
                       </div>
                       <div className="flex items-center gap-2 shrink-0 flex-wrap justify-end">
                         <span className={cn("text-xs px-2.5 py-1 rounded-full font-medium", stBadge(c.status).cls)}>{stBadge(c.status).label}</span>
@@ -376,6 +384,16 @@ export default function Equipment() {
             <div className="space-y-1.5 sm:col-span-2">
               <Label className="text-xs font-medium text-muted-foreground">{t.cond}</Label>
               <Input value={custForm.condition_note} onChange={(e) => setCustForm((f) => ({ ...f, condition_note: e.target.value }))} />
+            </div>
+            <div className="space-y-1.5 sm:col-span-2">
+              <div className="text-xs font-medium text-muted-foreground">{t.attach}</div>
+              <VaultAttachments
+                value={custForm.documents}
+                onChange={(v) => setCustForm((f) => ({ ...f, documents: v }))}
+                isAr={isAr}
+                empRef={empOf(custForm.employee_id)?.emp_ref || null}
+                docType="equipment_attachment"
+              />
             </div>
           </div>
           <DialogFooter>

@@ -8,6 +8,7 @@
     "start": "node src/server.js",
     "migrate": "node src/migrate.js",
     "verify": "node scripts/verify-storage.mjs",
+    "test": "node --test \"test/**/*.test.mjs\"",
     "dev": "node --watch src/server.js"
   },
   "dependencies": {

@@ -7,7 +7,7 @@
  * وضع احتياطي: لو فشلت الخزنة أو لم تُهيّأ، يُحفظ السجل محلياً في Base44 ولا ينكسر النظام.
  */
 import { base44 } from "@/api/base44Client";
-import { noteVaultFailure, readRecordCache, rememberRecord, vaultCooling } from "@/lib/vaultCache";
+import { noteVaultFailure, readRecordCache, rememberRecord, forgetRecord, vaultCooling } from "@/lib/vaultCache";
 
 // الأقسام الحساسة المدعومة في الخزنة الموسّعة
 export const VAULT_MODULES = {
@@ -46,7 +46,13 @@ export async function writeRecordToVault(moduleKey, existingRef, record) {
     const data = res?.data?.data || res?.data || {};
     const refKey = `${moduleKey}Ref`;
     const ref = data[refKey] || data.ref || data.emp_ref || existingRef || null;
-    if (ref) rememberRecord(moduleKey, ref, record);
+    if (ref) {
+      // عند التحديث لا نحفظ الحمولة الجزئية في الذاكرة: الخزنة تدمجها مع السجل
+      // الكامل، فلو خزّنّا الجزئية لبدا السجل ناقصاً (بلا مرفقاته وحقوله السابقة).
+      // الإسقاط يجعل الجلب التالي يعرض السجل المدمج الصحيح.
+      if (existingRef) forgetRecord(moduleKey, ref);
+      else rememberRecord(moduleKey, ref, record);
+    }
     return ref;
   } catch (e) {
     console.log(`[vaultGeneric] ${moduleKey}: vault unavailable, legacy mode`);

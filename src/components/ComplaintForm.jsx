@@ -9,6 +9,7 @@ import { Loader2 } from "lucide-react";
 import { base44 } from "@/api/base44Client";
 import { usePortalI18n } from "@/lib/portalI18n";
 import { writeRecordToVault, VAULT_MODULES } from "@/lib/vaultGeneric";
+import VaultAttachments from "@/components/VaultAttachments";
 
 const TYPES = [
   { value: "ethical", ar: "أخلاقية", en: "Ethical" },
@@ -20,7 +21,7 @@ const TYPES = [
   { value: "other", ar: "أخرى", en: "Other" },
 ];
 
-const empty = { complaint_type: "work_environment", custom_type: "", description: "", is_confidential: false };
+const empty = { complaint_type: "work_environment", custom_type: "", description: "", is_confidential: false, documents: [] };
 
 export default function ComplaintForm({ open, onClose, onSaved, employee, portalCreate }) {
   const { lang } = usePortalI18n();
@@ -30,11 +31,13 @@ export default function ComplaintForm({ open, onClose, onSaved, employee, portal
     descL: "تفاصيل الشكوى", confL: "سرية — تُعالج من الموارد البشرية فقط دون المدير المباشر",
     cancel: "إلغاء", submit: "إرسال الشكوى",
     warn: "تُرفع الشكوى للمدير المباشر ثم الموارد البشرية. عند الحل يُسجّل القرار ويُؤرشف المستند بين الأطراف.",
+    attach: "مرفقات الشكوى (اختياري)",
   } : {
     title: "Submit a complaint", emp: "Employee", typeL: "Complaint type", customL: "Custom type (if Other)",
     descL: "Complaint details", confL: "Confidential — handled by HR only",
     cancel: "Cancel", submit: "Submit complaint",
     warn: "The complaint goes to your direct manager then HR. On resolution the decision is recorded and archived.",
+    attach: "Complaint attachments (optional)",
   };
 
   const [form, setForm] = useState(empty);
@@ -53,6 +56,8 @@ export default function ComplaintForm({ open, onClose, onSaved, employee, portal
         custom_type: form.complaint_type === "other" ? form.custom_type : "",
         description: form.description,
         is_confidential: !!form.is_confidential,
+        // مرفقات الشكوى تُخزَّن في الخزنة السعودية داخل نفس سجل الشكوى الحسّاس
+        documents: form.documents || [],
       };
       const complaintRef = await writeRecordToVault(VAULT_MODULES.complaints, null, vaultData);
       const payload = {
@@ -110,6 +115,16 @@ export default function ComplaintForm({ open, onClose, onSaved, employee, portal
             <input type="checkbox" checked={form.is_confidential} onChange={(e) => set("is_confidential", e.target.checked)} className="w-4 h-4 accent-violet-600" />
             {t.confL}
           </label>
+          <div className="space-y-1.5">
+            <div className="text-xs font-medium text-muted-foreground">{t.attach}</div>
+            <VaultAttachments
+              value={form.documents}
+              onChange={(v) => set("documents", v)}
+              isAr={isAr}
+              empRef={employee?.emp_ref || null}
+              docType="complaint_attachment"
+            />
+          </div>
           <div className="text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded-lg p-3">{t.warn}</div>
           <DialogFooter>
             <Button type="button" variant="outline" onClick={onClose} disabled={saving}>{t.cancel}</Button>

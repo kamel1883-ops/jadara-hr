@@ -220,6 +220,21 @@ export function readRecordCache(moduleKey, ref) {
   return hit.data;
 }
 
+/**
+ * يُسقط سجلاً من الذاكرة بعد تحديث جزئي.
+ * السبب: تحديث الخزنة يدمج مع السجل الكامل على السيرفر، فلو خزّنّا الحمولة
+ * الجزئية محلياً لعُرض السجل ناقصاً (تختفي مرفقاته وحقوله السابقة) حتى اليوم التالي.
+ * الإسقاط يجعل الجلب القادم يأتي بالسجل المدمج الصحيح.
+ */
+export function forgetRecord(moduleKey, ref) {
+  if (!moduleKey || !ref) return;
+  const state = load();
+  const key = recordKey(moduleKey, ref);
+  if (state.records[key] === undefined) return;
+  delete state.records[key];
+  persist();
+}
+
 export function rememberRecord(moduleKey, ref, data, silent = false) {
   if (!moduleKey || !ref) return;
   const state = load();

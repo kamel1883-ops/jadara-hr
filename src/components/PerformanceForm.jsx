@@ -12,6 +12,7 @@ import { base44 } from "@/api/base44Client";
 import { todayISO } from "@/lib/hr";
 import { useI18n } from "@/lib/i18n";
 import { writeRecordToVault, VAULT_MODULES } from "@/lib/vaultGeneric";
+import VaultAttachments from "@/components/VaultAttachments";
 
 const empty = {
   employee_id: "", review_period: "annual", period_year: new Date().getFullYear(),
@@ -19,7 +20,7 @@ const empty = {
   values_rating: 0, overall_rating: 0, strengths: "", improvements: "",
   personal_goals: "", behaviors: "", tasks_coverage: "", tasks_amendments: "",
   recommendation: "none", target_grade: "", promotion_ready: false,
-  review_date: todayISO(), next_review_date: "", status: "draft", notes: "",
+  review_date: todayISO(), next_review_date: "", status: "draft", notes: "", documents: [],
 };
 
 export default function PerformanceForm({ open, employees, editing, user, onClose, onSaved }) {
@@ -40,6 +41,7 @@ export default function PerformanceForm({ open, employees, editing, user, onClos
     sDraft: "مسودة", sSubmitted: "مُرسلة", sAcknowledged: "معتمدة من الموظف", sCompleted: "مكتملة",
     ready: "جاهز للترقية", cancel: "إلغاء", save: "حفظ التقييم", saving: "جارٍ الحفظ...",
     reviewerDefault: "المدير",
+    attach: "مرفقات التقييم (اختياري)",
   } : {
     edit: "Edit performance review", add: "New performance review",
     emp: "Employee", chooseEmp: "Select employee",
@@ -55,6 +57,7 @@ export default function PerformanceForm({ open, employees, editing, user, onClos
     sDraft: "Draft", sSubmitted: "Submitted", sAcknowledged: "Acknowledged by employee", sCompleted: "Completed",
     ready: "Promotion ready", cancel: "Cancel", save: "Save review", saving: "Saving...",
     reviewerDefault: "Manager",
+    attach: "Review attachments (optional)",
   };
 
   const [form, setForm] = useState(empty);
@@ -74,12 +77,16 @@ export default function PerformanceForm({ open, employees, editing, user, onClos
       strengths: form.strengths, improvements: form.improvements, notes: form.notes,
       goals_rating: Number(form.goals_rating), competencies_rating: Number(form.competencies_rating),
       values_rating: Number(form.values_rating), overall_rating: overall,
+      // مرفقات التقييم (خطابات/شهادات/أدلة) تُخزَّن في الخزنة داخل نفس سجل التقييم
+      documents: form.documents || [],
     };
     const perfRef = editing?.perf_ref
       ? await writeRecordToVault(VAULT_MODULES.performance, editing.perf_ref, vaultData)
       : await writeRecordToVault(VAULT_MODULES.performance, null, vaultData);
+    // المرفقات تُخزَّن في الخزنة فقط — تُستبعد من حمولة Base44 حتى لا تخرج من داخل المملكة
+    const { documents: _docs, ...restForm } = form; // eslint-disable-line no-unused-vars
     const payload = {
-      ...form, period_year: Number(form.period_year), goals_rating: Number(form.goals_rating), competencies_rating: Number(form.competencies_rating), values_rating: Number(form.values_rating), overall_rating: overall,
+      ...restForm, period_year: Number(form.period_year), goals_rating: Number(form.goals_rating), competencies_rating: Number(form.competencies_rating), values_rating: Number(form.values_rating), overall_rating: overall,
       employee_name: emp.employee_number ? `${emp.employee_number} - ${emp.position}` : emp.position,
       department: emp.department || "", current_grade: emp.job_grade || "",
       reviewer_id: user?.id || "", reviewer_name: user?.full_name || t.reviewerDefault,
@@ -174,6 +181,16 @@ export default function PerformanceForm({ open, employees, editing, user, onClos
             <Checkbox checked={form.promotion_ready} onCheckedChange={(v) => set("promotion_ready", v)} />
             {t.ready}
           </label>
+
+          <Field label={t.attach}>
+            <VaultAttachments
+              value={form.documents}
+              onChange={(v) => set("documents", v)}
+              isAr={isAr}
+              empRef={employees.find((e) => e.id === form.employee_id)?.emp_ref || null}
+              docType="performance_attachment"
+            />
+          </Field>
 
           <DialogFooter>
             <Button type="button" variant="outline" onClick={onClose}>{t.cancel}</Button>

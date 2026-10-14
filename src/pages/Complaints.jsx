@@ -14,6 +14,7 @@ import { todayISO } from "@/lib/hr";
 import PullToRefresh from "@/components/PullToRefresh";
 import ComplaintResolutionDoc from "@/components/docs/ComplaintResolutionDoc";
 import { enrichRecordsWithVault, VAULT_MODULES } from "@/lib/vaultGeneric";
+import { VaultDocsView } from "@/components/VaultAttachments";
 
 const TYPES = {
   ethical: "شكوى أخلاقية", pressure: "ضغط من موظف/مسؤول", sexual_harassment: "شكوى تحرّش",
@@ -70,7 +71,7 @@ export default function Complaints() {
     setItems(list); setEmployees(emps); setOrg(orgs[0]);
     try { setMe(await base44.auth.me()); } catch {}
     setLoading(false);
-    enrichRecordsWithVault(list, VAULT_MODULES.complaints, "complaint_ref", ["description", "hr_resolution", "manager_note", "hr_note", "notes"]).then(setItems);
+    enrichRecordsWithVault(list, VAULT_MODULES.complaints, "complaint_ref", ["description", "hr_resolution", "manager_note", "hr_note", "notes", "documents"]).then(setItems);
   };
   useEffect(() => { load(); }, []);
 
@@ -163,6 +164,7 @@ export default function Complaints() {
                       <div className="text-[11px] text-muted-foreground mt-1">{t.submitted}: <b className="text-foreground tabular-nums">{r.submitted_date || (r.created_date || "").slice(0, 10) || "—"}</b></div>
                       {r.manager_note && <div className="text-[11px] text-muted-foreground mt-1">ملاحظة المدير: {r.manager_note}</div>}
                       {r.hr_resolution && <div className="text-[11px] text-emerald-700 bg-emerald-50 border border-emerald-200 rounded-lg p-2 mt-1.5"><b>الحل:</b> {r.hr_resolution} {r.hr_name ? `— ${r.hr_name} · ${r.hr_date || ""}` : ""}</div>}
+                      <VaultDocsView value={r.documents} isAr={isAr} className="mt-1.5" />
                     </div>
                     <div className="flex items-center gap-2 shrink-0 flex-wrap justify-end">
                       <span className={cn("text-xs px-2.5 py-1 rounded-full font-medium", stBadge(r.status).cls)}>{stBadge(r.status).label}</span>

@@ -10,6 +10,7 @@ import { cn } from "@/lib/utils";
 import { useI18n } from "@/lib/i18n";
 import { printSection } from "@/lib/sectionPrint";
 import { enrichRecordsWithVault, VAULT_MODULES } from "@/lib/vaultGeneric";
+import { VaultDocsView } from "@/components/VaultAttachments";
 
 export default function Performance() {
   const { lang } = useI18n();
@@ -70,7 +71,7 @@ export default function Performance() {
     setReviews(r); setEmployees(e);
     try { setUser(await base44.auth.me()); } catch {}
     setLoading(false);
-    enrichRecordsWithVault(r, VAULT_MODULES.performance, "perf_ref", ["goals", "personal_goals", "behaviors", "tasks_coverage", "tasks_amendments", "strengths", "improvements", "notes"]).then(setReviews);
+    enrichRecordsWithVault(r, VAULT_MODULES.performance, "perf_ref", ["goals", "personal_goals", "behaviors", "tasks_coverage", "tasks_amendments", "strengths", "improvements", "notes", "documents"]).then(setReviews);
   };
   useEffect(() => { load(); }, []);
 
@@ -176,6 +177,7 @@ export default function Performance() {
                     {r.review_type === "goal_setting"
                       ? (r.personal_goals || r.behaviors || r.tasks_coverage) && <p className="text-xs text-muted-foreground line-clamp-2">{r.personal_goals || r.behaviors || r.tasks_coverage}</p>
                       : r.goals && <p className="text-xs text-muted-foreground line-clamp-2">{r.goals}</p>}
+                    <VaultDocsView value={r.documents} isAr={isAr} />
                     <div className="flex items-center justify-between pt-1 border-t border-border">
                       <span className="text-xs text-muted-foreground">{r.review_date || ""}</span>
                       <div className="flex gap-1">

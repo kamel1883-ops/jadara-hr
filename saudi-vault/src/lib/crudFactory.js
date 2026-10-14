@@ -74,7 +74,22 @@ export function createCrudRouter({ table, refCol, refPrefix }) {
   router.put('/:refId', async (req, res, next) => {
     try {
       const tenantId = req.headers['x-tenant-id'];
-      const data = req.body.data || req.body;
+      const incoming = req.body.data || req.body;
+      const { rows } = await query(
+        `SELECT data_enc FROM ${table} WHERE ${refCol}=$1 AND tenant_id=$2`,
+        [req.params.refId, tenantId]
+      );
+      if (!rows.length) return res.status(404).json({ error: 'not_found' });
+      // التحديث **يدمج** مع السجل الحالي بدل استبداله كاملاً.
+      // السبب: أكثر الاستدعاءات تحديث جزئي (ملاحظة إرجاع عهدة، حلّ شكوى، إضافة مرفق)،
+      // وكان الاستبدال يمحو بقية الحقول الحسّاسة والمرفقات المخزّنة سابقاً.
+      // للاستبدال الكامل المتعمّد: أرسل replace:true.
+      const replace = req.body.replace === true || req.query.replace === 'true';
+      let current = {};
+      if (rows[0].data_enc) {
+        try { current = JSON.parse(decrypt(rows[0].data_enc) || '{}') || {}; } catch { current = {}; }
+      }
+      const data = replace ? incoming : { ...current, ...incoming };
       const encrypted = encrypt(JSON.stringify(data));
       const empRef = req.body.emp_ref !== undefined ? req.body.emp_ref : null;
       const { rowCount } = await query(
@@ -82,7 +97,7 @@ export function createCrudRouter({ table, refCol, refPrefix }) {
         [encrypted, req.params.refId, empRef, tenantId]
       );
       if (!rowCount) return res.status(404).json({ error: 'not_found' });
-      res.json({ [refCol]: req.params.refId });
+      res.json({ [refCol]: req.params.refId, merged: !replace });
     } catch (e) { next(e); }
   });
 
