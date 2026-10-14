@@ -26,7 +26,9 @@ export default function OrgStructure() {
     exportPdf: "طباعة كامل الهيكل", exportStructure: "طباعة الإدارات والأقسام",
     exportPdfHint: "يطبع الهيكل كاملاً بجميع الموظفين في كل الإدارات والأقسام",
     exportStructureHint: "يطبع الإدارات ورؤساء الأقسام فقط دون الموظفين",
-    exportWord: "تصدير Word",
+    exportWord: "تصدير Word (كامل)", exportWordStructure: "تصدير Word (إدارات وأقسام)",
+    exportWordHint: "ملف وورد بهوية المنشأة وجداره — كامل الهيكل",
+    exportWordStructureHint: "ملف وورد بهوية المنشأة وجداره — الإدارات والأقسام دون الموظفين",
     roleCount: (label, n) => `${label}: ${n}`,
   } : {
     title: "Organizational structure", subtitle: "Auto-built from employee data: Owner → Executive → Department managers → Supervisors → Staff & workers.",
@@ -39,7 +41,9 @@ export default function OrgStructure() {
     exportPdf: "Print full chart", exportStructure: "Print departments & sections",
     exportPdfHint: "Prints the full chart with every employee in all departments and sections",
     exportStructureHint: "Prints departments and section heads only, without employees",
-    exportWord: "Export Word",
+    exportWord: "Export Word (full)", exportWordStructure: "Export Word (depts & sections)",
+    exportWordHint: "Word file with the org brand header — full chart",
+    exportWordStructureHint: "Word file with the org brand header — departments and sections without employees",
     roleCount: (label, n) => `${label}: ${n}`,
   };
 
@@ -115,7 +119,8 @@ export default function OrgStructure() {
           <div className="flex flex-wrap items-center gap-2">
             <Button variant="outline" onClick={() => printOrgChartPDF(exportOpts)} disabled={loading || employees.length === 0} className="gap-2" title={t.exportPdfHint}><FileText size={16} /> {t.exportPdf}</Button>
             <Button variant="outline" onClick={() => printOrgChartPDF({ ...exportOpts, structure: true })} disabled={loading || employees.length === 0} className="gap-2" title={t.exportStructureHint}><Network size={16} /> {t.exportStructure}</Button>
-            <Button variant="outline" onClick={() => downloadOrgWord(exportOpts)} disabled={loading || employees.length === 0} className="gap-2" title={t.exportWord}><FileType2 size={16} /> {t.exportWord}</Button>
+            <Button variant="outline" onClick={() => downloadOrgWord(exportOpts)} disabled={loading || employees.length === 0} className="gap-2" title={t.exportWordHint}><FileType2 size={16} /> {t.exportWord}</Button>
+            <Button variant="outline" onClick={() => downloadOrgWord({ ...exportOpts, structure: true })} disabled={loading || employees.length === 0} className="gap-2" title={t.exportWordStructureHint}><FileType2 size={16} /> {t.exportWordStructure}</Button>
             <Button variant="outline" onClick={load} className="gap-2"><RefreshCw size={16} /> {t.refresh}</Button>
           </div>
         }
