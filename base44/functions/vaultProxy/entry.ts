@@ -14,14 +14,23 @@
  *   getPayroll      — استرجاع قيم مالية
  *   storeDocument   — رفع مستند → { doc_ref, sha256 }
  *   getDocumentLink — توليد رابط تنزيل مؤقت → { token, expires_in, download_url }
+ *   health          — تشخيص: هل الأسرار مُضبطة وهل سيرفر الخزنة يستجيب (بلا كشف أي سر)
+ *
+ * ملاحظتان مهمّتان:
+ *  ١) الكتابة تستخدم مفتاح المنشأة الثابت (الرقم الموحّد) لا حساب من رفع المستند،
+ *     حتى يفتح أي عضو في نفس المنشأة مستنداتها.
+ *  ٢) أي خطأ يُعاد برمز واضح (not_configured / unauthorized / not_found / timeout / unreachable)
+ *     بدل رسالة عامة، فلا يعود «تعذر فتح المستند» بلا سبب.
  */
 import { createClientFromRequest } from "npm:@base44/sdk@0.8.44";
 import {
-  storeEmployee, storeEmployeesBulk, getEmployeesBatch, updateEmployeeInCompany, deleteEmployee,
-  storePayroll, getPayroll, storeDocument, getDocumentLinkInCompany, buildDownloadUrl,
+  storeEmployee, storeEmployeesBulk, getEmployeesBatch, updateEmployeeInCompany, deleteEmployeeInCompany,
+  storePayroll, getPayrollInCompany, storeDocument, getDocumentLinkInCompany, buildDownloadUrl,
   storeRecord, storeRecordsBulk, getRecord, getRecordsBatch, updateRecord, deleteRecord,
+  vaultConfigured, vaultHealth,
 } from "../../shared/vaultClient.ts";
-import { tenantKeysForRead } from "../../shared/vaultIdentity.ts";
+import { tenantKeysForRead, companyVaultKey } from "../../shared/vaultIdentity.ts";
+import { vaultErrorCode, vaultErrorStatus } from "../../shared/vaultErrors.ts";
 
 export default async function (req: Request): Promise<Response> {
   try {
@@ -32,12 +41,27 @@ export default async function (req: Request): Promise<Response> {
     const body = await req.json();
     const { action, tenantId: _ignoredTenant, ...rest } = body;
     if (!action) return Response.json({ error: "action_required" }, { status: 400 });
-    // مفتاح الكتابة الافتراضي يبقى حساب المستخدم الذي أنشأ السجل،
-    // حتى تبقى السجلات الجديدة في نفس قسم الخزنة الذي تبحث فيه القراءة أولاً.
-    const tenant = user.id;
+
+    // مفتاح الكتابة: رقم المنشأة الموحّد إن وُجد (يقرأه كل أعضائها)، وإلا سجل المنشأة،
+    // وإلا حساب المستخدم. يحل مشكلة المستندات المحفوظة تحت حساب الرافع فقط.
+    const tenant = await companyVaultKey(base44, user);
 
     let result;
     switch (action) {
+      // تشخيص فوري لسبب عدم فتح المستندات — لا يُعيد أي سرّ، فقط الحالة والنطاق
+      case "health": {
+        const cfg = vaultConfigured();
+        const probe = cfg.ok ? await vaultHealth() : { ok: false, status: 0 };
+        result = {
+          configured: cfg.ok,
+          has_url: cfg.url,
+          has_key: cfg.key,
+          host: cfg.host,
+          reachable: probe.ok,
+          vault_status: probe.status,
+        };
+        break;
+      }
       case "storeEmployee":
         result = await storeEmployee(tenant, rest.sensitiveData || rest);
         break;
@@ -62,7 +86,7 @@ export default async function (req: Request): Promise<Response> {
         break;
       case "deleteEmployee":
         if (!rest.empRef) return Response.json({ error: "empRef_required" }, { status: 400 });
-        result = await deleteEmployee(tenant, rest.empRef);
+        result = await deleteEmployeeInCompany(await tenantKeysForRead(base44, user, [rest.empRef]), rest.empRef);
         break;
       case "storePayroll":
         if (!rest.empRef) return Response.json({ error: "empRef_required" }, { status: 400 });
@@ -70,7 +94,7 @@ export default async function (req: Request): Promise<Response> {
         break;
       case "getPayroll":
         if (!rest.payrollRef) return Response.json({ error: "payrollRef_required" }, { status: 400 });
-        result = await getPayroll(tenant, rest.payrollRef);
+        result = await getPayrollInCompany(await tenantKeysForRead(base44, user), rest.payrollRef);
         break;
       case "storeDocument":
         if (!rest.fileBase64) return Response.json({ error: "fileBase64_required" }, { status: 400 });
@@ -118,9 +142,10 @@ export default async function (req: Request): Promise<Response> {
         return Response.json({ error: "unknown_action", action }, { status: 400 });
     }
     return Response.json({ ok: true, data: result });
-  } catch (error) {
-    // لا نُسجّل أي حمولة — فقط رسالة الخطأ العامة
-    console.error("[vaultProxy] error:", error.message);
-    return Response.json({ error: "vault_operation_failed" }, { status: 500 });
+  } catch (error: any) {
+    // لا نُسجّل أي حمولة — رمز الخطأ فقط
+    const code = vaultErrorCode(error);
+    console.error("[vaultProxy]", code, String(error?.message || "").slice(0, 120));
+    return Response.json({ error: code }, { status: vaultErrorStatus(code) });
   }
 }

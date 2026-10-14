@@ -8,6 +8,7 @@ import { cn } from "@/lib/utils";
 import { LICENSE_TYPES, typeMeta, expiryStatus, statusBadgeOf } from "@/lib/licenses";
 import { useI18n } from "@/lib/i18n";
 import { enrichRecordsWithVault, VAULT_MODULES } from "@/lib/vaultGeneric";
+import { StoredDocButton } from "@/components/VaultDocLink";
 
 export default function Licenses() {
   const { lang } = useI18n();
@@ -143,7 +144,7 @@ function GroupCard({ type, recs, onAdd, onEdit, onRenew, t }) {
                     <div className="flex flex-wrap gap-2 pt-2">
                       <Button size="sm" variant="outline" onClick={() => onEdit(rec)} className="gap-1.5"><Pencil size={13} /> {t.edit}</Button>
                       <Button size="sm" variant="outline" onClick={() => onRenew(rec)} className="gap-1.5 text-violet-700 hover:bg-violet-50"><RefreshCw size={13} /> {t.renew}</Button>
-                      {rec.document_url && (<a href={rec.document_url} target="_blank" rel="noreferrer" className="text-xs text-blue-600 hover:underline self-center">{t.viewDoc}</a>)}
+                      {rec.document_url && (<StoredDocButton value={rec.document_url} isAr={isAr} className="text-xs text-blue-600 hover:underline self-center">{t.viewDoc}</StoredDocButton>)}
                     </div>
                   </>
                 )}

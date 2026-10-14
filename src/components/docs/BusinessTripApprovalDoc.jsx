@@ -3,6 +3,18 @@ import BrandHeader from "@/components/docs/BrandHeader";
 import { formatCurrency } from "@/lib/hr";
 import { genDateBoth } from "@/lib/printDate";
 
+// المستند قد يكون رابطاً قديماً أو رمز خزنة (doc_ref) — لا نطبع الرمز المعتّم على الورق
+const docLine = (label, value) => {
+  const v = String(value || "").trim();
+  if (!v) return null;
+  const isUrl = /^https?:\/\//i.test(v);
+  return (
+    <div style={{ fontSize: 11, color: "#2563eb", marginBottom: 6 }}>
+      {label}: {isUrl ? v : "مرفق محفوظ في الخزنة السعودية — يُفتح من النظام"}
+    </div>
+  );
+};
+
 const tripTypeLabel = (t) => (t === "external" ? "خارجية" : "داخلية");
 const transportLabel = (m) => ({
   plane: "طيران", car: "سيارة", bus: "حافلة", train: "قطار", none: "بدون",
@@ -81,12 +93,8 @@ export default function BusinessTripApprovalDoc({ employee, trip, org }) {
         </div>
       ) : null}
 
-      {trip?.employee_document_url ? (
-        <div style={{ fontSize: 11, color: "#2563eb", marginBottom: 6 }}>مستندات الموظف: {trip.employee_document_url}</div>
-      ) : null}
-      {trip?.hr_document_url ? (
-        <div style={{ fontSize: 11, color: "#2563eb", marginBottom: 6 }}>مستندات الموارد البشرية: {trip.hr_document_url}</div>
-      ) : null}
+      {docLine("مستندات الموظف", trip?.employee_document_url)}
+      {docLine("مستندات الموارد البشرية", trip?.hr_document_url)}
 
       <div style={{ marginTop: 22, display: "flex", justifyContent: "space-between", fontSize: 11 }}>
         <div>اسم المعتمد: {trip?.approver_name || "—"}</div>

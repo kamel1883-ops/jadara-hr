@@ -10,6 +10,7 @@ import { AlertTriangle, Plus, ScrollText, Search } from "lucide-react";
 import { VIOLATION_CATEGORIES, WARNING_LEVELS, categoryById, levelById, LABOR_POLICY_INTRO } from "@/lib/laborPolicy";
 import { useI18n } from "@/lib/i18n";
 import { enrichRecordsWithVault, VAULT_MODULES } from "@/lib/vaultGeneric";
+import { VaultDocsView } from "@/components/VaultAttachments";
 import { cn } from "@/lib/utils";
 
 export default function Warnings() {
@@ -21,14 +22,14 @@ export default function Warnings() {
     newBtn: "إنشاء إنذار", policy: "سياسة العمل (المواد والمخالفات)", warnings: "الإنذارات الصادرة",
     search: "بحث باسم/رقم الموظف...", filterCat: "كل المخالفات", filterLevel: "كل الدرجات", filterStatus: "كل الحالات",
     no: "لا توجد إنذارات", thEmp: "الموظف", thCat: "المخالفة", thLevel: "الدرجة", thArticle: "المرجع", thIncident: "الواقعة", thSession: "الجلسة", thStatus: "الحالة",
-    sent: "مرسلة", ack: "مطّلع", total: "إجمالي الإنذارات", firsts: "إنذارات أولى", finals: "إنذارات نهائية/فصل",
+    sent: "مرسلة", ack: "مطّلع", total: "إجمالي الإنذارات", firsts: "إنذارات أولى", finals: "إنذارات نهائية/فصل", thDocs: "المرفقات",
   } : {
     title: "Labor Policy & Warnings", subtitle: "Labor policy reference and paperless smart warnings sent to the employee portal",
     intro: LABOR_POLICY_INTRO.en,
     newBtn: "Create warning", policy: "Labor policy (articles & violations)", warnings: "Issued warnings",
     search: "Search by name/number...", filterCat: "All violations", filterLevel: "All levels", filterStatus: "All statuses",
     no: "No warnings", thEmp: "Employee", thCat: "Violation", thLevel: "Level", thArticle: "Reference", thIncident: "Incident", thSession: "Session", thStatus: "Status",
-    sent: "Sent", ack: "Acknowledged", total: "Total warnings", firsts: "First warnings", finals: "Final/Termination",
+    sent: "Sent", ack: "Acknowledged", total: "Total warnings", firsts: "First warnings", finals: "Final/Termination", thDocs: "Attachments",
   };
 
   const [employees, setEmployees] = useState([]);
@@ -48,7 +49,7 @@ export default function Warnings() {
     setEmployees(e);
     setWarnings(w);
     setLoading(false);
-    enrichRecordsWithVault(w, VAULT_MODULES.warnings, "warning_ref", ["description", "investigation_summary", "notes"]).then(setWarnings);
+    enrichRecordsWithVault(w, VAULT_MODULES.warnings, "warning_ref", ["description", "investigation_summary", "notes", "documents"]).then(setWarnings);
   };
   useEffect(() => { load(); }, []);
 
@@ -147,14 +148,15 @@ export default function Warnings() {
               <th className="text-right font-medium px-4 py-3 hidden md:table-cell">{t.thIncident}</th>
               <th className="text-right font-medium px-4 py-3 hidden lg:table-cell">{t.thSession}</th>
               <th className="text-right font-medium px-4 py-3">{t.thStatus}</th>
+              <th className="text-right font-medium px-4 py-3">{t.thDocs}</th>
               <th className="text-right font-medium px-4 py-3">{isAr ? "أُعدّت بواسطة" : "Prepared by"}</th>
             </tr>
           </thead>
           <tbody>
             {loading ? (
-              <tr><td colSpan={9} className="px-4 py-8 text-center text-muted-foreground">—</td></tr>
+              <tr><td colSpan={10} className="px-4 py-8 text-center text-muted-foreground">—</td></tr>
             ) : filtered.length === 0 ? (
-              <tr><td colSpan={9} className="px-4 py-8 text-center text-muted-foreground">{t.no}</td></tr>
+              <tr><td colSpan={10} className="px-4 py-8 text-center text-muted-foreground">{t.no}</td></tr>
             ) : filtered.map((w) => {
               const c = categoryById(w.violation_category, lang);
               const lv = levelById(w.warning_level, lang);
@@ -168,6 +170,7 @@ export default function Warnings() {
                   <td className="px-4 py-3 hidden md:table-cell">{w.incident_date || "—"}</td>
                   <td className="px-4 py-3 hidden lg:table-cell">{w.session_date || "—"}</td>
                   <td className="px-4 py-3"><span className="text-xs px-2 py-0.5 rounded-full bg-slate-100 text-slate-600">{w.status === "acknowledged" ? t.ack : t.sent}</span></td>
+                  <td className="px-4 py-3"><VaultDocsView value={w.documents} isAr={isAr} /></td>
                   <td className="px-4 py-3 text-[11px] text-violet-700">{w.prepared_by_name ? `${w.prepared_by_name}${w.prepared_by_id ? ` — ${w.prepared_by_id}` : ""}` : "—"}</td>
                 </tr>
               );

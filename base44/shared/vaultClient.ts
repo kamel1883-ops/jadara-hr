@@ -9,6 +9,15 @@
  *   VAULT_URL    — نطاق الخزنة السعودي (https://vault.jadara.sa) بدون شرطة مائلة
  */
 import { secrets } from "base44:runtime";
+import { codeFromStatus, type VaultErrorCode } from "./vaultErrors.ts";
+
+/** خطأ خزنة يحمل رمزاً واضحاً (status + code) ليعرضه الوسيط والواجهة بسبب مفهوم */
+function vaultFail(status: number | "timeout" | "unreachable", path: string): any {
+  const err: any = new Error(`vault_error: ${status} ${path}`);
+  err.vaultCode = (status === "timeout" || status === "unreachable" ? status : codeFromStatus(status)) as VaultErrorCode;
+  err.status = typeof status === "number" ? status : 0;
+  return err;
+}
 
 // الحقول الحساسة المُعزولة في الخزنة — مُعرّفات قوية وأرقام خاصة، لا تُخزّن في Base44
 const SENSITIVE_FIELDS = [
@@ -26,9 +35,36 @@ function getVaultConfig() {
   const apiKey = secrets.get("VAULT_API_KEY");
   const baseUrl = secrets.get("VAULT_URL");
   if (!apiKey || !baseUrl) {
-    throw new Error("vault_not_configured: VAULT_API_KEY و VAULT_URL غير مُضبطين في أسرار التطبيق");
+    const err: any = new Error("vault_not_configured: VAULT_API_KEY و VAULT_URL غير مُضبطين في أسرار التطبيق");
+    err.vaultCode = "not_configured";
+    throw err;
   }
   return { apiKey, baseUrl: baseUrl.replace(/\/$/, "") };
+}
+
+/** هل أسرار الخزنة مُضبطة؟ (لا يكشف أي قيمة — النطاق فقط للتشخيص) */
+export function vaultConfigured(): { ok: boolean; url: boolean; key: boolean; host: string } {
+  const apiKey = String(secrets.get("VAULT_API_KEY") || "");
+  const baseUrl = String(secrets.get("VAULT_URL") || "");
+  let host = "";
+  try { host = baseUrl ? new URL(baseUrl).host : ""; } catch { host = ""; }
+  return { ok: !!(apiKey && baseUrl), url: !!baseUrl, key: !!apiKey, host };
+}
+
+/** فحص صحة سيرفر الخزنة (/health) — لتشخيص سبب عدم فتح المستندات */
+export async function vaultHealth(): Promise<{ ok: boolean; status: number }> {
+  let baseUrl = "";
+  try { baseUrl = getVaultConfig().baseUrl; } catch { return { ok: false, status: 0 }; }
+  const ctrl = new AbortController();
+  const timer = setTimeout(() => ctrl.abort(), 8000);
+  try {
+    const res = await fetch(`${baseUrl}/health`, { signal: ctrl.signal });
+    return { ok: res.ok, status: res.status };
+  } catch {
+    return { ok: false, status: 0 };
+  } finally {
+    clearTimeout(timer);
+  }
 }
 
 /** ترويسات موحدة لكل مكالمة — مفتاح API + المستأجر */
@@ -58,12 +94,14 @@ async function callVault(path, tenantId, options: { timeoutMs?: number; method?:
     try { body = text ? JSON.parse(text) : null; } catch { body = { raw: text }; }
     if (!res.ok) {
       // لا نُسجّل الحمولة — قد تحوي قيماً حساسة
-      throw new Error(`vault_error: ${res.status} ${path}`);
+      throw vaultFail(res.status, path);
     }
     return body;
   } catch (e: any) {
-    if (e?.name === "AbortError") throw new Error(`vault_error: timeout ${path}`);
-    throw e;
+    if (e?.name === "AbortError") throw vaultFail("timeout", path);
+    if (e?.vaultCode) throw e;
+    // فشل شبكة/DNS/TLS — نُعيد رمزاً مفهومًا بدل رسالة اللغة الأصلية
+    throw vaultFail("unreachable", path);
   } finally {
     clearTimeout(timer);
   }
@@ -233,6 +271,21 @@ export async function deleteEmployee(tenantId, empRef) {
   return callVault(`/api/vault/employees/${empRef}`, tenantId, { method: "DELETE" });
 }
 
+/** يحذف السجل تحت المستأجر الذي يملكه فعلاً (سجلات قديمة حُفظت تحت حساب آخر) */
+export async function deleteEmployeeInCompany(tenantIds, empRef) {
+  const ids = [...new Set((tenantIds || []).map((t) => String(t || "").trim()).filter(Boolean))].slice(0, 24);
+  let lastError: any = null;
+  for (const tenant of ids) {
+    try {
+      return await deleteEmployee(tenant, empRef);
+    } catch (e: any) {
+      lastError = e;
+      if (!String(e?.message || "").includes("404")) throw e;
+    }
+  }
+  throw lastError || vaultFail(404, "/employees");
+}
+
 // ============================================================
 // الرواتب — قيم مالية حساسة
 // ============================================================
@@ -252,6 +305,21 @@ export async function storePayroll(tenantId, data) {
 
 export async function getPayroll(tenantId, payrollRef) {
   return callVault(`/api/vault/payroll/${payrollRef}`, tenantId, { method: "GET" });
+}
+
+/** يقرأ سجل الرواتب تحت مفتاح المنشأة الصحيح أيّا كان الحساب الذي كتبه */
+export async function getPayrollInCompany(tenantIds, payrollRef) {
+  const ids = [...new Set((tenantIds || []).map((t) => String(t || "").trim()).filter(Boolean))].slice(0, 24);
+  let lastError: any = null;
+  for (const tenant of ids) {
+    try {
+      return await getPayroll(tenant, payrollRef);
+    } catch (e: any) {
+      lastError = e;
+      if (!String(e?.message || "").includes("404")) throw e;
+    }
+  }
+  throw lastError || vaultFail(404, "/payroll");
 }
 
 // ============================================================
@@ -330,12 +398,17 @@ export async function storeDocument(tenantId, fileBuffer, fileName, mimeType, em
   formData.append("file", new Blob([fileBuffer], { type: mimeType }), fileName);
   formData.append("doc_type", docType);
   if (empRef) formData.append("emp_ref", empRef);
-  const res = await fetch(`${baseUrl}/api/vault/documents`, {
-    method: "POST",
-    headers: { "X-Vault-Key": apiKey, "X-Tenant-Id": tenantId },
-    body: formData,
-  });
-  if (!res.ok) throw new Error(`vault_error: ${res.status} /api/vault/documents`);
+  let res: Response;
+  try {
+    res = await fetch(`${baseUrl}/api/vault/documents`, {
+      method: "POST",
+      headers: { "X-Vault-Key": apiKey, "X-Tenant-Id": tenantId },
+      body: formData,
+    });
+  } catch {
+    throw vaultFail("unreachable", "/api/vault/documents");
+  }
+  if (!res.ok) throw vaultFail(res.status, "/api/vault/documents");
   return res.json();
 }
 
@@ -348,7 +421,8 @@ export async function getDocumentLink(tenantId, docRef) {
 export async function getDocumentLinkInCompany(tenantIds, docRef) {
   const ids = [...new Set((tenantIds || []).map((t) => String(t || "").trim()).filter(Boolean))].slice(0, 24);
   const ref = String(docRef || "").trim();
-  if (!ref) throw new Error("vault_error: 400");
+  if (!ref) throw vaultFail(400, "/documents/link");
+  if (!ids.length) throw vaultFail(404, "/documents/link");
   let lastError = null;
   for (const tenant of ids) {
     try {
@@ -358,12 +432,16 @@ export async function getDocumentLinkInCompany(tenantIds, docRef) {
       if (!String(e?.message || "").includes("404")) throw e;
     }
   }
-  throw lastError || new Error("vault_error: 404");
+  throw lastError || vaultFail(404, "/documents/link");
 }
 
 /** يبني رابط التنزيل العام النهائي (رابط مباشر يفتح في المتصفح) */
 export function buildDownloadUrl(docToken) {
   const baseUrl = secrets.get("VAULT_URL");
-  if (!baseUrl) throw new Error("vault_not_configured: VAULT_URL غير مُضبوط");
+  if (!baseUrl) {
+    const err: any = new Error("vault_not_configured: VAULT_URL غير مُضبوط");
+    err.vaultCode = "not_configured";
+    throw err;
+  }
   return `${baseUrl.replace(/\/$/, "")}/api/vault/documents/download/${docToken}`;
 }

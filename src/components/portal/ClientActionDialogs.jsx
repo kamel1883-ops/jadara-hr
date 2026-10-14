@@ -5,13 +5,14 @@ import { Label } from "@/components/ui/label";
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter,
 } from "@/components/ui/dialog";
-import { Loader2, Check, CalendarPlus, CalendarClock, Printer, X, Pause, Ban, Play, RotateCcw, BadgeCheck, Building2, Crown, FlaskConical, Download, Mail, FileSignature, FileText, Link2, Users } from "lucide-react";
+import { Loader2, Check, CalendarPlus, CalendarClock, Printer, X, Pause, Ban, Play, RotateCcw, BadgeCheck, Crown, FlaskConical, Download, Mail, FileSignature, FileText, Link2, Users } from "lucide-react";
 import { base44 } from "@/api/base44Client";
 import { cn } from "@/lib/utils";
 import ConfirmSubscriptionDialog from "./ConfirmSubscriptionDialog";
 import RenewYearDialog from "./RenewYearDialog";
 import { renderToPdfBlob } from "@/lib/pdfDocs";
 import QuoteDoc from "@/components/docs/QuoteDoc";
+import { StoredDocButton } from "@/components/VaultDocLink";
 import { PRICING_TIERS_AR, PRICING_TIERS_EN, tierForCount } from "@/lib/pricing";
 import { PROVIDER_BANK } from "@/lib/providerIdentity";
 
@@ -293,16 +294,16 @@ export function ClientInfoDialog({ open, onClose, tenant, isAr, t, onAction, bus
               </button>
             )}
             {tenant.contract_pdf_url && (
-              <a href={tenant.contract_pdf_url} target="_blank" rel="noreferrer" download
+              <StoredDocButton value={tenant.contract_pdf_url} isAr={isAr}
                  className="inline-flex items-center gap-1.5 text-sm h-9 px-3 rounded-md border border-input bg-transparent hover:bg-accent text-violet-700">
                 <Download size={14} /> {isAr ? "تنزيل العقد (PDF)" : "Download Contract"}
-              </a>
+              </StoredDocButton>
             )}
             {tenant.invoice_pdf_url && (
-              <a href={tenant.invoice_pdf_url} target="_blank" rel="noreferrer" download
+              <StoredDocButton value={tenant.invoice_pdf_url} isAr={isAr}
                  className="inline-flex items-center gap-1.5 text-sm h-9 px-3 rounded-md border border-input bg-transparent hover:bg-accent text-indigo-700">
                 <FileSignature size={14} /> {isAr ? "تنزيل الفاتورة (PDF)" : "Invoice"}
-              </a>
+              </StoredDocButton>
             )}
             <Button size="sm" variant="outline" onClick={() => window.print()} className="gap-1.5"><Printer size={14} /> {isAr ? "طباعة PDF" : "Print PDF"}</Button>
             <Button size="sm" variant="ghost" onClick={onClose} className="h-9 w-9 p-0"><X size={16} /></Button>

@@ -9,11 +9,12 @@ import {
 } from "@/components/ui/select";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Calculator, AlertTriangle, Printer, Save, User, FileText, CalendarDays, Plane, Trash2, Loader2, Check, Upload, Send, Wallet, X, Scale, ExternalLink } from "lucide-react";
+import { Calculator, AlertTriangle, Printer, Save, User, FileText, CalendarDays, Plane, Loader2, Check, Send, X, Scale, ExternalLink } from "lucide-react";
 import { computeSettlement, reasonMeta, terminationReasons, todayISO, isSaudiNationalId } from "@/lib/eos";
 import { computeLeaveEntitlement, usedLeaveTotal } from "@/lib/leaveBalance";
 import { formatCurrency } from "@/lib/hr";
 import { useI18n } from "@/lib/i18n";
+import { StoredDocButton } from "@/components/VaultDocLink";
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter
 } from "@/components/ui/dialog";
@@ -434,7 +435,7 @@ export default function EndOfService() {
                           <div className="flex items-center gap-2 mt-1.5 flex-wrap">
                             <span className={cn("text-xs px-2 py-0.5 rounded-full font-medium", b.cls)}>{b.label}</span>
                             {s.hr_name && <span className="text-xs text-muted-foreground">{s.hr_name} • {s.hr_date}</span>}
-                            {s.finance_proof_url && <a href={s.finance_proof_url} target="_blank" rel="noreferrer" className="text-xs px-2 py-0.5 rounded-full bg-blue-50 text-blue-600">{isAr ? t.proofLink : t.proofLink}</a>}
+                            {s.finance_proof_url && <StoredDocButton value={s.finance_proof_url} isAr={isAr} className="text-xs px-2 py-0.5 rounded-full bg-blue-50 text-blue-600">{t.proofLink}</StoredDocButton>}
                           </div>
                         </div>
                         <div className="flex gap-1 shrink-0 flex-wrap justify-end">

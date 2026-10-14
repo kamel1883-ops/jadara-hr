@@ -11,6 +11,7 @@ import { Loader2, AlertTriangle } from "lucide-react";
 import { VIOLATION_CATEGORIES, VIOLATION_CHAPTERS, WARNING_LEVELS, suggestLevel, categoryById } from "@/lib/laborPolicy";
 import { useI18n } from "@/lib/i18n";
 import SearchSelect from "@/components/SearchSelect";
+import VaultAttachments from "@/components/VaultAttachments";
 
 export default function WarningForm({ open, onClose, onSaved, employees }) {
   const { lang } = useI18n();
@@ -23,6 +24,7 @@ export default function WarningForm({ open, onClose, onSaved, employees }) {
     session: "تاريخ جلسة التحقيق", invest: "ملخص التحقيق/الجلسة", investPh: "اذكر ما تم في الجلسة وإثبات المخالفة...",
     desc: "نص الإنذار", descPh: "نص الإنذار الموجه للموظف...", save: "إرسال الإنذار للبوابة", saving: "جارٍ الإرسال...",
     needEmp: "اختر الموظف أولاً.", cons: "التوجير", existingCount: "عدد إنذارات سابقة بنفس النوع",
+    attach: "مرفقات الإنذار (اختياري)",
     info: "بعد إرسال الإنذار يُعتبر نافذاً ويظهر فوراً في بوابة الموظف دون الحاجة لموافقة.",
   } : {
     title: "Create warning", emp: "Employee", empPh: "Select employee", cat: "Violation type", catPh: "Select violation",
@@ -32,17 +34,18 @@ export default function WarningForm({ open, onClose, onSaved, employees }) {
     session: "Investigation session date", invest: "Investigation summary", investPh: "Describe the session and proof of the violation...",
     desc: "Warning text", descPh: "Warning text addressed to the employee...", save: "Send warning to portal", saving: "Sending...",
     needEmp: "Select an employee first.", cons: "Consequence", existingCount: "Previous warnings of same type",
+    attach: "Warning attachments (optional)",
     info: "Once sent, the warning is effective and appears immediately in the employee portal without approval.",
   };
 
-  const [form, setForm] = useState({ employee_id: "", violation_category: "", warning_level: "first", incident_date: "", session_date: "", investigation_summary: "", description: "" });
+  const [form, setForm] = useState({ employee_id: "", violation_category: "", warning_level: "first", incident_date: "", session_date: "", investigation_summary: "", description: "", documents: [] });
   const [existingCount, setExistingCount] = useState(0);
   const [saving, setSaving] = useState(false);
   const [err, setErr] = useState("");
 
   useEffect(() => {
     if (!open) {
-      setForm({ employee_id: "", violation_category: "", warning_level: "first", incident_date: "", session_date: "", investigation_summary: "", description: "" });
+      setForm({ employee_id: "", violation_category: "", warning_level: "first", incident_date: "", session_date: "", investigation_summary: "", description: "", documents: [] });
       setExistingCount(0); setErr("");
     }
   }, [open]);
@@ -102,6 +105,8 @@ export default function WarningForm({ open, onClose, onSaved, employees }) {
         session_date: form.session_date || "",
         investigation_summary: form.investigation_summary || "",
         description: form.description || "",
+        // مرفقات الإنذار (صور/مستندات) تُخزّن في الخزنة ضمن نفس السجل الحساس
+        documents: form.documents || [],
       };
       const warningRef = await writeRecordToVault(VAULT_MODULES.warnings, null, vaultData);
       const payload = {
@@ -201,6 +206,17 @@ export default function WarningForm({ open, onClose, onSaved, employees }) {
           <div className="space-y-1.5">
             <Label>{t.desc}</Label>
             <Textarea rows={3} value={form.description} onChange={(e) => set("description", e.target.value)} placeholder={t.descPh} />
+          </div>
+
+          <div className="space-y-1.5">
+            <Label>{t.attach}</Label>
+            <VaultAttachments
+              value={form.documents}
+              onChange={(next) => set("documents", next)}
+              isAr={isAr}
+              empRef={emp?.emp_ref || null}
+              docType="warning"
+            />
           </div>
 
           <div className="rounded-lg bg-slate-50 p-2.5 text-xs text-muted-foreground leading-relaxed">{t.info}</div>

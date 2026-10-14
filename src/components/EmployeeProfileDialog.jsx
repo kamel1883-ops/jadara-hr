@@ -1,16 +1,16 @@
 import React, { useState, useEffect } from "react";
 import { base44 } from "@/api/base44Client";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { Plane, Download, Eye, Printer } from "lucide-react";
+import { Plane, Download } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { formatCurrency, statusEmployeeLabel, leaveTypeLabel, ticketEntitlementLabel, contractTypeLabel } from "@/lib/hr";
 import { computeLeaveEntitlement, usedLeaveTotal, getEmployeeAnnualDays } from "@/lib/leaveBalance";
 import { reasonMeta, computeSettlement } from "@/lib/eos";
 import { badge } from "@/lib/approvals";
 import EmployeePaidDocuments from "@/components/EmployeePaidDocuments";
+import { StoredDocButton } from "@/components/VaultDocLink";
 import EmployeePortalPasswordAdmin from "@/components/portal/EmployeePortalPasswordAdmin";
 import { useI18n } from "@/lib/i18n";
 import { PERMISSION_MODULES, parsePermissions } from "@/lib/employeePermissions";
@@ -235,7 +235,7 @@ export default function EmployeeProfileDialog({ open, onClose, employee, org, on
                             {s.date && <span className="text-muted-foreground mx-1">· {s.date}</span>}
                             {s.who && <span className="text-muted-foreground">· {s.who}</span>}
                             {s.note && <div className="text-muted-foreground mt-0.5">{s.note}</div>}
-                            {s.doc && <a href={s.doc} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 text-blue-600 mt-0.5"><Download size={11} /> {isAr ? "مرفق" : "attachment"}</a>}
+                            {s.doc && <StoredDocButton value={s.doc} isAr={isAr} className="inline-flex items-center gap-1 text-blue-600 mt-0.5"><Download size={11} /> {isAr ? "مرفق" : "attachment"}</StoredDocButton>}
                           </div>
                         </li>
                       ))}

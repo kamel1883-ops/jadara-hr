@@ -113,6 +113,24 @@ export async function tenantKeysForRead(base44: any, user: any, empRefs: string[
   return keys.slice(0, 24);
 }
 
+/**
+ * مفتاح كتابة ثابت للمنشأة.
+ * المشكلة السابقة: كانت المستندات تُحفظ تحت حساب من رفعها (user.id)، فإذا فتحها
+ * موظف آخر أو مدير آخر في نفس المنشأة لم يجدها ⇒ not_found و«تعذر فتح المستند».
+ * الترتيب: الرقم الموحّد (ثابت للمنشأة ويُقرأ من كل أعضائها)، ثم سجل المنشأة، ثم حساب المستخدم.
+ */
+export async function companyVaultKey(base44: any, user: any): Promise<string> {
+  const uid = String(user?.id || "").trim();
+  try {
+    const { keys, unified } = await resolveCompanyContext(base44, user);
+    if (unified) return unified;
+    const nonUser = keys.find((k) => k && k !== uid);
+    return nonUser || uid || "portal";
+  } catch {
+    return uid || "portal";
+  }
+}
+
 /** مفاتيح خزنة موظف البوابة: منشئ سجله ومنشأة رقمه الموحّد */
 export async function tenantKeysForEmployee(base44: any, emp: any): Promise<string[]> {
   const keys: string[] = [];

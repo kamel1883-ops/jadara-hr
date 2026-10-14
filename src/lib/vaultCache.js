@@ -5,7 +5,11 @@
  */
 export const VAULT_CACHE_TTL = 24 * 60 * 60 * 1000;
 const STORAGE_KEY = "jadara_vault_day_v1";
-const FAIL_COOLDOWN = 15 * 60 * 1000;
+// كان التبريد ١٥ دقيقة، فأي فشل واحد (مستند تالف أو ارتباط) يوقف جلب الخزنة
+// للشاشة كلها ربع ساعة ويبدو كأن النظام لا يجلب المستندات. صار ٩٠ ثانية،
+// ولمستند واحد فقط عبر refFails، فلا يعطّل رمز واحد بقية المستندات.
+const FAIL_COOLDOWN = 90 * 1000;
+const refFails = new Map();
 
 let memory = null;
 let userId = "";
@@ -103,6 +107,7 @@ export function noteVaultUser(id) {
 
 export function clearVaultCache() {
   failUntil = 0;
+  refFails.clear();
   memory = blank(userId);
   const store = storage();
   try { store?.removeItem(STORAGE_KEY); } catch { /* تجاهل */ }
@@ -126,6 +131,25 @@ export function vaultCooling() {
 
 export function noteVaultFailure() {
   failUntil = Date.now() + FAIL_COOLDOWN;
+}
+
+/** تسجيل فشل مستند واحد — يمنع تكرار محاولته فوراً دون تعطيل بقية المستندات */
+export function noteDocFailure(ref) {
+  const key = String(ref || "").trim();
+  if (!key) return;
+  refFails.set(key, Date.now() + FAIL_COOLDOWN);
+}
+
+/** هل هذا الرمز في فترة تبريد؟ (فشل حديثاً) */
+export function docCooling(ref) {
+  const key = String(ref || "").trim();
+  const until = refFails.get(key);
+  if (!until) return false;
+  if (Date.now() > until) {
+    refFails.delete(key);
+    return false;
+  }
+  return true;
 }
 
 export function trackRows(rows) {

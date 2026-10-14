@@ -6,6 +6,7 @@ import {
 } from "../../shared/payrollCompute.ts";
 import { notifyApproverForStatus } from "../../shared/approverNotify.ts";
 import { getDocumentLinkInCompany, buildDownloadUrl, storeDocument } from "../../shared/vaultClient.ts";
+import { vaultErrorCode } from "../../shared/vaultErrors.ts";
 import { tenantKeysForEmployee } from "../../shared/vaultIdentity.ts";
 import {
   loadCompanyBag, organizationForEmployee, inCompany, canWrite, stampCompany, scopeQuery, filterPayload,
@@ -203,8 +204,10 @@ export default async function (req) {
         const keys = await tenantKeysForEmployee(base44, emp);
         const link = await getDocumentLinkInCompany(keys, docRef);
         return Response.json({ ok: true, download_url: buildDownloadUrl(link.token) });
-      } catch {
-        return Response.json({ ok: false, error: "not_found" }, { status: 404 });
+      } catch (e: any) {
+        // نُعيد السبب الحقيقي (غير مُهيّأة/مفتاح مرفوض/غير موجود/مهلة) بدل not_found دائماً
+        const code = vaultErrorCode(e);
+        return Response.json({ ok: false, error: code }, { status: code === "not_found" ? 404 : 502 });
       }
     }
 

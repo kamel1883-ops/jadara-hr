@@ -6,12 +6,13 @@ import { formatCurrency } from "@/lib/hr";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
-  Crown, Building2, FlaskConical, FileText, BadgeCheck, Pause, CalendarClock,
-  Wallet, Loader2, AlertTriangle, RefreshCw, MessageCircle, Search, Users,
-  Check, Sparkles, Ban, RotateCcw, Eye, Bell, Download, FileSignature,
+  Crown, Building2, FlaskConical, FileText, BadgeCheck, Pause,
+  Wallet, AlertTriangle, RefreshCw, MessageCircle, Search, Users,
+  Check, Sparkles, Ban, Eye, Bell, Download, FileSignature,
   UploadCloud, Stamp, Handshake,
 } from "lucide-react";
 import { ClientInfoDialog, waLink, daysLeft, isOwnerTenant } from "./ClientActionDialogs";
+import { StoredDocButton } from "@/components/VaultDocLink";
 import RegenerateAllDocumentsDialog from "./RegenerateAllDocumentsDialog";
 
 export default function ClientsManager({ session }) {
@@ -361,16 +362,16 @@ export default function ClientsManager({ session }) {
                               </a>
                             )}
                             {x.contract_pdf_url && (
-                              <a href={x.contract_pdf_url} target="_blank" rel="noreferrer"
+                              <StoredDocButton value={x.contract_pdf_url} isAr={isAr}
                                 className="inline-flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg bg-violet-50 text-violet-700 border border-violet-200 hover:bg-violet-100">
                                 <Download size={13} /> {t.contract}
-                              </a>
+                              </StoredDocButton>
                             )}
                             {x.invoice_pdf_url && (
-                              <a href={x.invoice_pdf_url} target="_blank" rel="noreferrer"
+                              <StoredDocButton value={x.invoice_pdf_url} isAr={isAr}
                                 className="inline-flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg bg-indigo-50 text-indigo-700 border border-indigo-200 hover:bg-indigo-100">
                                 <FileSignature size={13} /> {t.invoice}
-                              </a>
+                              </StoredDocButton>
                             )}
                             {!owner && x.status === "active" && (
                               <Button size="sm" variant="outline" onClick={() => onPickClientContract(x)} disabled={busyId === x.id}
