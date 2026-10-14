@@ -191,19 +191,56 @@ async function readScopedRows(api, ctx, query = {}, sort = "-created_date", limi
 
 const belongsToTenant = (rec, keys, ctx) => recordBelongsToCompany(rec, ctx, keys);
 
-// قراءتان منفصلتان ثم دمج: بمعرّف الموظف، وبرقم المنشأة. أي شركة، وأي رقم موحّد.
+// قراءة منشئة معزولة بالرقم الموحّد + هوية الموظف.
+// القاعدة: إن حدّد المستخدم موظفاً بعينه (employee_id: "X") نحترم قيده تماماً بعد
+// التحقق من انتمائه لمنشأته، ولا نستبدله بكل موظفي المنشأة — فلا تتداخل مستندات
+// الموظفين ولا تتسرّب إجازات موظف إلى ملف آخر يحمل نفس الهوية في منشأة أخرى.
+// إن لم يُحدد موظفاً، نُقيّد النتائج بموظفي منشأته فقط.
 async function readKeyedRows(api, keys, ctx, query = {}, sort, limit) {
   if (!ctx?.unified || !api?.filter) return [];
   const lim = Math.min(typeof limit === "number" && limit > 0 ? limit : 1000, 5000);
   const srt = typeof sort === "string" && sort ? sort : "-created_date";
-  const chunks = [];
-  if (ctx.employeeIds?.length) {
-    const byEmployee = keys.length === 1
-      ? { [keys[0]]: { $in: ctx.employeeIds } }
-      : { $or: keys.map((k) => ({ [k]: { $in: ctx.employeeIds } })) };
-    try { chunks.push(...asRows(await api.filter({ ...query, ...byEmployee }, srt, lim))); } catch { /* تبقى قراءة الرقم الموحّد */ }
+
+  // تحقق أن قيد الموظف المحدد (إن وُجد) ينتمي لمنشأة المستخدم — عزل تام
+  const guardValue = (val) => {
+    if (val == null) return undefined;
+    if (typeof val === "string") {
+      // موظف محدد: إن لم يكن من موظفي هذه المنشأة لا نُرجع شيئاً (حتى إن تطابقت هويته)
+      return ctx.employeeIds?.length && ctx.employeeIds.includes(val) ? val : null;
+    }
+    if (val && typeof val === "object" && Array.isArray(val.$in)) {
+      // مجموعة موظفين: تقاطع مع موظفي المنشأة
+      const allowed = val.$in.filter((id) => ctx.employeeIds.includes(id));
+      return allowed.length ? { $in: allowed } : null;
+    }
+    return val;
+  };
+
+  const scoped = { ...query };
+  const specKeys = keys.filter((k) => scoped[k] != null);
+  const unspecKeys = keys.filter((k) => scoped[k] == null);
+
+  // تحقق من المفاتيح المحددة
+  for (const k of specKeys) {
+    const checked = guardValue(scoped[k]);
+    if (checked == null) return [];
+    scoped[k] = checked;
   }
+
+  // إن لم يُحدد أي موظف: قيّد بكل موظفي المنشأة
+  if (specKeys.length === 0 && ctx.employeeIds?.length) {
+    if (unspecKeys.length === 1) {
+      scoped[unspecKeys[0]] = { $in: ctx.employeeIds };
+    } else if (unspecKeys.length > 1) {
+      scoped.$or = unspecKeys.map((k) => ({ [k]: { $in: ctx.employeeIds } }));
+    }
+  }
+
+  const chunks = [];
+  try { chunks.push(...asRows(await api.filter(scoped, srt, lim))); } catch { /* تبقى قراءة الرقم الموحّد */ }
+  // قراءة إضافية بالرقم الموحّد (للكيانات الحاملة له)
   try { chunks.push(...asRows(await api.filter({ ...query, unified_number: ctx.unified }, srt, lim))); } catch { /* تبقى قراءة الموظفين */ }
+
   const seen = new Set();
   const out = [];
   for (const rec of chunks) {
