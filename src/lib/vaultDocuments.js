@@ -13,6 +13,7 @@
 import { base44 } from "@/api/base44Client";
 import { portalSession } from "@/lib/portalSession";
 import { docRefKind, vaultCodeFromResponse, vaultErrorText } from "@/lib/vaultErrors";
+import { reserveDocumentWindow, finishDocumentWindow } from "@/lib/documentWindow";
 
 function blobToBase64(blob) {
   return new Promise((resolve, reject) => {
@@ -107,9 +108,7 @@ export async function getVaultDocLink(docRef) {
 
 /** يفتح مستنداً مؤرشفاً في الخزنة عبر رابطه المؤقت (للعرض/التنزيل) */
 export async function openVaultDoc(docRef) {
-  const r = await getVaultDocLinkResult(docRef);
-  if (r.url) window.open(r.url, "_blank", "noopener,noreferrer");
-  return { ok: !!r.url, code: r.code };
+  return openStoredDoc(docRef);
 }
 
 /** رابط المستند من بوابة الموظف (لا يحتاج جلسة Base44) */
@@ -171,6 +170,7 @@ export async function openStoredDoc(value) {
     window.open(v, "_blank", "noopener,noreferrer");
     return { ok: true, code: "" };
   }
+  const tab = reserveDocumentWindow();
   const session = portalSession.load();
   const hasPortal = !!(session?.token && session?.employee_id);
   const attempts = hasPortal
@@ -180,12 +180,13 @@ export async function openStoredDoc(value) {
   for (const attempt of attempts) {
     const r = await attempt();
     if (r.url) {
-      window.open(r.url, "_blank", "noopener,noreferrer");
+      finishDocumentWindow(tab, r.url);
       return { ok: true, code: "" };
     }
     last = r.code || last;
     // عطل تهيئة/اتصال: لا فائدة من المسار الآخر — نوقف فوراً بدل إطالة الانتظار
     if (last !== "not_found") break;
   }
+  finishDocumentWindow(tab, null);
   return { ok: false, code: last };
 }

@@ -105,7 +105,7 @@ async function callVault(path, tenantId, options: { timeoutMs?: number; method?:
       // بدل ابتلاعه وإظهار «تعذّر الوصول» بلا سبب. نُخزّنه على كائن الخطأ لا في الرسالة.
       const err = vaultFail(res.status, path);
       const detail = String(body?.code || body?.error || body?.raw || "").slice(0, 80);
-      if (detail === "42703" || detail === "42P01") err.vaultCode = "schema_mismatch";
+      if (detail === "42703" || detail === "42P01" || detail === "schema_mismatch" || body?.error === "schema_mismatch") err.vaultCode = "schema_mismatch";
       if (detail && !err.vaultDetail) err.vaultDetail = detail;
       throw err;
     }
@@ -417,12 +417,20 @@ export async function storeDocument(tenantId, fileBuffer, fileName, mimeType, em
       method: "POST",
       headers: { "X-Vault-Key": apiKey, "X-Tenant-Id": tenantId },
       body: formData,
+      signal: AbortSignal.timeout(30000),
     });
-  } catch {
-    throw vaultFail("unreachable", "/api/vault/documents");
+  } catch (error) {
+    throw vaultFail(error?.name === "TimeoutError" || error?.name === "AbortError" ? "timeout" : "unreachable", "/api/vault/documents");
   }
-  if (!res.ok) throw vaultFail(res.status, "/api/vault/documents");
-  return res.json();
+  const body = await res.json();
+  if (!res.ok) {
+    const error = vaultFail(res.status, "/api/vault/documents");
+    const detail = String(body?.code || body?.error || "").slice(0, 80);
+    if (["42703", "42P01", "schema_mismatch"].includes(detail) || body?.error === "schema_mismatch") error.vaultCode = "schema_mismatch";
+    error.vaultDetail = detail;
+    throw error;
+  }
+  return body;
 }
 
 /** يولّد رابط تنزيل مؤقت (JWT) — يُعرض للمستخدم النهائي.

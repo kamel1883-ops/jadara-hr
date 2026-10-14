@@ -97,8 +97,11 @@ router.get('/download/:token', async (req, res, next) => {
     if (relative.startsWith('..') || path.isAbsolute(relative)) return res.status(403).json({ error: 'invalid_file' });
     const bytes = decryptDocument(fs.readFileSync(file));
     res.set({ 'Cache-Control': 'private, no-store', 'X-Content-Type-Options': 'nosniff', 'Referrer-Policy': 'no-referrer' });
-    res.attachment(doc.file_name || 'document');
-    res.type('application/octet-stream').send(bytes);
+    const previewTypes = new Set(['application/pdf', 'image/png', 'image/jpeg', 'image/webp', 'image/gif']);
+    const mimeType = previewTypes.has(doc.mime_type) ? doc.mime_type : 'application/octet-stream';
+    const fileName = String(doc.file_name || 'document').replace(/[\r\n]/g, '');
+    res.set('Content-Disposition', `${previewTypes.has(mimeType) ? 'inline' : 'attachment'}; filename*=UTF-8''${encodeURIComponent(fileName).replace(/'/g, '%27')}`);
+    res.type(mimeType).send(bytes);
   } catch (e) {
     res.status(403).json({ error: 'invalid_token' });
   }
