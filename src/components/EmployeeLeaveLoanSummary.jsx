@@ -51,7 +51,12 @@ export default function EmployeeLeaveLoanSummary({ employee }) {
     setOrg(o);
   };
 
-  useEffect(() => { load(); }, [employee?.id]);
+  // تصفير فوري عند تبديل الموظف — يمنع تسرب بيانات موظف سابق إلى ملف الموظف الجديد
+  useEffect(() => {
+    setLeaves([]);
+    setLoans([]);
+    if (employee?.id) load();
+  }, [employee?.id]);
 
   // رصيد الإجازات يعتمد اختيار المنشأة لكل موظف (21 أو 30) من ملف الموظف،
   // ويُلزم بـ30 بعد إكمال 5 سنوات خدمة. الخزنة أعلاه تتبع هذا الاختيار دائماً.

@@ -19,7 +19,9 @@ export default function EmployeePaidDocuments({ employee, org }) {
   const [trips, setTrips] = useState([]);
   const [printing, setPrinting] = useState(null);
 
+  // تصفير فوري عند تبديل الموظف — يمنع تسرب مستندات موظف سابق إلى ملف الموظف الجديد
   useEffect(() => {
+    setLeaves([]); setSets([]); setLoans([]); setTrips([]);
     if (!employee?.id) return;
     base44.entities.LeaveRequest.filter({ employee_id: employee.id }, "-created_date", 500)
       .then(setLeaves).catch(() => setLeaves([]));

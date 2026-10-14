@@ -74,6 +74,8 @@ export default function EmployeeProfileDialog({ open, onClose, employee, org, on
   };
 
   useEffect(() => {
+    // تصفير فوري عند تبديل الموظف — يمنع تسرب بيانات موظف سابق
+    setTrips([]); setLeaves([]);
     if (!open || !employee?.id) return;
     base44.entities.BusinessTrip.filter({ employee_id: employee.id }, "-created_date", 500)
       .then(setTrips).catch(() => setTrips([]));
