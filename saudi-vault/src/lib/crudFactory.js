@@ -46,11 +46,13 @@ export function createCrudRouter({ table, refCol, refPrefix }) {
         const empRef = row.emp_ref || null;
         const data = row.data || row;
         const encrypted = encrypt(JSON.stringify(data));
-        await query(
+        const saved = await query(
           `INSERT INTO ${table} (${refCol}, tenant_id, emp_ref, data_enc) VALUES ($1,$2,$3,$4)
-           ON CONFLICT (${refCol}) DO UPDATE SET updated_at=now(), emp_ref=EXCLUDED.emp_ref, data_enc=EXCLUDED.data_enc`,
+           ON CONFLICT (${refCol}) DO UPDATE SET updated_at=now(), emp_ref=EXCLUDED.emp_ref, data_enc=EXCLUDED.data_enc
+           WHERE ${table}.tenant_id=EXCLUDED.tenant_id RETURNING ${refCol}`,
           [ref, tenantId, empRef, encrypted]
         );
+        if (!saved.rowCount) return res.status(404).json({ error: 'not_found' });
         refs.push(ref);
       }
       res.status(201).json({ refs });

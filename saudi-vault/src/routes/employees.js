@@ -57,11 +57,14 @@ router.post('/bulk', async (req, res, next) => {
           vals.push(encrypt(String(row[f])));
         }
       }
-      await query(
+      const sets = ['updated_at=now()', ...cols.slice(2).map(c => `${c}=EXCLUDED.${c}`)];
+      const saved = await query(
         `INSERT INTO vault_employees (${cols.join(',')}) VALUES (${cols.map((_, i) => '$' + (i + 1)).join(',')})
-         ON CONFLICT (emp_ref) DO UPDATE SET updated_at=now(), ${cols.slice(2).map(c => `${c}=EXCLUDED.${c}`).join(',')}`,
+         ON CONFLICT (emp_ref) DO UPDATE SET ${sets.join(',')}
+         WHERE vault_employees.tenant_id=EXCLUDED.tenant_id RETURNING emp_ref`,
         vals
       );
+      if (!saved.rowCount) return res.status(404).json({ error: 'not_found' });
       refs.push(empRef);
     }
     res.status(201).json({ refs });

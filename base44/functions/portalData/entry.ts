@@ -8,6 +8,7 @@ import { notifyApproverForStatus } from "../../shared/approverNotify.ts";
 import { getDocumentLinkInCompany, buildDownloadUrl, storeDocument } from "../../shared/vaultClient.ts";
 import { vaultErrorCode } from "../../shared/vaultErrors.ts";
 import { tenantKeysForEmployee } from "../../shared/vaultIdentity.ts";
+import { employeeOwnsDocument, validVaultRef } from "../../shared/vaultAuthorization.ts";
 import {
   loadCompanyBag, organizationForEmployee, inCompany, canWrite, stampCompany, scopeQuery, filterPayload,
 } from "../../shared/companyScope.ts";
@@ -198,8 +199,10 @@ export default async function (req) {
     if (action === "document_link") {
       if (isOwnerSession) return Response.json({ ok: false, error: "forbidden" }, { status: 403 });
       const docRef = String(body.doc_ref || "").trim();
-      if (!docRef || docRef.length > 80 || /^https?:\/\//i.test(docRef))
+      if (!validVaultRef(docRef))
         return Response.json({ ok: false, error: "doc_ref_required" }, { status: 400 });
+      if (!(await employeeOwnsDocument(base44, emp, docRef)))
+        return Response.json({ ok: false, error: 'not_found' }, { status: 404 });
       try {
         const keys = await tenantKeysForEmployee(base44, emp);
         const link = await getDocumentLinkInCompany(keys, docRef);

@@ -29,7 +29,8 @@ import {
   storeRecord, storeRecordsBulk, getRecord, getRecordsBatch, updateRecord, deleteRecord,
   vaultConfigured, vaultHealth,
 } from "../../shared/vaultClient.ts";
-import { tenantKeysForRead, companyVaultKey } from "../../shared/vaultIdentity.ts";
+import { tenantKeysForRead, resolveCompanyContext } from "../../shared/vaultIdentity.ts";
+import { validVaultRef, employeeRefsInCompany } from "../../shared/vaultAuthorization.ts";
 import { vaultErrorCode, vaultErrorStatus } from "../../shared/vaultErrors.ts";
 
 export default async function (req: Request): Promise<Response> {
@@ -37,14 +38,30 @@ export default async function (req: Request): Promise<Response> {
     const base44 = createClientFromRequest(req);
     const user = await base44.auth.me();
     if (!user) return Response.json({ error: "unauthorized" }, { status: 401 });
+    // Employee and delegated portal access uses its own signed, restricted portalData flow.
+    if (user.role !== 'admin') return Response.json({ error: 'unauthorized' }, { status: 403 });
 
     const body = await req.json();
+    if (!body || Array.isArray(body) || typeof body !== 'object') return Response.json({ error: 'invalid' }, { status: 400 });
     const { action, tenantId: _ignoredTenant, ...rest } = body;
     if (!action) return Response.json({ error: "action_required" }, { status: 400 });
+    const modules = new Set(['complaints', 'warnings', 'licenses', 'platform-subs', 'org-structure', 'succession', 'training', 'performance', 'eos', 'equipment', 'expenses', 'business-trips', 'leaves', 'approvals', 'appointees', 'reports', 'gosi']);
+    if (rest.module !== undefined && !modules.has(rest.module)) return Response.json({ error: 'invalid' }, { status: 400 });
+    for (const key of ['empRef', 'payrollRef', 'docRef', 'ref']) {
+      if (rest[key] != null && !validVaultRef(rest[key])) return Response.json({ error: 'invalid' }, { status: 400 });
+    }
+    for (const key of ['empRefs', 'refs']) {
+      if (rest[key] !== undefined && (!Array.isArray(rest[key]) || rest[key].length > 500 || !rest[key].every(validVaultRef))) return Response.json({ error: 'invalid' }, { status: 400 });
+    }
+    if (rest.rows !== undefined && (!Array.isArray(rest.rows) || rest.rows.length > 500 || rest.rows.some(row => !row || typeof row !== 'object' || Array.isArray(row)))) return Response.json({ error: 'invalid' }, { status: 400 });
+    if (rest.fileBase64 !== undefined && (typeof rest.fileBase64 !== 'string' || rest.fileBase64.length > 35000000)) return Response.json({ error: 'invalid' }, { status: 400 });
+    const context = action === 'health' ? { unified: '', keys: [user.id] } : await resolveCompanyContext(base44, user);
+    const empRefs = [...new Set([rest.empRef, ...(rest.empRefs || []), ...(rest.rows || []).map(row => row.emp_ref)].filter(Boolean))];
+    if (!empRefs.every(validVaultRef) || !(await employeeRefsInCompany(base44, context, user, empRefs))) return Response.json({ error: 'unauthorized' }, { status: 403 });
 
     // مفتاح الكتابة: رقم المنشأة الموحّد إن وُجد (يقرأه كل أعضائها)، وإلا سجل المنشأة،
     // وإلا حساب المستخدم. يحل مشكلة المستندات المحفوظة تحت حساب الرافع فقط.
-    const tenant = await companyVaultKey(base44, user);
+    const tenant = context.unified || user.id;
 
     let result;
     switch (action) {

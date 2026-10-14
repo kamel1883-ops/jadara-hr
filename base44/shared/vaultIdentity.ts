@@ -7,8 +7,13 @@
  */
 import { findEmpRefsByNationalId, getEmployeesBatch } from "./vaultClient.ts";
 
-const COMPANY_CACHE_TTL = 24 * 60 * 60 * 1000;
-const companyCache = new Map<string, { at: number; keys: string[]; unified: string }>();
+import { companyLegacyKeys } from './vaultCompanyKeys.ts';
+
+function scopeDenied() {
+  const error = new Error('vault_scope_denied');
+  error.vaultCode = 'unauthorized';
+  throw error;
+}
 
 function asList(page: any): any[] {
   if (Array.isArray(page)) return page;
@@ -26,51 +31,38 @@ function day(value: any) {
 }
 
 /** مفاتيح الخزنة الخاصة بمنشأة المستخدم: حسابه، ثم سجل المنشأة */
-export async function resolveCompanyContext(base44: any, user: any): Promise<{ keys: string[]; unified: string }> {
-  const uid = String(user?.id || "");
-  if (uid) {
-    const hit = companyCache.get(uid);
-    if (hit && Date.now() - hit.at < COMPANY_CACHE_TTL) {
-      return { keys: [...hit.keys], unified: hit.unified };
+export async function resolveCompanyContext(base44, user) {
+  const uid = String(user?.id || '').trim();
+  if (!uid) scopeDenied();
+  const tenants = base44.asServiceRole.entities.Tenant;
+  const owned = await tenants.filter({ admin_user_id: uid }, { limit: 2 });
+  if (owned.items.length > 1 || owned.has_more) scopeDenied();
+  let tenant = owned.items[0];
+  const email = String(user.email || '').trim().toLowerCase();
+  if (!tenant && email) {
+    const matches = await tenants.filter({ $or: [{ contact_email: email }, { admin_email: email }] }, { limit: 2 });
+    if (matches.items.length > 1 || matches.has_more) scopeDenied();
+    const candidate = matches.items[0];
+    if (candidate && candidate.admin_user_id && candidate.admin_user_id !== uid) scopeDenied();
+    tenant = candidate;
+  }
+  let unified = String(tenant?.unified_number || '').trim();
+  if (!tenant) {
+    const employees = base44.asServiceRole.entities.Employee;
+    const query = { unified_number: { $nin: ['', null] } };
+    let page = await employees.filter({ ...query, user_id: uid }, { distinct: 'unified_number', limit: 2 });
+    if (!page.items.length && email) page = await employees.filter({ ...query, email }, { distinct: 'unified_number', limit: 2 });
+    if (page.items.length > 1 || page.has_more) scopeDenied();
+    unified = String(page.items[0] || '').trim();
+    if (unified) {
+      const matches = await tenants.filter({ unified_number: unified }, { limit: 2 });
+      if (matches.items.length > 1 || matches.has_more) scopeDenied();
+      tenant = matches.items[0];
     }
   }
-  const keys: string[] = [];
-  let unified = "";
-  let failed = false;
-  pushKey(keys, user?.id);
-  try {
-    const email = String(user?.email || "").trim().toLowerCase();
-    const tenants = asList(await base44.asServiceRole.entities.Tenant.filter({}));
-    const norm = (x: any) => String(x || "").trim().toLowerCase();
-    let t = tenants.find((x: any) => norm(x.contact_email) === email || norm(x.admin_email) === email);
-    if (!t) t = tenants.find((x: any) => String(x.admin_user_id || "") === String(user?.id || ""));
-    if (!t && user?.id) {
-      let emp: any = null;
-      try {
-        emp = asList(await base44.asServiceRole.entities.Employee.filter({ user_id: user.id }))[0] || null;
-      } catch { /* لا سجل موظف */ }
-      if (!emp && user?.email) {
-        try {
-          emp = asList(await base44.asServiceRole.entities.Employee.filter({ email: user.email }))[0] || null;
-        } catch { /* لا سجل بالبريد */ }
-      }
-      const un = String(emp?.unified_number || "").trim();
-      if (un) t = tenants.find((x: any) => String(x.unified_number || "").trim() === un);
-      if (!t && un) unified = un;
-    }
-    if (t) {
-      unified = String(t.unified_number || "").trim();
-      pushKey(keys, t.unified_number);
-      pushKey(keys, t.admin_user_id);
-      pushKey(keys, t.id);
-    } else if (unified) {
-      pushKey(keys, unified);
-    }
-  } catch (e: any) {
-    failed = true;
-    console.error("[vault] tenant resolve:", e?.message || e);
-  }
-  if (uid && !failed) companyCache.set(uid, { at: Date.now(), keys: [...keys], unified });
+  if (!unified) return { keys: [uid], unified: '' };
+  const legacy = await companyLegacyKeys(base44, unified, [uid, tenant?.admin_user_id]);
+  const keys = [...new Set([unified, tenant?.id, ...legacy].filter(Boolean))];
   return { keys, unified };
 }
 
@@ -79,38 +71,17 @@ export async function resolveCompanyContext(base44: any, user: any): Promise<{ k
  * لأن الخزنة حُفظت تحت ذلك الحساب، لا تحت حساب من يفتح الشاشة لاحقاً.
  * موظف منشأة أخرى لا يُضاف مفتاحه.
  */
-export async function tenantKeysForRead(base44: any, user: any, empRefs: string[] = []): Promise<string[]> {
+export async function tenantKeysForRead(base44, user, empRefs = []) {
   const { keys, unified } = await resolveCompanyContext(base44, user);
-  const want = new Set((empRefs || []).map((r) => String(r || "").trim()).filter(Boolean));
-  try {
-    const rows: any[] = [];
-    const seen = new Set<string>();
-    const addRows = (list: any) => {
-      for (const e of asList(list)) {
-        if (!e?.id || seen.has(e.id)) continue;
-        seen.add(e.id);
-        rows.push(e);
-      }
-    };
-    if (unified) addRows(await base44.asServiceRole.entities.Employee.filter({ unified_number: unified }));
-    if (user?.id) addRows(await base44.asServiceRole.entities.Employee.filter({ created_by_id: user.id }));
-    const have = new Set(rows.map((e) => String(e.emp_ref || "").trim()).filter(Boolean));
-    const missing = [...want].filter((ref) => !have.has(ref)).slice(0, 80);
-    if (missing.length) {
-      try {
-        addRows(await base44.asServiceRole.entities.Employee.filter({ emp_ref: { $in: missing } }));
-      } catch { /* البحث بالرمز غير متاح */ }
-    }
-    for (const e of rows) {
-      const un = String(e.unified_number || "").trim();
-      if (unified && un && un !== unified) continue;
-      if (want.size && !want.has(String(e.emp_ref || ""))) continue;
-      pushKey(keys, e.created_by_id);
-    }
-  } catch (e: any) {
-    console.error("[vault] tenant creators:", e?.message || e);
-  }
-  return keys.slice(0, 24);
+  if (!unified) return keys;
+  const query = { unified_number: unified };
+  if (empRefs.length) query.emp_ref = { $in: empRefs };
+  const page = await base44.asServiceRole.entities.Employee.filter(query, {
+    distinct: 'created_by_id', limit: 24,
+  });
+  if (page.has_more) scopeDenied();
+  const legacy = await companyLegacyKeys(base44, unified, page.items);
+  return [...new Set([...keys, ...legacy])].slice(0, 24);
 }
 
 /**
@@ -119,39 +90,26 @@ export async function tenantKeysForRead(base44: any, user: any, empRefs: string[
  * موظف آخر أو مدير آخر في نفس المنشأة لم يجدها ⇒ not_found و«تعذر فتح المستند».
  * الترتيب: الرقم الموحّد (ثابت للمنشأة ويُقرأ من كل أعضائها)، ثم سجل المنشأة، ثم حساب المستخدم.
  */
-export async function companyVaultKey(base44: any, user: any): Promise<string> {
-  const uid = String(user?.id || "").trim();
-  try {
-    const { keys, unified } = await resolveCompanyContext(base44, user);
-    if (unified) return unified;
-    const nonUser = keys.find((k) => k && k !== uid);
-    return nonUser || uid || "portal";
-  } catch {
-    return uid || "portal";
-  }
+export async function companyVaultKey(base44, user) {
+  const { unified, keys } = await resolveCompanyContext(base44, user);
+  if (unified) return unified;
+  if (keys.length === 1 && keys[0] === user?.id) return keys[0];
+  scopeDenied();
 }
 
 /** مفاتيح خزنة موظف البوابة: منشئ سجله ومنشأة رقمه الموحّد */
-export async function tenantKeysForEmployee(base44: any, emp: any): Promise<string[]> {
-  const keys: string[] = [];
-  pushKey(keys, emp?.created_by_id);
-  const un = String(emp?.unified_number || "").trim();
-  if (un) {
-    pushKey(keys, un);
-    try {
-      const tenants = asList(await base44.asServiceRole.entities.Tenant.filter({ unified_number: un }));
-      for (const t of tenants) {
-        pushKey(keys, t.id);
-        pushKey(keys, t.admin_user_id);
-        pushKey(keys, t.unified_number);
-      }
-      const coworkers = asList(await base44.asServiceRole.entities.Employee.filter({ unified_number: un }));
-      for (const e of coworkers) pushKey(keys, e.created_by_id);
-    } catch (e: any) {
-      console.error("[vault] employee tenants:", e?.message || e);
-    }
-  }
-  return keys.slice(0, 24);
+export async function tenantKeysForEmployee(base44, emp) {
+  const unified = String(emp?.unified_number || '').trim();
+  if (!unified) scopeDenied();
+  const page = await base44.asServiceRole.entities.Tenant.filter({ unified_number: unified }, { limit: 2 });
+  if (page.items.length > 1 || page.has_more) scopeDenied();
+  const tenant = page.items[0];
+  const creators = await base44.asServiceRole.entities.Employee.filter({ unified_number: unified }, {
+    distinct: 'created_by_id', limit: 24,
+  });
+  if (creators.has_more) scopeDenied();
+  const legacy = await companyLegacyKeys(base44, unified, [emp.created_by_id, tenant?.admin_user_id, ...creators.items]);
+  return [...new Set([unified, tenant?.id, ...legacy].filter(Boolean))].slice(0, 24);
 }
 
 function sortNewest(list: any[]) {

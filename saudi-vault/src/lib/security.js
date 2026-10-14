@@ -41,9 +41,11 @@ export function generateRef(prefix = 'ref') {
  * توقيع JWT قصير العمر لرابط تنزيل مستند — يُستخدم بدلاً من كشف مفتاح API في المتصفح.
  */
 export function signDocToken(docRef, tenantId) {
-  return jwt.sign({ doc_ref: docRef, tenant_id: tenantId || '', scope: 'doc' }, config.jwtSecret, { expiresIn: '5m' });
+  return jwt.sign({ doc_ref: docRef, tenant_id: tenantId || '', scope: 'doc' }, config.jwtSecret, { algorithm: 'HS256', expiresIn: config.docTokenTtlSeconds });
 }
 
 export function verifyDocToken(token) {
-  return jwt.verify(token, config.jwtSecret);
+  const payload = jwt.verify(token, config.jwtSecret, { algorithms: ['HS256'] });
+  if (payload.scope !== 'doc' || !payload.doc_ref || !payload.tenant_id) throw new Error('invalid_token');
+  return payload;
 }
