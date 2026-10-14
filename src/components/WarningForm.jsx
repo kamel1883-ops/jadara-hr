@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { base44 } from "@/api/base44Client";
 import { writeRecordToVault, VAULT_MODULES } from "@/lib/vaultGeneric";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
@@ -8,15 +8,17 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from "@/components/ui/select";
 import { Loader2, AlertTriangle } from "lucide-react";
-import { VIOLATION_CATEGORIES, VIOLATION_CHAPTERS, WARNING_LEVELS, suggestLevel, categoryById, levelById } from "@/lib/laborPolicy";
+import { VIOLATION_CATEGORIES, VIOLATION_CHAPTERS, WARNING_LEVELS, suggestLevel, categoryById } from "@/lib/laborPolicy";
 import { useI18n } from "@/lib/i18n";
-import { cn } from "@/lib/utils";
+import SearchSelect from "@/components/SearchSelect";
 
 export default function WarningForm({ open, onClose, onSaved, employees }) {
   const { lang } = useI18n();
   const isAr = lang === "ar";
   const t = isAr ? {
     title: "إنشاء إنذار", emp: "الموظف", empPh: "اختر الموظف", cat: "نوع المخالفة", catPh: "اختر نوع المخالفة",
+    empSearch: "ابحث بالاسم أو رقم الهوية...", catSearch: "ابحث في نوع المخالفة...",
+    noResults: "لا توجد نتائج مطابقة", more: "اكتب اسم الموظف أو رقم هويته للبحث في القائمة كاملة",
     article: "المرجع النظامي", level: "درجة الإنذار", suggested: "مقترح آلي", incident: "تاريخ الواقعة",
     session: "تاريخ جلسة التحقيق", invest: "ملخص التحقيق/الجلسة", investPh: "اذكر ما تم في الجلسة وإثبات المخالفة...",
     desc: "نص الإنذار", descPh: "نص الإنذار الموجه للموظف...", save: "إرسال الإنذار للبوابة", saving: "جارٍ الإرسال...",
@@ -24,6 +26,8 @@ export default function WarningForm({ open, onClose, onSaved, employees }) {
     info: "بعد إرسال الإنذار يُعتبر نافذاً ويظهر فوراً في بوابة الموظف دون الحاجة لموافقة.",
   } : {
     title: "Create warning", emp: "Employee", empPh: "Select employee", cat: "Violation type", catPh: "Select violation",
+    empSearch: "Search by name or national ID...", catSearch: "Search violation type...",
+    noResults: "No matching results", more: "Type a name or national ID to search the full list",
     article: "Legal reference", level: "Warning level", suggested: "auto-suggested", incident: "Incident date",
     session: "Investigation session date", invest: "Investigation summary", investPh: "Describe the session and proof of the violation...",
     desc: "Warning text", descPh: "Warning text addressed to the employee...", save: "Send warning to portal", saving: "Sending...",
@@ -45,6 +49,24 @@ export default function WarningForm({ open, onClose, onSaved, employees }) {
 
   const emp = employees.find((e) => e.id === form.employee_id) || null;
   const cat = categoryById(form.violation_category, lang);
+
+  // خيارات القائمتين المنسدلتين القابلتين للبحث:
+  // الموظف بالاسم أو رقم الهوية/الرقم الوظيفي، ونوع المخالفة بنصها أو بمرجعها النظامي.
+  const empOptions = useMemo(() => employees.map((e) => ({
+    value: e.id,
+    label: e.full_name || e.employee_number || e.national_id || "—",
+    sub: [e.national_id, e.employee_number, e.position].filter(Boolean).join(" · "),
+    searchText: `${e.full_name || ""} ${e.national_id || ""} ${e.employee_number || ""} ${e.position || ""}`,
+  })), [employees]);
+
+  const catGroups = useMemo(() => VIOLATION_CHAPTERS.map((chapter) => ({
+    label: isAr ? chapter.ar : chapter.en,
+    items: VIOLATION_CATEGORIES.filter((c) => c.chapter === chapter.id).map((c) => ({
+      value: c.id,
+      label: isAr ? c.ar : c.en,
+      searchText: `${c.ar} ${c.en} ${c.articleAr || ""} ${c.articleEn || ""}`,
+    })),
+  })), [isAr]);
 
   // عدّ الإنذارات السابقة للموظف بنفس نوع المخالفة لاقتراح الدرجة
   useEffect(() => {
@@ -120,37 +142,26 @@ export default function WarningForm({ open, onClose, onSaved, employees }) {
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div className="space-y-1.5">
               <Label>{t.emp}</Label>
-              <Select value={form.employee_id} onValueChange={(v) => set("employee_id", v)}>
-                <SelectTrigger><SelectValue placeholder={t.empPh} /></SelectTrigger>
-                <SelectContent>
-                  {employees.map((e) => (
-                    <SelectItem key={e.id} value={e.id}>{e.employee_number} — {e.position}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+              <SearchSelect
+                value={form.employee_id}
+                onValueChange={(v) => set("employee_id", v)}
+                placeholder={t.empPh}
+                searchPlaceholder={t.empSearch}
+                emptyText={t.noResults}
+                moreText={t.more}
+                groups={[{ items: empOptions }]}
+              />
             </div>
             <div className="space-y-1.5">
               <Label>{t.cat}</Label>
-              <Select value={form.violation_category} onValueChange={(v) => set("violation_category", v)}>
-                <SelectTrigger><SelectValue placeholder={t.catPh} /></SelectTrigger>
-                <SelectContent className="max-h-80">
-                  {VIOLATION_CHAPTERS.map((chapter) => {
-                    const items = VIOLATION_CATEGORIES.filter((c) => c.chapter === chapter.id);
-                    return (
-                      <React.Fragment key={chapter.id}>
-                        <div className="px-2 py-1.5 text-xs font-bold text-muted-foreground bg-muted/60 sticky top-0">
-                          {isAr ? chapter.ar : chapter.en}
-                        </div>
-                        {items.map((c) => (
-                          <SelectItem key={c.id} value={c.id} className="pr-6">
-                            {isAr ? c.ar : c.en}
-                          </SelectItem>
-                        ))}
-                      </React.Fragment>
-                    );
-                  })}
-                </SelectContent>
-              </Select>
+              <SearchSelect
+                value={form.violation_category}
+                onValueChange={(v) => set("violation_category", v)}
+                placeholder={t.catPh}
+                searchPlaceholder={t.catSearch}
+                emptyText={t.noResults}
+                groups={catGroups}
+              />
             </div>
           </div>
 
