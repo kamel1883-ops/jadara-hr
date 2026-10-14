@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef, useMemo } from "react";
 import { base44 } from "@/api/base44Client";
 import PageHeader from "@/components/PageHeader";
 import StatCard from "@/components/StatCard";
@@ -12,6 +12,8 @@ import { useI18n } from "@/lib/i18n";
 import { enrichRecordsWithVault, VAULT_MODULES } from "@/lib/vaultGeneric";
 import { VaultDocsView } from "@/components/VaultAttachments";
 import { cn } from "@/lib/utils";
+import { printReport } from "@/lib/reportPrint";
+import WarningDoc from "@/components/docs/WarningDoc";
 
 export default function Warnings() {
   const { lang } = useI18n();
@@ -61,6 +63,33 @@ export default function Warnings() {
     const e = employees.find((x) => x.id === w.employee_id);
     return e ? (e.national_id || "") : (w.national_id || "");
   };
+
+  // طباعة الإنذار — بنفس صيغة بقية المستندات (شعار المنشأة يميناً + جدارة يساراً)
+  const printRef = useRef(null);
+  const [printing, setPrinting] = useState(false);
+  const [printItem, setPrintItem] = useState(null);
+  const org = useMemo(() => base44?.org || {}, []);
+
+  useEffect(() => {
+    if (!printItem || !printRef.current) return;
+    let cancelled = false;
+    const run = async () => {
+      setPrinting(true);
+      try {
+        await printReport(printRef.current, {
+          org,
+          title: isAr ? "إنذار" : "Warning",
+          subtitle: empName(printItem) || "",
+          stamp: false,
+        });
+      } finally {
+        if (!cancelled) setPrinting(false);
+        setPrintItem(null);
+      }
+    };
+    run();
+    return () => { cancelled = true; };
+  }, [printItem, org, isAr]);
 
   const filtered = warnings.filter((w) => {
     const name = empName(w);
@@ -150,13 +179,14 @@ export default function Warnings() {
               <th className="text-right font-medium px-4 py-3">{t.thStatus}</th>
               <th className="text-right font-medium px-4 py-3">{t.thDocs}</th>
               <th className="text-right font-medium px-4 py-3">{isAr ? "أُعدّت بواسطة" : "Prepared by"}</th>
+              <th className="text-right font-medium px-4 py-3">{isAr ? "طباعة" : "Print"}</th>
             </tr>
           </thead>
           <tbody>
             {loading ? (
-              <tr><td colSpan={10} className="px-4 py-8 text-center text-muted-foreground">—</td></tr>
+              <tr><td colSpan={11} className="px-4 py-8 text-center text-muted-foreground">—</td></tr>
             ) : filtered.length === 0 ? (
-              <tr><td colSpan={10} className="px-4 py-8 text-center text-muted-foreground">{t.no}</td></tr>
+              <tr><td colSpan={11} className="px-4 py-8 text-center text-muted-foreground">{t.no}</td></tr>
             ) : filtered.map((w) => {
               const c = categoryById(w.violation_category, lang);
               const lv = levelById(w.warning_level, lang);
@@ -172,6 +202,19 @@ export default function Warnings() {
                   <td className="px-4 py-3"><span className="text-xs px-2 py-0.5 rounded-full bg-slate-100 text-slate-600">{w.status === "acknowledged" ? t.ack : t.sent}</span></td>
                   <td className="px-4 py-3"><VaultDocsView value={w.documents} isAr={isAr} /></td>
                   <td className="px-4 py-3 text-[11px] text-violet-700">{w.prepared_by_name ? `${w.prepared_by_name}${w.prepared_by_id ? ` — ${w.prepared_by_id}` : ""}` : "—"}</td>
+                  <td className="px-4 py-3">
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setPrintItem(w);
+                      }}
+                      disabled={printing}
+                    >
+                      {isAr ? "طباعة" : "Print"}
+                    </Button>
+                  </td>
                 </tr>
               );
             })}
@@ -180,6 +223,19 @@ export default function Warnings() {
       </div>
 
       <WarningForm open={open} onClose={() => setOpen(false)} onSaved={load} employees={employees} />
+
+      {/* مستند الإنذار المخفي — يُطبع عبر printReport */}
+      <div style={{ position: "fixed", left: -10000, top: 0, width: 794 }} aria-hidden="true">
+        <div ref={printRef}>
+          {printItem ? (
+            <WarningDoc
+              warning={printItem}
+              org={org}
+              employee={employees.find((x) => x.id === printItem.employee_id) || null}
+            />
+          ) : null}
+        </div>
+      </div>
     </div>
   );
 }

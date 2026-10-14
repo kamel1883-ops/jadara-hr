@@ -112,7 +112,7 @@ export default function AttendanceReport({ org }) {
         org,
         title: t.pdfTitle(monthLabel(sel.year, sel.month)),
         subtitle: t.pdfSub(sel.rows.length, counts),
-        stamp: true,
+        stamp: false,
         landscape: true,
       });
     } finally {
