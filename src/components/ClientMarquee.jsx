@@ -7,6 +7,7 @@ const CLIENTS = [
   { name: "شركة كود الأعمال للمقاولات", en: "Business Code Co.", logo: "https://media.base44.com/images/public/6a74edc8f347046365c2e1a4/d146af91b_Screenshot2026-08-09155940.png" },
   { name: "مصنع درز للخياطة الراقية", en: "Darz Tailoring Factory", logo: "https://media.base44.com/images/public/6a74edc8f347046365c2e1a4/64e527d78_Screenshot2026-08-09155842.png" },
   { name: "آل معيض", en: "Al Moied", logo: "https://media.base44.com/images/public/6a74edc8f347046365c2e1a4/40f72a492_image.png" },
+  { name: "شركة ومصنع الفواكه المجففة (دي فروت)", en: "Dfruit Dried Fruits Co. & Factory", logo: "https://base44.app/api/apps/6a74edc8f347046365c2e1a4/files/mp/public/6a74edc8f347046365c2e1a4/3e3cb09aa_dfruit-logo.png" },
 ];
 
 export default function ClientMarquee() {
