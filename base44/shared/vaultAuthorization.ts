@@ -7,11 +7,17 @@ const asList = page => Array.isArray(page) ? page : (Array.isArray(page?.items) 
 
 export async function employeeRefsInCompany(base44, context, user, refs) {
   if (!refs.length) return true;
-  const scope = context.unified
-    ? { unified_number: context.unified }
-    : { created_by_id: user.id, unified_number: { $in: ['', null] } };
+  // يُقبل الموظف إذا كان من منشأة المستخدم (بنفس الرقم الموحّد) **أو** أُنشئ بواسطة
+  // المستخدم نفسه أو أحد منشئي موظفي منشأته. القيد السابق كان يشترط شرطين معاً
+  // (منشئ = المستخدم، والرقم الموحّد فارغاً)، فيرفض موظفي المنشأة أنفسهم ممن يحملون
+  // رقماً موحّداً أو أُنشئوا من مدير آخر ⇒ 403 عند أرشفة المستند، ويبقى حقل المستند
+  // فارغاً (شرطة) رغم نجاح التخزين في الخزنة. العزل لم يتغيّر: موظف منشأة أخرى
+  // لا يستوفي الشرطين.
+  const owners = [...new Set([user.id, ...(context.keys || [])].filter(Boolean))].slice(0, 24);
+  const or: any[] = [{ created_by_id: { $in: owners } }];
+  if (context.unified) or.push({ unified_number: context.unified });
   const page = await base44.asServiceRole.entities.Employee.filter(
-    { ...scope, emp_ref: { $in: refs } },
+    { emp_ref: { $in: refs }, $or: or },
     { limit: 500, fields: ['emp_ref'] }
   );
   const found = new Set(asList(page).map(row => row?.emp_ref));
