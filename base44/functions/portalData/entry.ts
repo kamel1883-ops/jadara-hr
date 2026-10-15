@@ -222,8 +222,13 @@ export default async function (req) {
     if (action === "store_leave_document") {
       if (isOwnerSession || !canManageLeaveDocuments(emp))
         return Response.json({ ok: false, error: 'forbidden' }, { status: 403 });
+      const unified = String(emp.unified_number || '').trim();
       try {
-        const result = await saveLeaveDocument(base44, String(emp.unified_number || '').trim(), body);
+        const result = await saveLeaveDocument(base44, {
+          writeKey: unified || (await tenantKeysForEmployee(base44, emp))[0],
+          // موظف الطلب لا بد أن يكون من منشأة الموظف المُفوّض نفسه.
+          verify: async (owner) => !!unified && String(owner.unified_number || '').trim() === unified,
+        }, body);
         return Response.json({ ok: true, data: result });
       } catch (error) {
         const code = vaultErrorCode(error);

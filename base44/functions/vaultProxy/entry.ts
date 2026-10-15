@@ -117,8 +117,13 @@ export default async function (req: Request): Promise<Response> {
         if (!rest.payrollRef) return Response.json({ error: "payrollRef_required" }, { status: 400 });
         result = await getPayrollInCompany(await tenantKeysForRead(base44, user), rest.payrollRef);
         break;
+      // أرشفة مستند الإجازة: مفتاح كتابة الخزنة كما في بقية العمليات (الرقم الموحّد ثم حساب المستخدم)،
+      // مع تحقّق أن موظف المستند من منشأة المستخدم — فلا يُربَط مستند بطلب موظف منشأة أخرى.
       case "storeLeaveDocument":
-        result = await saveLeaveDocument(base44, context.unified, rest);
+        result = await saveLeaveDocument(base44, {
+          writeKey: context.unified || user.id,
+          verify: (employee) => employeeRefsInCompany(base44, context, user, [employee.emp_ref]),
+        }, rest);
         break;
       case "storeDocument":
         if (!rest.fileBase64) return Response.json({ error: "fileBase64_required" }, { status: 400 });
