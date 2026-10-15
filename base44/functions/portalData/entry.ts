@@ -324,6 +324,27 @@ export default async function (req) {
       return Response.json({ ok: true, tenants: tenants || [], stats });
     }
 
+    // ====== إشعارات المالك — إشعارات العمل فقط (تجارب/اشتراكات/مدفوعات) ======
+    // عزل صارم: لا يُعرض للمالك أي إشعار يخص موظفي المنشآت أو طلباتهم (إجازة/سلفة/حضور/تحقيق...).
+    // تلك الإشعارات تخص المنشأة وحدها وتظهر داخل بوابتها.
+    const OWNER_NOTIFICATION_TYPES = ["trial_ending", "sub_ending", "stripe_payment", "paypal_payment"];
+    if (action === "owner_notifications") {
+      if (!isOwner) return Response.json({ ok: false, error: "forbidden" }, { status: 403 });
+      const limit = Math.min(Number(body.limit) || 30, 200);
+      const rows = await base44.asServiceRole.entities.Notification.filter(
+        { type: { $in: OWNER_NOTIFICATION_TYPES } }, "-created_date", limit
+      );
+      return Response.json({ ok: true, notifications: rows || [] });
+    }
+    if (action === "owner_notifications_read") {
+      if (!isOwner) return Response.json({ ok: false, error: "forbidden" }, { status: 403 });
+      await base44.asServiceRole.entities.Notification.updateMany(
+        { type: { $in: OWNER_NOTIFICATION_TYPES }, is_read: false },
+        { $set: { is_read: true } }
+      );
+      return Response.json({ ok: true });
+    }
+
     if (action === "owner_extend_trial") {
       if (!isOwner) return Response.json({ ok: false, error: "forbidden" }, { status: 403 });
       const tenant_id = String(body.tenant_id || "");

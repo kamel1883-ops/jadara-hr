@@ -18,22 +18,37 @@ export async function notifyApproverForStatus(
 
   const employees: any[] = await base44.asServiceRole.entities.Employee.list("-created_date", 5000);
   const requester = (employees || []).find((e) => e.id === employeeId);
-  // قصر اختيار المعتمد على نفس منشأة الموظف صاحب الطلب (عبر الرقم الموحد) لمنع
-  // وصول التنبيه لمعتمد في منشأة أخرى — مع رجوع لمعتمد عام إن لم يوجد مطابق.
+  // عزل المنشآت: لا يُختار معتمد إلا من نفس منشأة صاحب الطلب (عبر الرقم الموحّد)،
+  // ولا يوجد أي رجوع لمعتمد عام في منشأة أخرى — فلا يصل تنبيه شركة إلى شركة ثانية.
   const requesterUn = String(requester?.unified_number || "").trim();
-  const sameTenant = (e: any) => !requesterUn || String(e?.unified_number || "").trim() === requesterUn;
+  const sameTenant = (e: any) => !!requesterUn && String(e?.unified_number || "").trim() === requesterUn;
 
-  // تحديد المعتمد المختص بناءً على المرحلة الحالية للطلب
+  // الرجوع الوحيد المسموح عند غياب المعتمد المختص: مدير المنشأة نفسها (سجل المنشأة).
+  const tenantAdmin = async () => {
+    if (!requesterUn) return null;
+    const page = await base44.asServiceRole.entities.Tenant.filter({ unified_number: requesterUn });
+    const t = (Array.isArray(page) ? page : page?.items || [])[0];
+    const email = String(t?.admin_email || t?.contact_email || "").trim();
+    if (!t || !email) return null;
+    return {
+      id: "", email, unified_number: requesterUn,
+      full_name: t?.contact_name || t?.name || "",
+      user_id: String(t?.admin_user_id || ""),
+    };
+  };
+
+  // تحديد المعتمد المختص بناءً على المرحلة الحالية للطلب — من نفس المنشأة فقط
   let approver: any = null;
   let stageLabel = "";
   if (["pending_manager", "pending"].includes(status)) {
-    approver = (employees || []).find((e) => e.id === requester?.manager_id) || null;
+    const manager = (employees || []).find((e) => e.id === requester?.manager_id) || null;
+    approver = manager && sameTenant(manager) ? manager : await tenantAdmin();
     stageLabel = "المدير المباشر";
   } else if (status === "manager_approved") {
-    approver = (employees || []).find((e) => e.is_approver_hr && sameTenant(e)) || (employees || []).find((e) => e.is_approver_hr) || null;
+    approver = (employees || []).find((e) => e.is_approver_hr && sameTenant(e)) || await tenantAdmin();
     stageLabel = "الموارد البشرية";
   } else if (["hr_approved", "hr_settled", "awaiting_finance"].includes(status)) {
-    approver = (employees || []).find((e) => e.is_approver_finance && sameTenant(e)) || (employees || []).find((e) => e.is_approver_finance) || null;
+    approver = (employees || []).find((e) => e.is_approver_finance && sameTenant(e)) || await tenantAdmin();
     stageLabel = "المالية";
   }
 
@@ -57,6 +72,7 @@ export async function notifyApproverForStatus(
       type: "approval_pending",
       employee_id: approver.id || "",
       user_id: approver.user_id || "",
+      unified_number: requesterUn,
       is_read: false,
     });
   } catch {}
