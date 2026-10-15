@@ -22,7 +22,7 @@
  *  ٢) أي خطأ يُعاد برمز واضح (not_configured / unauthorized / not_found / timeout / unreachable)
  *     بدل رسالة عامة، فلا يعود «تعذر فتح المستند» بلا سبب.
  */
-import { createClientFromRequest } from "npm:@base44/sdk@0.8.44";
+import { createClientFromRequest } from "npm:@base44/sdk@0.8.54";
 import {
   storeEmployee, storeEmployeesBulk, getEmployeesBatch, updateEmployeeInCompany, deleteEmployeeInCompany,
   storePayroll, getPayrollInCompany, storeDocument, getDocumentLinkInCompany, buildDownloadUrl,

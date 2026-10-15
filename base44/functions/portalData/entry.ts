@@ -1,4 +1,4 @@
-import { createClientFromRequest } from "npm:@base44/sdk@0.8.40";
+import { createClientFromRequest } from "npm:@base44/sdk@0.8.54";
 import { verifyToken } from "../../shared/portalToken.ts";
 import {
   PAID_STATUSES, computeWorkDaysSet, computeWorkDaysInMonth,
@@ -204,7 +204,7 @@ export default async function (req) {
         return Response.json({ ok: false, error: "doc_ref_required" }, { status: 400 });
       const ownsDocument = await employeeOwnsDocument(base44, emp, docRef);
       const managesLeave = !ownsDocument && canManageLeaveDocuments(emp)
-        && await companyOwnsLeaveDocument(base44, String(emp.unified_number || '').trim(), docRef);
+        && await companyOwnsLeaveDocument(base44, emp, docRef);
       if (!ownsDocument && !managesLeave)
         return Response.json({ ok: false, error: 'not_found' }, { status: 404 });
       try {

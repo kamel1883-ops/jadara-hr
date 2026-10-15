@@ -1,18 +1,21 @@
-// وظيفة تحقّق مؤقتة — تُحذف بعد التأكد من نجاح أرشفة مستند الإجازة وربطه بالطلب.
-import { createClientFromRequest } from "npm:@base44/sdk@0.8.44";
+// Read-only verification, removed after the document-query checks complete.
+import { createClientFromRequest } from 'npm:@base44/sdk@0.8.54';
+import { companyOwnsLeaveDocument } from '../../shared/leaveDocuments.ts';
+import { resolveCompanyContext } from '../../shared/vaultIdentity.ts';
 
-export default async function (req: Request): Promise<Response> {
-  const base44 = createClientFromRequest(req);
-  const leaveId = "6ad0883fc8119d66c69a5dba";
-  const legacy = "https://base44.app/api/apps/6a74edc8f347046365c2e1a4/files/mp/public/6a74edc8f347046365c2e1a4/a0b62a614_leave-settlement-6a957639fd61ab170805a498.pdf";
-  const L = base44.asServiceRole.entities.LeaveRequest;
-  const rows = (p: any) => (Array.isArray(p) ? p : p?.items || []);
-  const out: any = {};
-  out.byId = rows(await L.filter({ id: leaveId }, { limit: 2 })).length;
-  out.byEmp = rows(await L.filter({ employee_id: "6a7b5f4ef66815fdc660a409" }, { limit: 2 })).length;
-  out.legacyNoFields = rows(await L.filter({ settlement_pdf_url: legacy })).length;
-  out.legacyFields = rows(await L.filter({ settlement_pdf_url: legacy }, { limit: 2, fields: ["id"] })).length;
-  out.legacyRegex = rows(await L.filter({ settlement_pdf_url: { $regex: "a0b62a614" } }, { limit: 2 })).length;
-  out.legacyOr = rows(await L.filter({ employee_id: "6a7b5f4ef66815fdc660a409", $or: [{ settlement_pdf_url: legacy }] }, { limit: 2 })).length;
-  return Response.json({ ok: true, out });
+export default async function(req) {
+  try {
+    const base44 = createClientFromRequest(req);
+    const user = await base44.auth.me();
+    if (!user || user.role !== 'admin') return Response.json({ error: 'forbidden' }, { status: 403 });
+    const leave = await base44.asServiceRole.entities.LeaveRequest.get('6a957639fd61ab170805a498');
+    const employee = await base44.asServiceRole.entities.Employee.get(leave.employee_id);
+    const page = await base44.asServiceRole.entities.LeaveRequest.filter({ id: leave.id, settlement_pdf_url: leave.settlement_pdf_url }, { limit: 1, fields: ['employee_id'] });
+    const company = await resolveCompanyContext(base44, user);
+    const sameCompany = await companyOwnsLeaveDocument(base44, employee, leave.settlement_pdf_url);
+    const otherCompany = await companyOwnsLeaveDocument(base44, { unified_number: '__not_this_company__' }, leave.settlement_pdf_url);
+    return Response.json({ ok: true, query_found: page.items?.length === 1, same_company_allowed: sameCompany, other_company_denied: !otherCompany, session_company_resolved: !!company.unified });
+  } catch (error) {
+    return Response.json({ ok: false, error: error.vaultCode || 'verification_failed' }, { status: 500 });
+  }
 }
