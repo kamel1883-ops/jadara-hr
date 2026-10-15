@@ -101,15 +101,14 @@ export async function companyVaultKey(base44, user) {
 export async function tenantKeysForEmployee(base44, emp) {
   const unified = String(emp?.unified_number || '').trim();
   if (!unified) scopeDenied();
-  const tenants = asList(await base44.asServiceRole.entities.Tenant.filter({ unified_number: unified }, { limit: 2 }));
-  if (tenants.length > 1) scopeDenied();
-  const tenant = tenants[0];
+  // الرقم الموحّد مثبت على موظف الجلسة. سجلات الاشتراكات القديمة لنفس الرقم ليست منشآت أخرى.
+  const tenants = asList(await base44.asServiceRole.entities.Tenant.filter({ unified_number: unified }, { limit: 20 }));
   const creators = asList(await base44.asServiceRole.entities.Employee.filter({ unified_number: unified }, {
     distinct: 'created_by_id', limit: 24,
   }));
   if (creators.length >= 24) scopeDenied();
-  const legacy = await companyLegacyKeys(base44, unified, [emp.created_by_id, tenant?.admin_user_id, ...creators]);
-  return [...new Set([unified, tenant?.id, ...legacy].filter(Boolean))].slice(0, 24);
+  const legacy = await companyLegacyKeys(base44, unified, [emp.created_by_id, ...tenants.map(t => t.admin_user_id), ...creators]);
+  return [...new Set([unified, ...tenants.map(t => t.id), ...legacy].filter(Boolean))].slice(0, 24);
 }
 
 function sortNewest(list: any[]) {

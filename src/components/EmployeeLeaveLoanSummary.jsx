@@ -8,6 +8,7 @@ import { Download, FileText, Loader2, RefreshCw, CalendarDays, Wallet } from "lu
 import { cn } from "@/lib/utils";
 import { StoredDocButton } from "@/components/VaultDocLink";
 import { useI18n } from "@/lib/i18n";
+import { leaveDocumentErrorText } from "@/lib/saveLeaveDocument";
 
 export default function EmployeeLeaveLoanSummary({ employee }) {
   const { lang } = useI18n();
@@ -75,6 +76,7 @@ export default function EmployeeLeaveLoanSummary({ employee }) {
   const regenLeave = async (l) => {
     setBusy("l" + l.id);
     try { await generateLeaveSettlement(l, employee, org, leaves); await load(); }
+    catch (error) { alert(leaveDocumentErrorText(error, isAr)); }
     finally { setBusy(null); }
   };
   const genLoan = async (l) => {

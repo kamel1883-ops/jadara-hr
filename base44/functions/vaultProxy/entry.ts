@@ -32,6 +32,7 @@ import {
 import { tenantKeysForRead, resolveCompanyContext } from "../../shared/vaultIdentity.ts";
 import { validVaultRef, employeeRefsInCompany } from "../../shared/vaultAuthorization.ts";
 import { vaultErrorCode, vaultErrorStatus } from "../../shared/vaultErrors.ts";
+import { saveLeaveDocument } from "../../shared/leaveDocuments.ts";
 
 export default async function (req: Request): Promise<Response> {
   try {
@@ -115,6 +116,9 @@ export default async function (req: Request): Promise<Response> {
       case "getPayroll":
         if (!rest.payrollRef) return Response.json({ error: "payrollRef_required" }, { status: 400 });
         result = await getPayrollInCompany(await tenantKeysForRead(base44, user), rest.payrollRef);
+        break;
+      case "storeLeaveDocument":
+        result = await saveLeaveDocument(base44, context.unified, rest);
         break;
       case "storeDocument":
         if (!rest.fileBase64) return Response.json({ error: "fileBase64_required" }, { status: 400 });

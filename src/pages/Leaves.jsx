@@ -16,6 +16,7 @@ import { StoredDocButton } from "@/components/VaultDocLink";
 import { enrichEmployeesBatch, applySensitiveMap } from "@/lib/vaultSensitive";
 import { getOrgOnce } from "@/lib/leaveBalance";
 import PullToRefresh from "@/components/PullToRefresh";
+import { leaveDocumentErrorText } from "@/lib/saveLeaveDocument";
 
 export default function Leaves() {
   const { lang } = useI18n();
@@ -104,7 +105,8 @@ export default function Leaves() {
     try {
       await generateLeaveSettlement(leave, emp, org, requests.filter((x) => x.employee_id === leave.employee_id));
       await load();
-    } finally { setBusy(null); }
+    } catch (error) { alert(leaveDocumentErrorText(error, isAr)); }
+    finally { setBusy(null); }
   };
 
   const filtered = requests.filter((r) => {

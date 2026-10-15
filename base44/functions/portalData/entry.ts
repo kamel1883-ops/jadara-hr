@@ -6,7 +6,8 @@ import {
 } from "../../shared/payrollCompute.ts";
 import { notifyApproverForStatus } from "../../shared/approverNotify.ts";
 import { getDocumentLinkInCompany, buildDownloadUrl, storeDocument } from "../../shared/vaultClient.ts";
-import { vaultErrorCode } from "../../shared/vaultErrors.ts";
+import { vaultErrorCode, vaultErrorStatus } from "../../shared/vaultErrors.ts";
+import { saveLeaveDocument, canManageLeaveDocuments, companyOwnsLeaveDocument } from "../../shared/leaveDocuments.ts";
 import { tenantKeysForEmployee } from "../../shared/vaultIdentity.ts";
 import { employeeOwnsDocument, validVaultRef } from "../../shared/vaultAuthorization.ts";
 import {
@@ -201,7 +202,10 @@ export default async function (req) {
       const docRef = String(body.doc_ref || "").trim();
       if (!validVaultRef(docRef))
         return Response.json({ ok: false, error: "doc_ref_required" }, { status: 400 });
-      if (!(await employeeOwnsDocument(base44, emp, docRef)))
+      const ownsDocument = await employeeOwnsDocument(base44, emp, docRef);
+      const managesLeave = !ownsDocument && canManageLeaveDocuments(emp)
+        && await companyOwnsLeaveDocument(base44, String(emp.unified_number || '').trim(), docRef);
+      if (!ownsDocument && !managesLeave)
         return Response.json({ ok: false, error: 'not_found' }, { status: 404 });
       try {
         const keys = await tenantKeysForEmployee(base44, emp);
@@ -211,6 +215,19 @@ export default async function (req) {
         // نُعيد السبب الحقيقي (غير مُهيّأة/مفتاح مرفوض/غير موجود/مهلة) بدل not_found دائماً
         const code = vaultErrorCode(e);
         return Response.json({ ok: false, error: code }, { status: code === "not_found" ? 404 : 502 });
+      }
+    }
+
+    // أرشفة مستند الإجازة وربطه بطلب من نفس المنشأة بجلسة البوابة، لا بجلسة Base44 أخرى.
+    if (action === "store_leave_document") {
+      if (isOwnerSession || !canManageLeaveDocuments(emp))
+        return Response.json({ ok: false, error: 'forbidden' }, { status: 403 });
+      try {
+        const result = await saveLeaveDocument(base44, String(emp.unified_number || '').trim(), body);
+        return Response.json({ ok: true, data: result });
+      } catch (error) {
+        const code = vaultErrorCode(error);
+        return Response.json({ ok: false, error: code }, { status: vaultErrorStatus(code) });
       }
     }
 
