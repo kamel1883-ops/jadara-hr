@@ -238,3 +238,16 @@ CREATE TABLE IF NOT EXISTS vault_gosi (
 );
 CREATE INDEX IF NOT EXISTS idx_vault_gosi_tenant ON vault_gosi(tenant_id);
 CREATE INDEX IF NOT EXISTS idx_vault_gosi_tenant_period ON vault_gosi(tenant_id, period_key);
+-- ============================================================
+-- كتالوج نطاقات قوى (Nitaqat) — بيانات مرجعية عامة ليست حسّاسة
+-- يُحدَّث تلقائياً من المصدر الرسمي؛ الفشل لا يمسّ آخر نسخة سليمة
+-- ============================================================
+CREATE TABLE IF NOT EXISTS vault_nitaqat_catalog (
+  id            TEXT PRIMARY KEY,          -- 'main'
+  source_url    TEXT,
+  content_hash  TEXT,                      -- sha256 للمحتوى المُعتمد
+  data          JSONB,
+  fetched_at    TIMESTAMPTZ,
+  last_error    TEXT,
+  updated_at    TIMESTAMPTZ DEFAULT now()
+);

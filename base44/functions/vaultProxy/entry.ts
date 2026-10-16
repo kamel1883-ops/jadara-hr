@@ -27,6 +27,7 @@ import {
   storeEmployee, storeEmployeesBulk, getEmployeesBatch, updateEmployeeInCompany, deleteEmployeeInCompany,
   storePayroll, getPayrollInCompany, storeDocument, getDocumentLinkInCompany, buildDownloadUrl,
   storeRecord, storeRecordsBulk, getRecord, getRecordsBatch, updateRecord, deleteRecord,
+  getNitaqatCatalog, syncNitaqatCatalog,
   vaultConfigured, vaultHealth,
 } from "../../shared/vaultClient.ts";
 import { tenantKeysForRead, companyVaultKey } from "../../shared/vaultIdentity.ts";
@@ -137,6 +138,13 @@ export default async function (req: Request): Promise<Response> {
       case "deleteRecord":
         if (!rest.module || !rest.ref) return Response.json({ error: "module_and_ref_required" }, { status: 400 });
         result = await deleteRecord(tenant, rest.module, rest.ref);
+        break;
+      // كتالوج نطاقات قوى — يُجلب من السيرفر السعودي (محدَّث تلقائياً من المصدر الوزاري)
+      case "nitaqatCatalog":
+        result = await getNitaqatCatalog();
+        break;
+      case "nitaqatSync":
+        result = await syncNitaqatCatalog();
         break;
       default:
         return Response.json({ error: "unknown_action", action }, { status: 400 });

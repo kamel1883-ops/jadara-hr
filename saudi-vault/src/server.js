@@ -1,6 +1,7 @@
 import app from './app.js';
 import { config } from './config.js';
 import { pool } from './db.js';
+import { startScheduler } from './lib/nitaqatSync.js';
 
 async function start() {
   try {
@@ -13,6 +14,8 @@ async function start() {
   app.listen(config.port, () => {
     console.log(`[vault] Saudi Data Vault listening on :${config.port}`);
     console.log('[vault] ⚠️  يجب إنهاء TLS عبر reverse proxy (Nginx/Caddy) — لا تكشف المنفذ مباشرة للإنترنت');
+    // مزامنة دورية لكتالوج نطاقات قوى — يبقى آخر نسخة سليمة عند الفشل
+    startScheduler();
   });
 }
 

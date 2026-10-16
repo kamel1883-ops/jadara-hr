@@ -348,6 +348,20 @@ export async function getRecord(tenantId, module, ref) {
   return callVault(`/api/vault/modules/${module}/${ref}`, tenantId, { method: "GET" });
 }
 
+/**
+ * كتالوج نطاقات قوى — بيانات مرجعية عامة تُحدَّث تلقائياً على السيرفر السعودي
+ * من المصدر الوزاري، فلا يعتمد النظام على نسخة ثابتة عندنا.
+ */
+export async function getNitaqatCatalog() {
+  return callVault("/api/vault/nitaqat", "public", { method: "GET", timeoutMs: 10000 });
+}
+
+/** مزامنة يدوية فورية من المصدر الرسمي (لزر «تحديث الآن») */
+export async function syncNitaqatCatalog() {
+  return callVault("/api/vault/nitaqat/sync", "public", { method: "POST", body: "{}", timeoutMs: 40000 });
+}
+
+
 /** عدة سجلات في رحلة دالة واحدة. الخزنة الحالية تُقرأ سجلاً سجلاً بتوازي محدود. */
 export async function getRecordsBatch(tenantIds, module, refs) {
   const ids = [...new Set((tenantIds || []).map((t) => String(t || "").trim()).filter(Boolean))].slice(0, 24);

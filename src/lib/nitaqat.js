@@ -2,34 +2,59 @@
 // النشاط يُختار من دليل الأنشطة (نشاط رئيسي ثم النشاط الذي يندرج تحته).
 // حد اللون = م × لوغ(إجمالي العمالة) + ث ، ولوغ هو اللوغاريتم الطبيعي.
 // من يقل عن حد الأخضر المنخفض فهو في الأحمر.
+//
+// مصدر البيانات: كتالوج تُحدّثه الخزنة السعودية تلقائياً من منصة قوى
+// (مصدر قرارات التوطين الرسمية)، فلا نعتمد على نسخة ثابتة عندنا.
+// عند تعذّر جلب الكتالوج من الخزنة نعود للنسخة المضمّنة (نسخة احتياطية).
+import { base44 } from "@/api/base44Client";
 
 let CATALOG = null;
 let CATALOG_PENDING = null;
+let CATALOG_META = null; // { source, fetched_at } — لعرض «آخر تحديث»
+
+function buildCatalog(data) {
+  const byCode = new Map();
+  const byGroup = new Map();
+  for (const row of data.activities) {
+    const bands = row.m
+      ? {
+          green_low: { m: row.m[0], c: row.c[0] },
+          green_medium: { m: row.m[1], c: row.c[1] },
+          green_high: { m: row.m[2], c: row.c[2] },
+          platinum: { m: row.m[3], c: row.c[3] },
+        }
+      : null;
+    const activity = { code: row.code, ar: row.ar, en: row.en || row.ar, group: row.group, bands };
+    byCode.set(row.code, activity);
+    const list = byGroup.get(row.group);
+    if (list) list.push(activity);
+    else byGroup.set(row.group, [activity]);
+  }
+  return { groups: data.groups, byCode, byGroup };
+}
+
+async function fetchCatalogData() {
+  // 1) من الخزنة السعودية — محدَّث تلقائياً من منصة قوى (المصدر الرسمي للقرارات الوزارية)
+  try {
+    const res = await base44.functions.invoke("vaultProxy", { action: "nitaqatCatalog" });
+    const body = res?.data?.data || res?.data || {};
+    if (body?.data?.activities?.length) {
+      CATALOG_META = { source: body.source || null, fetched_at: body.fetched_at || null };
+      return body.data;
+    }
+  } catch { /* الخزنة غير متاحة — نعود للنسخة المضمّنة */ }
+  // 2) النسخة المضمّنة (احتياطية — قد لا تكون محدَّثة لأحدث قرار وزاري)
+  CATALOG_META = null;
+  const res = await fetch(`${import.meta.env.BASE_URL}nitaqat-activities.json`);
+  return res.json();
+}
 
 export function loadNitaqatCatalog() {
   if (CATALOG) return Promise.resolve(CATALOG);
   if (!CATALOG_PENDING) {
-    CATALOG_PENDING = fetch(`${import.meta.env.BASE_URL}nitaqat-activities.json`)
-      .then((r) => r.json())
+    CATALOG_PENDING = fetchCatalogData()
       .then((data) => {
-        const byCode = new Map();
-        const byGroup = new Map();
-        for (const row of data.activities) {
-          const bands = row.m
-            ? {
-                green_low: { m: row.m[0], c: row.c[0] },
-                green_medium: { m: row.m[1], c: row.c[1] },
-                green_high: { m: row.m[2], c: row.c[2] },
-                platinum: { m: row.m[3], c: row.c[3] },
-              }
-            : null;
-          const activity = { code: row.code, ar: row.ar, en: row.en || row.ar, group: row.group, bands };
-          byCode.set(row.code, activity);
-          const list = byGroup.get(row.group);
-          if (list) list.push(activity);
-          else byGroup.set(row.group, [activity]);
-        }
-        CATALOG = { groups: data.groups, byCode, byGroup };
+        CATALOG = buildCatalog(data);
         return CATALOG;
       })
       .catch((err) => {
@@ -38,6 +63,11 @@ export function loadNitaqatCatalog() {
       });
   }
   return CATALOG_PENDING;
+}
+
+/** معلومات مصدر الكتالوج (للعرض: آخر تحديث + المصدر) */
+export function nitaqatCatalogMeta() {
+  return CATALOG_META;
 }
 
 export function findActivity(catalog, code) {

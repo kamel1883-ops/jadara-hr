@@ -6,6 +6,7 @@ import employeesRouter from './routes/employees.js';
 import documentsRouter from './routes/documents.js';
 import payrollRouter from './routes/payroll.js';
 import modulesRouter from './routes/modules.js';
+import nitaqatRouter from './routes/nitaqat.js';
 
 fs.mkdirSync(config.storageDir, { recursive: true });
 
@@ -24,6 +25,8 @@ app.use('/api/vault/payroll', requireApiKey, payrollRouter);
 app.use('/api/vault/documents', documentsRouter);
 // الوحدات الحساسة الموسّعة — CRUD عام لكل جدول عبر crudFactory
 app.use('/api/vault/modules', modulesRouter);
+// كتالوج نطاقات قوى — بيانات مرجعية عامة تُحدَّث تلقائياً من المصدر الوزاري
+app.use('/api/vault/nitaqat', nitaqatRouter);
 
 app.use(errorHandler);
 
