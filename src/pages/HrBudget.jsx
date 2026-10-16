@@ -1,11 +1,11 @@
-import React, { useState, useEffect, useMemo } from "react";
+import React, { useState, useEffect, useMemo, useRef } from "react";
 import { base44 } from "@/api/base44Client";
 import PageHeader from "@/components/PageHeader";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Save, Loader2, Plus, Trash2, Calculator, PieChart as PieIcon, BarChart3, TrendingUp } from "lucide-react";
+import { Save, Loader2, Plus, Trash2, Calculator, PieChart as PieIcon, BarChart3, TrendingUp, Printer } from "lucide-react";
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
   PieChart, Pie, Cell, Legend, Line, ComposedChart,
@@ -13,6 +13,7 @@ import {
 import { computeHrBudget, computeBudgetKpis, monthlyActualsFromPayrolls, budgetMonthlyPlan, BUDGET_INPUT_DEFAULTS } from "@/lib/hrBudget";
 import { formatCurrency } from "@/lib/hr";
 import { getCurrentOrgContext } from "@/lib/currentOrg";
+import { printReport } from "@/lib/reportPrint";
 import { useI18n } from "@/lib/i18n";
 import { useToast } from "@/components/ui/use-toast";
 import { cn } from "@/lib/utils";
@@ -122,7 +123,7 @@ export default function HrBudget() {
   const isAr = lang === "ar";
   const { toast } = useToast();
   const t = isAr ? {
-    title: "ميزانية الموارد البشرية السنوية", subtitle: "كل ريال يُصرف على الموظف في بند واضح — مرتبط تلقائياً بالرواتب والتأمينات والإقامة والسيارات",
+    title: "ميزانية الموارد البشرية السنوية", subtitle: "كل ريال يُصرف على الموظف معروف بالنسبة لك",
     loading: "جارٍ تحميل بيانات الميزانية...",
     inputs: "مدخلات الميزانية", inputsHint: "البنود المرتبطة بالموظفين محسوبة تلقائياً — أدخِل هنا بنود التكاليف الأخرى.",
     customPlatforms: "منصات مخصّصة", addPlatform: "إضافة منصة", platformName: "اسم المنصة", platformCost: "التكلفة السنوية",
@@ -135,9 +136,10 @@ export default function HrBudget() {
     vsActual: "الميزانية مقابل الفعلي (شهرياً)", vsHint: "الفعلي = كشوف الرواتب المصروفة + حصة صاحب العمل في التأمينات.",
     plan: "الخطة (الميزانية ÷ 12)", actual: "الفعلي",
     save: "حفظ الميزانية", saving: "جارٍ الحفظ...", saved: "تم حفظ الميزانية", saveFail: "تعذّر الحفظ",
-    yearLabel: "سنة الميزانية",
+    print: "طباعة الميزانية", printing: "جارٍ تجهيز الطباعة...", printStampYear: (y) => `ميزانية الموارد البشرية — ${y}`,
+    yearLabel: "سنة الميزانية", printHeadcount: "العمالة النشطة", printPrepared: "أُعدّت بواسطة", printDate: "تاريخ الإصدار",
   } : {
-    title: "Annual HR Budget", subtitle: "Every riyal spent on employees in a clear line — auto-linked to salaries, GOSI, iqama and fleet",
+    title: "Annual HR Budget", subtitle: "Every riyal spent on employees is accounted for",
     loading: "Loading budget data...",
     inputs: "Budget inputs", inputsHint: "Employee-linked lines are computed automatically — enter the other cost lines here.",
     customPlatforms: "Custom platforms", addPlatform: "Add platform", platformName: "Platform name", platformCost: "Annual cost",
@@ -150,7 +152,8 @@ export default function HrBudget() {
     vsActual: "Budget vs actual (monthly)", vsHint: "Actual = paid payroll sheets + employer GOSI share.",
     plan: "Plan (budget ÷ 12)", actual: "Actual",
     save: "Save budget", saving: "Saving...", saved: "Budget saved", saveFail: "Could not save",
-    yearLabel: "Budget year",
+    print: "Print budget", printing: "Preparing print...", printStampYear: (y) => `Annual HR Budget — ${y}`,
+    yearLabel: "Budget year", printHeadcount: "Active workforce", printPrepared: "Prepared by", printDate: "Issue date",
   };
 
   const [loading, setLoading] = useState(true);
@@ -164,6 +167,9 @@ export default function HrBudget() {
   const [payrolls, setPayrolls] = useState([]);
   const [inputs, setInputs] = useState({ ...BUDGET_INPUT_DEFAULTS });
   const [recordId, setRecordId] = useState(null);
+  const [printing, setPrinting] = useState(false);
+  const printRef = useRef(null);
+  const [printMe, setPrintMe] = useState("");
 
   useEffect(() => {
     (async () => {
@@ -217,6 +223,25 @@ export default function HrBudget() {
 
   const setField = (key, v) => setInputs((s) => ({ ...s, [key]: v === "" ? 0 : Number(v) || 0 }));
 
+  const onPrint = async () => {
+    if (!printRef.current) return;
+    setPrinting(true);
+    try {
+      const me = await base44.auth.me().catch(() => null);
+      setPrintMe(me?.full_name || me?.name || me?.email || "");
+      // ننتظر رسم قسم الطباعة (بعد تحديث اسم المُعِدّ) ثم نصدّر PDF بنفس ترويسة باقي مستندات النظام
+      await new Promise((r) => setTimeout(r, 80));
+      await printReport(printRef.current, {
+        org,
+        title: t.printStampYear(year),
+        subtitle: t.title,
+        landscape: true,
+      });
+    } finally {
+      setPrinting(false);
+    }
+  };
+
   const addPlatform = () => setInputs((s) => ({ ...s, custom_platforms: [...(s.custom_platforms || []), { label: "", amount: 0 }] }));
   const setPlatformField = (i, patch) => setInputs((s) => {
     const list = [...(s.custom_platforms || [])];
@@ -260,11 +285,14 @@ export default function HrBudget() {
         title={t.title}
         subtitle={t.subtitle}
         action={
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 flex-wrap">
             <div className="flex items-center gap-2">
               <Label className="text-xs text-muted-foreground">{t.yearLabel}</Label>
               <Input type="number" value={year} onChange={(e) => setYear(Number(e.target.value) || new Date().getFullYear())} className="w-24" />
             </div>
+            <Button variant="outline" onClick={onPrint} disabled={printing} className="gap-2">
+              {printing ? <Loader2 size={16} className="animate-spin" /> : <Printer size={16} />} {printing ? t.printing : t.print}
+            </Button>
             <Button onClick={save} disabled={saving} className="gap-2">
               {saving ? <Loader2 size={16} className="animate-spin" /> : <Save size={16} />} {saving ? t.saving : t.save}
             </Button>
@@ -416,6 +444,131 @@ export default function HrBudget() {
           </ResponsiveContainer>
         </CardContent>
       </Card>
+
+      {/* قسم الطباعة — خارج الشاشة، يُصدَّر PDF بلوحة أفقية بنفس ترويسة باقي مستندات النظام */}
+      <div
+        aria-hidden
+        ref={printRef}
+        dir={isAr ? "rtl" : "ltr"}
+        style={{ position: "fixed", top: 0, right: isAr ? "auto" : "-99999px", left: isAr ? "-99999px" : "auto", width: "1075px", background: "#fff", color: "#0b1120", padding: 0, zIndex: -1, fontFamily: "inherit" }}
+      >
+        {/* مؤشرات */}
+        <table style={{ width: "100%", borderCollapse: "collapse", marginBottom: "14px", fontSize: "11px" }}>
+          <tbody>
+            <tr>
+              {[
+                [t.kpiCost, formatCurrency(kpis.costPerEmployee)],
+                [t.kpiSalariesPct, pctFmt(kpis.salariesPct)],
+                [t.kpiTraining, formatCurrency(kpis.trainingPerEmployee)],
+                [t.kpiSaudization, pctFmt(kpis.saudizationPct)],
+              ].map(([l, v]) => (
+                <td key={l} style={{ border: "1px solid #d1d5db", padding: "6px 10px", textAlign: "center" }}>
+                  <div style={{ fontSize: "9px", color: "#666" }}>{l}</div>
+                  <div style={{ fontWeight: 700, fontSize: "13px" }}>{v}</div>
+                </td>
+              ))}
+            </tr>
+            <tr>
+              {[
+                [t.kpiEos, pctFmt(kpis.eosPctOfSalaries)],
+                [t.kpiFleet, formatCurrency(kpis.fleetPerVehicle)],
+                [t.kpiHc, `${budget.headcount.total} (${budget.headcount.saudis} / ${budget.headcount.expats} / ${budget.headcount.dependents})`],
+                [t.kpiVehicles, String(budget.vehicles)],
+              ].map(([l, v]) => (
+                <td key={l} style={{ border: "1px solid #d1d5db", padding: "6px 10px", textAlign: "center" }}>
+                  <div style={{ fontSize: "9px", color: "#666" }}>{l}</div>
+                  <div style={{ fontWeight: 700, fontSize: "13px" }}>{v}</div>
+                </td>
+              ))}
+            </tr>
+          </tbody>
+        </table>
+
+        {/* جدول البنود الكامل */}
+        <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "10.5px", marginBottom: "10px" }}>
+          <thead>
+            <tr style={{ background: "#f1f5f9" }}>
+              <th style={{ border: "1px solid #94a3b8", padding: "5px 10px", textAlign: "right" }}>{t.budgetTable}</th>
+              <th style={{ border: "1px solid #94a3b8", padding: "5px 10px", width: "90px", textAlign: "center" }}>{t.autoBadge}</th>
+              <th style={{ border: "1px solid #94a3b8", padding: "5px 10px", width: "160px", textAlign: "center" }}>{t.total}</th>
+            </tr>
+          </thead>
+          <tbody>
+            {budget.categories.map((cat) => (
+              <React.Fragment key={cat.key}>
+                <tr style={{ background: "#f8fafc", fontWeight: 700 }}>
+                  <td colSpan={2} style={{ border: "1px solid #cbd5e1", padding: "5px 10px" }}>{isAr ? cat.ar : cat.en}</td>
+                  <td style={{ border: "1px solid #cbd5e1", padding: "5px 10px", textAlign: "center" }}>{formatCurrency(cat.total)}</td>
+                </tr>
+                {cat.items.map((it) => (
+                  <tr key={it.key}>
+                    <td style={{ border: "1px solid #e2e8f0", padding: "4px 10px" }}>{isAr ? it.ar : it.en}</td>
+                    <td style={{ border: "1px solid #e2e8f0", padding: "4px 10px", textAlign: "center", fontSize: "9px", color: it.source === "auto" ? "#059669" : "#64748b" }}>
+                      {it.source === "auto" ? t.autoBadge : t.inputBadge}
+                    </td>
+                    <td style={{ border: "1px solid #e2e8f0", padding: "4px 10px", textAlign: "center" }}>{formatCurrency(it.amount)}</td>
+                  </tr>
+                ))}
+              </React.Fragment>
+            ))}
+            <tr>
+              <td colSpan={2} style={{ border: "1px solid #cbd5e1", padding: "5px 10px", fontWeight: 600 }}>{t.contingency(budget.contingency_pct)}</td>
+              <td style={{ border: "1px solid #cbd5e1", padding: "5px 10px", textAlign: "center" }}>{formatCurrency(budget.contingency)}</td>
+            </tr>
+            <tr style={{ background: "#f1f5f9", fontWeight: 800 }}>
+              <td colSpan={2} style={{ border: "1px solid #94a3b8", padding: "6px 10px" }}>{t.grandTotal}</td>
+              <td style={{ border: "1px solid #94a3b8", padding: "6px 10px", textAlign: "center", fontSize: "12px" }}>{formatCurrency(budget.grandTotal)}</td>
+            </tr>
+          </tbody>
+        </table>
+
+        {/* الرسوم البيانية — بنفس محتوى الشاشة لتطابق الأرقام */}
+        <div style={{ display: "flex", gap: "16px", marginBottom: "10px" }}>
+          <div style={{ flex: 1 }}>
+            <div style={{ fontSize: "10px", fontWeight: 700, marginBottom: "4px" }}>{t.chartBars}</div>
+            <ResponsiveContainer width="100%" height={240}>
+              <BarChart data={barsData}>
+                <CartesianGrid strokeDasharray="3 3" />
+                <XAxis dataKey="short" tick={{ fontSize: 9 }} interval={0} angle={-25} textAnchor="end" height={64} />
+                <YAxis tick={{ fontSize: 9 }} />
+                <Bar dataKey="value" radius={[5, 5, 0, 0]}>
+                  {barsData.map((_, i) => <Cell key={i} fill={CHART_COLORS[i % CHART_COLORS.length]} />)}
+                </Bar>
+              </BarChart>
+            </ResponsiveContainer>
+          </div>
+          <div style={{ flex: 1 }}>
+            <div style={{ fontSize: "10px", fontWeight: 700, marginBottom: "4px" }}>{t.chartPie}</div>
+            <ResponsiveContainer width="100%" height={240}>
+              <PieChart>
+                <Pie data={pieData} dataKey="value" nameKey="name" outerRadius={85} label={({ name, percent }) => `${name} ${(percent * 100).toFixed(0)}%`}>
+                  {pieData.map((_, i) => <Cell key={i} fill={CHART_COLORS[i % CHART_COLORS.length]} />)}
+                </Pie>
+                <Legend wrapperStyle={{ fontSize: 9 }} />
+              </PieChart>
+            </ResponsiveContainer>
+          </div>
+        </div>
+        <div style={{ marginBottom: "10px" }}>
+          <div style={{ fontSize: "10px", fontWeight: 700, marginBottom: "4px" }}>{t.vsActual}</div>
+          <ResponsiveContainer width="100%" height={200}>
+            <ComposedChart data={vsData}>
+              <CartesianGrid strokeDasharray="3 3" />
+              <XAxis dataKey="name" tick={{ fontSize: 9 }} />
+              <YAxis tick={{ fontSize: 9 }} />
+              <Legend wrapperStyle={{ fontSize: 9 }} />
+              <Bar dataKey="actual" fill="#0891b2" radius={[3, 3, 0, 0]} name={t.actual} />
+              <Line dataKey="plan" stroke="#dc2626" strokeWidth={2} dot={false} name={t.plan} />
+            </ComposedChart>
+          </ResponsiveContainer>
+        </div>
+
+        {/* تذييل: المُعِدّ + التاريخ */}
+        <div style={{ display: "flex", justifyContent: "space-between", fontSize: "9px", color: "#666", borderTop: "1px solid #cbd5e1", paddingTop: "6px" }}>
+          <span>{t.printPrepared}: {printMe || "—"}</span>
+          <span>{t.printDate}: {new Date().toISOString().slice(0, 10)}</span>
+        </div>
+      </div>
     </div>
   );
 }
