@@ -27,7 +27,7 @@ const CONTENT = {
     features: [
       { icon: BadgeCheck, t: "تتبّع الإقامات والوثائق", d: "متابعة تواريخ انتهاء الإقامات والجوازات والتأمين الطبي مع تنبيهات استباقية." },
       { icon: ShieldCheck, t: "حماية الأجور (WPS)", d: "توليد بيانات مسير الرواتب جاهزة للإرسال لمنصة مدد وفق الهيكل المعتمد." },
-      { icon: Landmark, t: "التأمينات الاجتماعية", d: "احتساب مساهمات GOSI للسعوديين (21%) والمقيمين (2%) ومواءمتها مع النظام." },
+      { icon: Landmark, t: "التأمينات الاجتماعية", d: "احتساب مساهمات GOSI حسب تاريخ تسجيل الموظف (21.5% أو 23.5% للسعوديين، و2% مخاطر مهنية للمقيمين) ومواءمتها مع النظام." },
       { icon: RefreshCw, t: "تحديث تلقائي للبيانات", d: "مزامنة بيانات الموظفين والمنشأة دون إدخال يدوي مكرّر." },
       { icon: Bell, t: "تنبيهات استباقية", d: "إشعارات قبل انتهاء الإقامات والتراخيص والتأمينات." },
       { icon: Link2, t: "تكامل واحد متكامل", d: "كل البيانات الحكومية المتعلقة بالموظف في مكان واحد منظّم." },
@@ -73,7 +73,7 @@ const CONTENT = {
     features: [
       { icon: BadgeCheck, t: "Iqama & Document Tracking", d: "Track Iqama, passport and health insurance expiry with proactive alerts." },
       { icon: ShieldCheck, t: "Wage Protection (WPS)", d: "Generate payroll data ready to submit to Mudad in the approved format." },
-      { icon: Landmark, t: "GOSI Social Insurance", d: "Calculate GOSI for Saudis (21%) and expats (2%) and reconcile with the scheme." },
+      { icon: Landmark, t: "GOSI Social Insurance", d: "Calculate GOSI by the employee's registration date (21.5% or 23.5% for Saudis, 2% occupational-hazards for expats) and reconcile with the scheme." },
       { icon: RefreshCw, t: "Auto Data Updates", d: "Sync establishment and employee data without duplicate manual entry." },
       { icon: Bell, t: "Proactive Alerts", d: "Notifications before Iqama, license and insurance expiry." },
       { icon: Link2, t: "One Integrated Hub", d: "All employee-related government data in one organized place." },

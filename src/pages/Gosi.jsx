@@ -12,7 +12,7 @@ import { Input } from "@/components/ui/input";
 import { Shield, FileDown, Save, CheckCircle2, BadgeCheck, Wallet, Building2, ArrowRight } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { formatCurrency } from "@/lib/hr";
-import { computeGOSI, isGosiSubscriber } from "@/lib/eos";
+import { computeGOSI, gosiRateTable, isGosiSubscriber } from "@/lib/eos";
 import { useI18n } from "@/lib/i18n";
 import { printReport } from "@/lib/reportPrint";
 
@@ -25,7 +25,9 @@ export default function Gosi() {
     month: "الشهر", year: "السنة",
     months: ["يناير", "فبراير", "مارس", "أبريل", "مايو", "يونيو", "يوليو", "أغسطس", "سبتمبر", "أكتوبر", "نوفمبر", "ديسمبر"],
     ratesInfo: "نسب الاشتراك المطبّقة (من ملف المنشأة):",
-    saudiEmp: "الموظف السعودي", saudiEmpr: "صاحب العمل (سعودي)", expatEmpr: "صاحب العمل (مقيم)",
+    catLegacy: "سعودي مباشرته قبل 3 يوليو 2024", catNew: "سعودي مباشرته من 3 يوليو 2024 (النسب السارية من يوليو 2026)", catExpat: "مقيم — مخاطر مهنية",
+    catLegacyShort: "مباشرته قبل 3 يوليو 2024", catNewShort: "مباشرته من 3 يوليو 2024", catExpatShort: "مقيم — مخاطر مهنية",
+    rEmp: "الموظف", rEmpr: "صاحب العمل",
     sTotalEmp: "إجمالي حصة الموظف", sTotalEmpr: "إجمالي حصة صاحب العمل", sGrand: "إجمالي الاشتراكات", sGross: "إجمالي الأجور الخاضعة", sCount: "عدد المشتركين",
     save: "حفظ سجلات الاشتراكات", saving: "جارٍ الحفظ...", saved: "محفوظ", notSaved: "غير محفوظ لهذا الشهر",
     pdf: "تحميل / طباعة PDF", exporting: "جارٍ التجهيز...",
@@ -40,7 +42,9 @@ export default function Gosi() {
     month: "Month", year: "Year",
     months: ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"],
     ratesInfo: "Applied contribution rates (from organization profile):",
-    saudiEmp: "Saudi employee", saudiEmpr: "Employer (Saudi)", expatEmpr: "Employer (Expat)",
+    catLegacy: "Saudi — commenced before 3 Jul 2024", catNew: "Saudi — commenced from 3 Jul 2024 (rates effective July 2026)", catExpat: "Expat — occupational hazards",
+    catLegacyShort: "commenced before 3 Jul 2024", catNewShort: "commenced from 3 Jul 2024", catExpatShort: "expat — occupational hazards",
+    rEmp: "employee", rEmpr: "employer",
     sTotalEmp: "Total employee share", sTotalEmpr: "Total employer share", sGrand: "Total subscriptions", sGross: "Total subject wages", sCount: "Subscribers",
     save: "Save subscription records", saving: "Saving...", saved: "Saved", notSaved: "Not saved for this month",
     pdf: "Download / Print PDF", exporting: "Preparing...",
@@ -85,8 +89,6 @@ export default function Gosi() {
 
   const rows = employees.map((emp) => {
     const gosi = computeGOSI({ employee: emp, org });
-    const empRate = gosi.isSaudi ? (Number(org?.gosi_saudi_employee_rate) || 9.75) : 0;
-    const emprRate = gosi.isSaudi ? (Number(org?.gosi_saudi_employer_rate) || 9.75) : (Number(org?.gosi_expat_employer_rate) || 2);
     return {
       employee_id: emp.id,
       employee_name: emp.full_name || "",
@@ -94,10 +96,11 @@ export default function Gosi() {
       national_id: emp.national_id || "",
       emp_ref: emp.emp_ref || "",
       is_saudi: gosi.isSaudi,
+      category: gosi.category,
       department: emp.department || "",
       gross_wage: Number(gosi.gross.toFixed(2)),
-      employee_rate: empRate,
-      employer_rate: emprRate,
+      employee_rate: gosi.employee_rate,
+      employer_rate: gosi.employer_rate,
       gosi_employee: Number(gosi.gosi_employee.toFixed(2)),
       gosi_employer: Number(gosi.gosi_employer.toFixed(2)),
       gosi_total: Number((gosi.gosi_employee + gosi.gosi_employer).toFixed(2)),
@@ -115,7 +118,8 @@ export default function Gosi() {
     try {
       if (records.length) await base44.entities.GosiRecord.deleteMany({ period_key: `${year}-${month}` });
       // عزل الهوية في الخزنة: يُحفظ emp_ref فقط، وتُترك national_id فارغة في السجل اللقطي
-      const payload = rows.map((r) => ({ ...r, national_id: "", emp_ref: r.emp_ref || "", month, year, period_key: `${year}-${month}`, status: "saved" }));
+      // فئة الاشتراك للعرض فقط؛ الحقلان employee_rate/employer_rate يوثّقان النسبة المطبقة على كل موظف.
+      const payload = rows.map(({ category, ...r }) => ({ ...r, national_id: "", emp_ref: r.emp_ref || "", month, year, period_key: `${year}-${month}`, status: "saved" }));
       if (payload.length) await base44.entities.GosiRecord.bulkCreate(payload);
       await load();
     } finally { setSaving(false); }
@@ -133,9 +137,7 @@ export default function Gosi() {
     } finally { setExporting(false); }
   };
 
-  const saudiEmpRate = Number(org?.gosi_saudi_employee_rate) || 9.75;
-  const saudiEmprRate = Number(org?.gosi_saudi_employer_rate) || 9.75;
-  const expatRate = Number(org?.gosi_expat_employer_rate) || 2;
+  const rates = gosiRateTable(org);
 
   return (
     <div dir={isAr ? "rtl" : "ltr"}>
@@ -188,7 +190,18 @@ export default function Gosi() {
       </div>
 
       <div className="mb-4 text-xs text-slate-600 bg-amber-50 border border-amber-200 rounded-xl px-4 py-2.5 leading-relaxed">
-        {t.ratesInfo} {t.saudiEmp}: <b>{saudiEmpRate}%</b> — {t.saudiEmpr}: <b>{saudiEmprRate}%</b> — {t.expatEmpr}: <b>{expatRate}%</b>
+        {t.ratesInfo}
+        <div className="mt-1.5 grid grid-cols-1 md:grid-cols-3 gap-1.5">
+          <div className="px-2 py-1 rounded-lg bg-white/70 border border-amber-200">
+            {t.catLegacy}: <b>{rates.legacy.employee}%</b> {t.rEmp} + <b>{rates.legacy.employer}%</b> {t.rEmpr} = <b>{(rates.legacy.employee + rates.legacy.employer).toFixed(2)}%</b>
+          </div>
+          <div className="px-2 py-1 rounded-lg bg-white/70 border border-amber-200">
+            {t.catNew}: <b>{rates.fresh.employee}%</b> {t.rEmp} + <b>{rates.fresh.employer}%</b> {t.rEmpr} = <b>{(rates.fresh.employee + rates.fresh.employer).toFixed(2)}%</b>
+          </div>
+          <div className="px-2 py-1 rounded-lg bg-white/70 border border-amber-200">
+            {t.catExpat}: <b>{rates.expat.employer}%</b> {t.rEmpr} — {t.rEmp}: <b>0%</b>
+          </div>
+        </div>
       </div>
 
       <div ref={sheetRef} className="relative bg-white rounded-2xl border border-border overflow-hidden">
@@ -222,7 +235,12 @@ export default function Gosi() {
                     <td className="px-3 py-2 text-muted-foreground">{i + 1}</td>
                     <td className="px-4 py-2 font-medium sticky right-0 bg-white">{r.employee_name}</td>
                     <td className="px-3 py-2 tabular-nums">{r.national_id || "—"}</td>
-                    <td className="px-3 py-2"><span className={cn("text-xs px-2 py-0.5 rounded-full font-medium", r.is_saudi ? "bg-emerald-50 text-emerald-700" : "bg-blue-50 text-blue-700")}>{r.is_saudi ? t.saudi : t.expat}</span></td>
+                    <td className="px-3 py-2">
+                      <span className={cn("text-xs px-2 py-0.5 rounded-full font-medium", r.is_saudi ? "bg-emerald-50 text-emerald-700" : "bg-blue-50 text-blue-700")}>{r.is_saudi ? t.saudi : t.expat}</span>
+                      <div className="text-[11px] text-muted-foreground mt-0.5 leading-tight">
+                        {r.category === "saudi_new" ? t.catNewShort : r.category === "saudi_legacy" ? t.catLegacyShort : t.catExpatShort}
+                      </div>
+                    </td>
                     <td className="px-3 py-2 tabular-nums">{formatCurrency(r.gross_wage)}</td>
                     <td className="px-3 py-2 text-amber-700">{r.is_saudi ? `${r.employee_rate}%` : "—"}</td>
                     <td className="px-3 py-2 tabular-nums text-amber-700">{formatCurrency(r.gosi_employee)}</td>

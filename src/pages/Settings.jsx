@@ -40,7 +40,10 @@ export default function SettingsPage() {
     yearly: "سنوية", biennial: "كل سنتين", none: "بدون",
     secEos: "إعدادات نهاية الخدمة والتأمينات", eosBasis: "أساس حساب نهاية الخدمة",
     gross: "الراتب الإجمالي (أساسي + بدلات)", baseOnly: "الراتب الأساسي فقط",
-    gosiEmp: "نسبة تأمين الموظف السعودي %", gosiErSa: "نسبة تأمين صاحب العمل (سعودي) %", gosiErEx: "نسبة تأمين صاحب العمل (مقيم) %",
+    gosiEmp: "حصة الموظف السعودي — مسجل قبل 3 يوليو 2024 %", gosiErSa: "حصة صاحب العمل — مسجل قبل 3 يوليو 2024 %",
+    gosiEmpNew: "حصة الموظف السعودي — مسجل من 3 يوليو 2024 %", gosiErSaNew: "حصة صاحب العمل — مسجل من 3 يوليو 2024 %",
+    gosiErEx: "حصة صاحب العمل (مقيم — مخاطر مهنية) %",
+    gosiRuleHint: "النسبة تختلف حسب تاريخ تسجيل الموظف في التأمينات: المسجل قبل 3 يوليو 2024 (9.75% موظف + 11.75% صاحب عمل = 21.50%)، والمسجل من 3 يوليو 2024 فصاعداً (10.75% + 12.75% = 23.50%، وهي النسب السارية من يوليو 2026). وتُحدَّد فئة كل موظف من تاريخ مباشرته المسجَّل في ملفه.",
     secAtt: "إعدادات الحضور والدوام", weekHours: "ساعات العمل الأسبوعية", weekDays: "عدد أيام العمل", grace: "سماح التأخير (دقيقة)",
     workDays: "أيام العمل الأسبوعية", workDaysHint: "الأيام غير المختارة تُعد إجازة أسبوعية — تُستخدم لحساب عطلات الأسبوع في الحضور وكشف الحضور.",
     weeklyOffTitle: "الإجازة الأسبوعية",
@@ -70,7 +73,10 @@ export default function SettingsPage() {
     yearly: "Yearly", biennial: "Biennial", none: "None",
     secEos: "EOS & GOSI settings", eosBasis: "EOS calculation basis",
     gross: "Gross salary (base + allowances)", baseOnly: "Base salary only",
-    gosiEmp: "Saudi employee GOSI rate %", gosiErSa: "Employer GOSI (Saudi) %", gosiErEx: "Employer GOSI (Expat) %",
+    gosiEmp: "Saudi employee share — registered before 3 Jul 2024 %", gosiErSa: "Employer share — registered before 3 Jul 2024 %",
+    gosiEmpNew: "Saudi employee share — registered from 3 Jul 2024 %", gosiErSaNew: "Employer share — registered from 3 Jul 2024 %",
+    gosiErEx: "Employer share (Expat — occupational hazards) %",
+    gosiRuleHint: "The rate depends on the employee's GOSI registration date: before 3 July 2024 (9.75% employee + 11.75% employer = 21.50%), and from 3 July 2024 onward (10.75% + 12.75% = 23.50%, the rates effective from July 2026). Each employee's category is determined from the commencement date recorded in the employee file.",
     secAtt: "Attendance & working time", weekHours: "Weekly working hours", weekDays: "Number of working days", grace: "Late grace (minutes)",
     workDays: "Weekly working days", workDaysHint: "Unselected days are treated as the weekly off — used to mark weekly holidays in attendance and the attendance report.",
     weeklyOffTitle: "Weekly off",
@@ -279,8 +285,11 @@ export default function SettingsPage() {
             </Field>
             <Field label={t.gosiEmp}><Input type="number" step="0.01" value={org.gosi_saudi_employee_rate} onChange={(e) => set("gosi_saudi_employee_rate", Number(e.target.value))} /></Field>
             <Field label={t.gosiErSa}><Input type="number" step="0.01" value={org.gosi_saudi_employer_rate} onChange={(e) => set("gosi_saudi_employer_rate", Number(e.target.value))} /></Field>
+            <Field label={t.gosiEmpNew}><Input type="number" step="0.01" value={org.gosi_new_saudi_employee_rate} onChange={(e) => set("gosi_new_saudi_employee_rate", Number(e.target.value))} /></Field>
+            <Field label={t.gosiErSaNew}><Input type="number" step="0.01" value={org.gosi_new_saudi_employer_rate} onChange={(e) => set("gosi_new_saudi_employer_rate", Number(e.target.value))} /></Field>
             <Field label={t.gosiErEx}><Input type="number" step="0.01" value={org.gosi_expat_employer_rate} onChange={(e) => set("gosi_expat_employer_rate", Number(e.target.value))} /></Field>
           </div>
+          <p className="text-xs text-muted-foreground mt-3 leading-relaxed">{t.gosiRuleHint}</p>
         </Card>
 
         <Card>
