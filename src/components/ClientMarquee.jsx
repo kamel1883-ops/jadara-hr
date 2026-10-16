@@ -1,5 +1,5 @@
 import React from "react";
-import { motion } from "framer-motion";
+import { Image } from "@/components/ui/image";
 import { useI18n } from "@/lib/i18n";
 
 const CLIENTS = [
@@ -27,20 +27,16 @@ export default function ClientMarquee() {
       <div className="relative overflow-hidden rounded-3xl border border-violet-100 bg-violet-50/40 py-8" dir="ltr">
         <div className="pointer-events-none absolute inset-y-0 left-0 w-24 bg-gradient-to-r from-[#F6F3FC] to-transparent z-10" />
         <div className="pointer-events-none absolute inset-y-0 right-0 w-24 bg-gradient-to-l from-[#F6F3FC] to-transparent z-10" />
-        <motion.div
-          className="flex gap-6 w-max"
-          animate={{ x: ["0%", "-50%"] }}
-          transition={{ duration: 26, ease: "linear", repeat: Infinity }}
-        >
+        <div className="marquee-track flex w-max">
           {loop.map((c, i) => (
-            <div key={i} className="shrink-0 w-[300px] h-[150px] rounded-2xl bg-white border border-violet-100 flex flex-col items-center justify-center gap-3 px-4 shadow-lg">
-              <img src={c.logo} alt={isAr ? c.name : c.en} className="h-24 w-32 object-contain rounded-xl" />
+            <div key={i} className="shrink-0 mx-3 w-[300px] h-[150px] rounded-2xl bg-white border border-violet-100 flex flex-col items-center justify-center gap-3 px-4 shadow-lg">
+              <Image src={c.logo} alt={isAr ? c.name : c.en} fittingType="fit" loading="eager" className="h-24 w-32 rounded-xl object-contain" />
               <div className="text-center text-sm font-semibold text-slate-800 leading-tight" dir={isAr ? "rtl" : "ltr"}>
                 {isAr ? c.name : c.en}
               </div>
             </div>
           ))}
-        </motion.div>
+        </div>
       </div>
     </section>
   );
