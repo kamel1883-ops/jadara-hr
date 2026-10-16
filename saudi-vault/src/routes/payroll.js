@@ -17,7 +17,8 @@ const FIELDS = [
  */
 router.post('/', async (req, res, next) => {
   try {
-    const tenantId = req.headers['x-tenant-id'];
+    const tenantId = String(req.headers['x-tenant-id'] || '').trim();
+    if (!tenantId) return res.status(400).json({ error: 'tenant_required' });
     const { emp_ref, period_key } = req.body;
     if (!emp_ref) return res.status(400).json({ error: 'emp_ref_required' });
     const ref = generateRef('pay');
@@ -42,7 +43,8 @@ router.post('/', async (req, res, next) => {
  */
 router.get('/:payrollRef', async (req, res, next) => {
   try {
-    const tenantId = req.headers['x-tenant-id'];
+    const tenantId = String(req.headers['x-tenant-id'] || '').trim();
+    if (!tenantId) return res.status(400).json({ error: 'tenant_required' });
     const { rows } = await query(
       'SELECT * FROM vault_payroll WHERE payroll_ref=$1 AND tenant_id=$2',
       [req.params.payrollRef, tenantId]

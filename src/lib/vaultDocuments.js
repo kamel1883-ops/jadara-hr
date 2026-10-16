@@ -13,6 +13,7 @@
 import { base44 } from "@/api/base44Client";
 import { portalSession } from "@/lib/portalSession";
 import { docRefKind, vaultCodeFromResponse, vaultErrorText } from "@/lib/vaultErrors";
+import { reserveDocumentWindow, finishDocumentWindow } from "@/lib/documentWindow";
 
 function blobToBase64(blob) {
   return new Promise((resolve, reject) => {
@@ -129,9 +130,7 @@ export async function getVaultDocLink(docRef) {
 
 /** يفتح مستنداً مؤرشفاً في الخزنة عبر رابطه المؤقت (للعرض/التنزيل) */
 export async function openVaultDoc(docRef) {
-  const r = await getVaultDocLinkResult(docRef);
-  if (r.url) window.open(r.url, "_blank", "noopener,noreferrer");
-  return { ok: !!r.url, code: r.code };
+  return openStoredDoc(docRef);
 }
 
 /** رابط المستند من بوابة الموظف (لا يحتاج جلسة Base44) */
@@ -167,13 +166,14 @@ export async function vaultHealthCheck() {
 /** نص جاهز للعرض عند فشل الفتح: السبب، وإذا كان عطلاً عاماً يُضاف تشخيص مباشر */
 export async function vaultFailureMessage(code, isAr = true) {
   let text = vaultErrorText(code, isAr);
-  if (code === "not_configured" || code === "unauthorized" || code === "unreachable" || code === "timeout") {
+  if (["not_configured", "unauthorized", "unreachable", "timeout", "schema_mismatch"].includes(code)) {
     const h = await vaultHealthCheck();
     if (h) {
       const bits = [];
       bits.push(isAr ? `النطاق: ${h.host || "—"}` : `host: ${h.host || "—"}`);
       bits.push(isAr ? `الأسرار: ${h.configured ? "مُضبطة" : "ناقصة"}` : `secrets: ${h.configured ? "ok" : "missing"}`);
-      bits.push(isAr ? `فحص /health: ${h.reachable ? "ناجح" : "فاشل"} (${h.vault_status})` : `/health: ${h.reachable ? "ok" : "failed"} (${h.vault_status})`);
+      bits.push(isAr ? `فحص الاتصال: ${h.reachable ? "ناجح" : "فاشل"} (${h.vault_status})` : `Connectivity: ${h.reachable ? "ok" : "failed"} (${h.vault_status})`);
+      if (typeof h.documents_ready === "boolean") bits.push(isAr ? `فحص المستندات: ${h.documents_ready ? "ناجح" : "فاشل"} (${h.document_status})` : `Documents: ${h.documents_ready ? "ok" : "failed"} (${h.document_status})`);
       text += "\n" + (isAr ? "تشخيص: " : "Diagnostics: ") + bits.join(" · ");
     }
   }
@@ -192,6 +192,7 @@ export async function openStoredDoc(value) {
     window.open(v, "_blank", "noopener,noreferrer");
     return { ok: true, code: "" };
   }
+  const tab = reserveDocumentWindow();
   const session = portalSession.load();
   const hasPortal = !!(session?.token && session?.employee_id);
   const attempts = hasPortal
@@ -201,12 +202,13 @@ export async function openStoredDoc(value) {
   for (const attempt of attempts) {
     const r = await attempt();
     if (r.url) {
-      window.open(r.url, "_blank", "noopener,noreferrer");
+      finishDocumentWindow(tab, r.url);
       return { ok: true, code: "" };
     }
     last = r.code || last;
     // عطل تهيئة/اتصال: لا فائدة من المسار الآخر — نوقف فوراً بدل إطالة الانتظار
     if (last !== "not_found") break;
   }
+  finishDocumentWindow(tab, null);
   return { ok: false, code: last };
 }

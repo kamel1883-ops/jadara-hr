@@ -2,6 +2,7 @@ import React from "react";
 import { base44 } from "@/api/base44Client";
 import { renderToPdfBlob } from "@/lib/pdfDocs";
 import { archiveBlobToVault } from "@/lib/vaultDocuments";
+import saveLeaveDocument from "@/lib/saveLeaveDocument";
 import { enrichEmployee } from "@/lib/vaultSensitive";
 import { computeLeaveEntitlement, usedLeaveTotal } from "@/lib/leaveBalance";
 import LeaveClearanceDoc from "@/components/docs/LeaveClearanceDoc";
@@ -35,11 +36,8 @@ export async function generateLeaveSettlement(leave, emp, org, allLeavesForEmp) 
   const blob = await renderToPdfBlob(
     <LeaveClearanceDoc employee={employee} leave={leave} org={org} balanceBefore={bBefore} balanceAfter={bAfter} daysCash={daysCash} dailyWage={dailyWage} />
   );
-  const url = await archiveBlobToVault(blob, { fileName: `leave-settlement-${leave.id}.pdf`, empRef: employee?.emp_ref || null, docType: "leave_settlement" });
-  const patch = { balance_before: bBefore, balance_after: bAfter };
-  if (url) patch.settlement_pdf_url = url;
-  await base44.entities.LeaveRequest.update(leave.id, patch);
-  return url || leave?.settlement_pdf_url || "";
+  // نجاح العملية يعني أن الخزنة أعادت مرجعاً وأن المرجع حُفظ على الطلب، لا مجرد توليد PDF.
+  return saveLeaveDocument(blob, leave.id, { balance_before: bBefore, balance_after: bAfter });
 }
 
 // كشف سلفة — تُولّد PDF محدّث بالمدفوع/المتبقي وتُخزّن على الطلب

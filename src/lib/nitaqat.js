@@ -2,17 +2,66 @@
 // النشاط يُختار من دليل الأنشطة (نشاط رئيسي ثم النشاط الذي يندرج تحته).
 // حد اللون = م × لوغ(إجمالي العمالة) + ث ، ولوغ هو اللوغاريتم الطبيعي.
 // من يقل عن حد الأخضر المنخفض فهو في الأحمر.
-//
-// مصدر البيانات: كتالوج تُحدّثه الخزنة السعودية تلقائياً من منصة قوى
-// (مصدر قرارات التوطين الرسمية)، فلا نعتمد على نسخة ثابتة عندنا.
-// عند تعذّر جلب الكتالوج من الخزنة نعود للنسخة المضمّنة (نسخة احتياطية).
+
 import { base44 } from "@/api/base44Client";
 
 let CATALOG = null;
 let CATALOG_PENDING = null;
-let CATALOG_META = null; // { source, fetched_at } — لعرض «آخر تحديث»
 
-function buildCatalog(data) {
+// البيانات الرسمية المُزامَنة: يكتبها إجراء syncNitaqat في سجل NitaqatCatalog بعد قراءتها
+// من المصدر الرسمي (منصة قوى / وزارة الموارد البشرية)، فينتقل أي تعديل في النسب إلى هنا تلقائياً.
+async function loadFromServer() {
+  const rows = await base44.entities.NitaqatCatalog.list("-fetched_at", 1);
+  const row = rows && rows[0];
+  if (!row) return null;
+  let data = null;
+  try { data = row.payload ? JSON.parse(row.payload) : null; } catch (_) { data = null; }
+  if (!data?.activities?.length) data = null;
+  // عند تعذّر آخر قراءة من المصدر الرسمي: تُعرض النسخة الرسمية المخزّنة، ويبقى سبب الحالة ظاهراً للمالك.
+  return {
+    data,
+    meta: {
+      source_name: data ? (row.source_name || "منصة قوى") : "النسخة الرسمية المخزّنة",
+      source_url: row.source_url || "",
+      fetched_at: row.fetched_at || "",
+      status: row.status || "ok",
+      error: row.error || "",
+      ...(data ? { activities: data.activities.length } : {}),
+    },
+  };
+}
+
+// النسخة المرفقة مع النظام: خطة بديلة تعمل بلا اتصال بالمصدر.
+async function loadBundled() {
+  const res = await fetch(`${import.meta.env.BASE_URL}nitaqat-activities.json`);
+  const data = await res.json();
+  return {
+    data,
+    meta: { source_name: "النسخة المرفقة مع النظام", source_url: "", fetched_at: "", status: "bundled", error: "", activities: data?.activities?.length || 0 },
+  };
+}
+
+// المصدر الثاني الحيّ: الخزنة السعودية — تُزامَن دورياً على السيرفر السعودي من المصدر الوزاري
+// (نفّاذ الخزنة غير متاح لكل البيئات، لذا الفشل هنا طبيعي ولا يمنع بقية المصادر).
+async function loadFromVault() {
+  const res = await base44.functions.invoke("vaultProxy", { action: "nitaqatCatalog" });
+  const body = res?.data?.data || res?.data || {};
+  const data = body?.data;
+  if (!data?.activities?.length) return null;
+  return {
+    data,
+    meta: {
+      source_name: body.source ? "الخزنة السعودية (مصدر رسمي مُزامَن)" : "منصة قوى",
+      source_url: body.source || "",
+      fetched_at: body.fetched_at || "",
+      status: body.last_error ? "failed" : "ok",
+      error: body.last_error || "",
+      activities: data.activities.length,
+    },
+  };
+}
+
+function buildCatalog(data, meta) {
   const byCode = new Map();
   const byGroup = new Map();
   for (const row of data.activities) {
@@ -30,44 +79,47 @@ function buildCatalog(data) {
     if (list) list.push(activity);
     else byGroup.set(row.group, [activity]);
   }
-  return { groups: data.groups, byCode, byGroup };
-}
-
-async function fetchCatalogData() {
-  // 1) من الخزنة السعودية — محدَّث تلقائياً من منصة قوى (المصدر الرسمي للقرارات الوزارية)
-  try {
-    const res = await base44.functions.invoke("vaultProxy", { action: "nitaqatCatalog" });
-    const body = res?.data?.data || res?.data || {};
-    if (body?.data?.activities?.length) {
-      CATALOG_META = { source: body.source || null, fetched_at: body.fetched_at || null };
-      return body.data;
-    }
-  } catch { /* الخزنة غير متاحة — نعود للنسخة المضمّنة */ }
-  // 2) النسخة المضمّنة (احتياطية — قد لا تكون محدَّثة لأحدث قرار وزاري)
-  CATALOG_META = null;
-  const res = await fetch(`${import.meta.env.BASE_URL}nitaqat-activities.json`);
-  return res.json();
+  CATALOG = { groups: data.groups, byCode, byGroup, meta };
+  return CATALOG;
 }
 
 export function loadNitaqatCatalog() {
   if (CATALOG) return Promise.resolve(CATALOG);
   if (!CATALOG_PENDING) {
-    CATALOG_PENDING = fetchCatalogData()
-      .then((data) => {
-        CATALOG = buildCatalog(data);
-        return CATALOG;
-      })
-      .catch((err) => {
-        CATALOG_PENDING = null;
-        throw err;
-      });
+    CATALOG_PENDING = (async () => {
+      let loaded = null;
+      try { loaded = await loadFromServer(); } catch (_) { loaded = null; }
+      if (!loaded?.data) {
+        // المصدر الثاني: الخزنة السعودية (مُزامَنة تلقائياً من المصدر الوزاري على السيرفر)
+        try { loaded = await loadFromVault(); } catch (_) { loaded = null; }
+      }
+      if (!loaded?.data) {
+        const bundled = await loadBundled();
+        // النسب من النسخة الرسمية المخزّنة، وحالة آخر محاولة مزامنة من المصدر تبقى معروضة.
+        loaded = { data: bundled.data, meta: { ...bundled.meta, ...(loaded?.meta || {}) } };
+      }
+      return buildCatalog(loaded.data, loaded.meta);
+    })().catch((err) => {
+      CATALOG_PENDING = null;
+      throw err;
+    });
   }
   return CATALOG_PENDING;
 }
 
-/** معلومات مصدر الكتالوج (للعرض: آخر تحديث + المصدر) */
-export function nitaqatCatalogMeta() {
-  return CATALOG_META;
+// مزامنة فورية مع المصدر الرسمي ثم إعادة تحميل البيانات.
+// ويمكن تمرير نسخة رسمية محدّثة (payload) فتُعتمد فوراً وتُخزَّن كمرجع لكل المنشآت.
+// تُشغَّل المزامنة على المسارين المتاحين (قاعدة Base44 + الخزنة السعودية)؛ فشل أحدهما لا يوقف الآخر.
+export async function refreshNitaqatCatalog(payload = null) {
+  const tasks = [base44.functions.invoke("syncNitaqat", payload ? { payload } : {})];
+  if (!payload) tasks.push(base44.functions.invoke("vaultProxy", { action: "nitaqatSync" }).catch(() => null));
+  const results = await Promise.allSettled(tasks);
+  const first = results.find((r) => r.status === "fulfilled");
+  const res = first ? first.value : null;
+  CATALOG = null;
+  CATALOG_PENDING = null;
+  const catalog = await loadNitaqatCatalog();
+  return { catalog, result: res?.data || null };
 }
 
 export function findActivity(catalog, code) {

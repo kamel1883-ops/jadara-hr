@@ -1260,6 +1260,7 @@ function Partners() {
     { n: "Darz Fine Tailoring Co.", sub: "Fine tailoring", logo: "https://media.base44.com/images/public/6a74edc8f347046365c2e1a4/64e527d78_Screenshot2026-08-09155842.png" },
     { n: "Dr. Tom Veterinary Clinic", sub: "Veterinary clinics", logo: "https://media.base44.com/images/public/6a74edc8f347046365c2e1a4/5ae9d2097_Screenshot2026-08-05143830.png" },
     { n: "Al Moied", sub: "Al Moied Co.", logo: "https://media.base44.com/images/public/6a74edc8f347046365c2e1a4/40f72a492_image.png" },
+    { n: "Dfruit Dried Fruits Co. & Factory", sub: "Dried fruit manufacturing", logo: "https://base44.app/api/apps/6a74edc8f347046365c2e1a4/files/mp/public/6a74edc8f347046365c2e1a4/3e3cb09aa_dfruit-logo.png" },
   ];
   return (
     <Section tint="light" heading={<Heading icon={<Network />} title="Our Partners" sub="The real companies and entities we work with and serve" />}>

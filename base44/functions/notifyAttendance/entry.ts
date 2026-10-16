@@ -107,6 +107,7 @@ export default async function (req: Request): Promise<Response> {
       type: "attendance",
       employee_id: att.employee_id || "",
       user_id: emp?.user_id || "",
+      unified_number: String(emp?.unified_number || ""),
       i18n: JSON.stringify(i18n),
       is_read: false,
     });

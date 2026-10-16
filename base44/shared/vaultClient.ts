@@ -51,20 +51,28 @@ export function vaultConfigured(): { ok: boolean; url: boolean; key: boolean; ho
   return { ok: !!(apiKey && baseUrl), url: !!baseUrl, key: !!apiKey, host };
 }
 
-/** فحص صحة سيرفر الخزنة (/health) — لتشخيص سبب عدم فتح المستندات */
-export async function vaultHealth(): Promise<{ ok: boolean; status: number }> {
+/** فحص الاتصال وقراءة جدول المستندات. نجاح /health وحده لا يعني أن المستندات تعمل. */
+export async function vaultHealth(tenantId) {
+  const result = { ok: false, status: 0, documents_ready: false, document_status: 0, document_error: "" };
   let baseUrl = "";
-  try { baseUrl = getVaultConfig().baseUrl; } catch { return { ok: false, status: 0 }; }
-  const ctrl = new AbortController();
-  const timer = setTimeout(() => ctrl.abort(), 8000);
+  try { baseUrl = getVaultConfig().baseUrl; } catch { return result; }
   try {
-    const res = await fetch(`${baseUrl}/health`, { signal: ctrl.signal });
-    return { ok: res.ok, status: res.status };
-  } catch {
-    return { ok: false, status: 0 };
-  } finally {
-    clearTimeout(timer);
+    const res = await fetch(`${baseUrl}/health`, { signal: AbortSignal.timeout(8000) });
+    result.ok = res.ok;
+    result.status = res.status;
+  } catch { return result; }
+  if (!result.ok || !tenantId) return result;
+  // مرجع غير موجود مقصود: 404 not_found يثبت أن استعلام المستندات نجح دون رفع أو تعديل بيانات.
+  try {
+    await getDocumentLink(tenantId, "doc_healthcheck_nonexistent");
+    result.document_status = 200;
+    result.documents_ready = true;
+  } catch (error) {
+    result.document_status = error?.status || 0;
+    result.documents_ready = error?.vaultCode === "not_found" && error?.vaultDetail === "not_found";
+    result.document_error = result.documents_ready ? "" : (error?.vaultCode || "unknown");
   }
+  return result;
 }
 
 /** ترويسات موحدة لكل مكالمة — مفتاح API + المستأجر */
@@ -93,8 +101,13 @@ async function callVault(path, tenantId, options: { timeoutMs?: number; method?:
     let body;
     try { body = text ? JSON.parse(text) : null; } catch { body = { raw: text }; }
     if (!res.ok) {
-      // لا نُسجّل الحمولة — قد تحوي قيماً حساسة
-      throw vaultFail(res.status, path);
+      // نُرفق رمز الخطأ الذي أعاده سيرفر الخزنة (آمن — لا يحوي بيانات حساسة) للتشخيص،
+      // بدل ابتلاعه وإظهار «تعذّر الوصول» بلا سبب. نُخزّنه على كائن الخطأ لا في الرسالة.
+      const err = vaultFail(res.status, path);
+      const detail = String(body?.code || body?.error || body?.raw || "").slice(0, 80);
+      if (detail === "42703" || detail === "42P01" || detail === "schema_mismatch" || body?.error === "schema_mismatch") err.vaultCode = "schema_mismatch";
+      if (detail && !err.vaultDetail) err.vaultDetail = detail;
+      throw err;
     }
     return body;
   } catch (e: any) {
@@ -418,17 +431,30 @@ export async function storeDocument(tenantId, fileBuffer, fileName, mimeType, em
       method: "POST",
       headers: { "X-Vault-Key": apiKey, "X-Tenant-Id": tenantId },
       body: formData,
+      signal: AbortSignal.timeout(30000),
     });
-  } catch {
-    throw vaultFail("unreachable", "/api/vault/documents");
+  } catch (error) {
+    throw vaultFail(error?.name === "TimeoutError" || error?.name === "AbortError" ? "timeout" : "unreachable", "/api/vault/documents");
   }
-  if (!res.ok) throw vaultFail(res.status, "/api/vault/documents");
-  return res.json();
+  const body = await res.json();
+  if (!res.ok) {
+    const error = vaultFail(res.status, "/api/vault/documents");
+    const detail = String(body?.code || body?.error || "").slice(0, 80);
+    if (["42703", "42P01", "schema_mismatch"].includes(detail) || body?.error === "schema_mismatch") error.vaultCode = "schema_mismatch";
+    error.vaultDetail = detail;
+    throw error;
+  }
+  return body;
 }
 
-/** يولّد رابط تنزيل مؤقت (JWT) — يُعرض للمستخدم النهائي */
+/** يولّد رابط تنزيل مؤقت (JWT) — يُعرض للمستخدم النهائي.
+ *  يُرسل جسم JSON فارغ لأن بعض خوادم الوسيط/body-parser تُسقط POST بلا جسم
+ *  عندما يكون Content-Type: application/json (كان سبب خطأ 500 على مسار المستندات). */
 export async function getDocumentLink(tenantId, docRef) {
-  return callVault(`/api/vault/documents/${docRef}/link`, tenantId, { method: "POST" });
+  return callVault(`/api/vault/documents/${docRef}/link`, tenantId, {
+    method: "POST",
+    body: JSON.stringify({}),
+  });
 }
 
 /** يبحث عن المستند تحت مفاتيح منشأة الموظف، لا تحت حساب الفاتح فقط */

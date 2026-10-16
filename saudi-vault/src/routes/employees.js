@@ -57,11 +57,14 @@ router.post('/bulk', async (req, res, next) => {
           vals.push(encrypt(String(row[f])));
         }
       }
-      await query(
+      const sets = ['updated_at=now()', ...cols.slice(2).map(c => `${c}=EXCLUDED.${c}`)];
+      const saved = await query(
         `INSERT INTO vault_employees (${cols.join(',')}) VALUES (${cols.map((_, i) => '$' + (i + 1)).join(',')})
-         ON CONFLICT (emp_ref) DO UPDATE SET updated_at=now(), ${cols.slice(2).map(c => `${c}=EXCLUDED.${c}`).join(',')}`,
+         ON CONFLICT (emp_ref) DO UPDATE SET ${sets.join(',')}
+         WHERE vault_employees.tenant_id=EXCLUDED.tenant_id RETURNING emp_ref`,
         vals
       );
+      if (!saved.rowCount) return res.status(404).json({ error: 'not_found' });
       refs.push(empRef);
     }
     res.status(201).json({ refs });
@@ -117,9 +120,9 @@ router.post('/find', async (req, res, next) => {
     const tenantIds = Array.isArray(req.body?.tenant_ids)
       ? [...new Set(req.body.tenant_ids.map((r) => String(r || '').trim()).filter(Boolean))].slice(0, 64)
       : [];
-    const { rows } = tenantIds.length
-      ? await query('SELECT emp_ref, national_id_enc, birth_date_enc FROM vault_employees WHERE tenant_id = ANY($1::text[])', [tenantIds])
-      : await query('SELECT emp_ref, national_id_enc, birth_date_enc FROM vault_employees');
+    // لا نبحث أبداً دون تحديد المنشآت — يمنع تسرّب emp_ref لمنشآت أخرى
+    if (!tenantIds.length) return res.status(400).json({ error: 'tenant_ids_required' });
+    const { rows } = await query('SELECT emp_ref, national_id_enc, birth_date_enc FROM vault_employees WHERE tenant_id = ANY($1::text[])', [tenantIds]);
     const matches = [];
     for (const r of rows) {
       const id = String(decrypt(r.national_id_enc) || '').replace(/[٠-٩]/g, (d) => String('٠١٢٣٤٥٦٧٨٩'.indexOf(d))).replace(/\D/g, '');
@@ -140,7 +143,8 @@ router.post('/find', async (req, res, next) => {
  */
 router.get('/:empRef', async (req, res, next) => {
   try {
-    const tenantId = req.headers['x-tenant-id'];
+    const tenantId = String(req.headers['x-tenant-id'] || '').trim();
+    if (!tenantId) return res.status(400).json({ error: 'tenant_required' });
     const { rows } = await query(
       'SELECT * FROM vault_employees WHERE emp_ref=$1 AND tenant_id=$2',
       [req.params.empRef, tenantId]
@@ -161,7 +165,8 @@ router.get('/:empRef', async (req, res, next) => {
  */
 router.put('/:empRef', async (req, res, next) => {
   try {
-    const tenantId = req.headers['x-tenant-id'];
+    const tenantId = String(req.headers['x-tenant-id'] || '').trim();
+    if (!tenantId) return res.status(400).json({ error: 'tenant_required' });
     const sets = [];
     const vals = [];
     let i = 1;
@@ -188,7 +193,8 @@ router.put('/:empRef', async (req, res, next) => {
  */
 router.delete('/:empRef', async (req, res, next) => {
   try {
-    const tenantId = req.headers['x-tenant-id'];
+    const tenantId = String(req.headers['x-tenant-id'] || '').trim();
+    if (!tenantId) return res.status(400).json({ error: 'tenant_required' });
     const { rowCount } = await query(
       'DELETE FROM vault_employees WHERE emp_ref=$1 AND tenant_id=$2',
       [req.params.empRef, tenantId]

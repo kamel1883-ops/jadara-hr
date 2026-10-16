@@ -46,11 +46,13 @@ export function createCrudRouter({ table, refCol, refPrefix }) {
         const empRef = row.emp_ref || null;
         const data = row.data || row;
         const encrypted = encrypt(JSON.stringify(data));
-        await query(
+        const saved = await query(
           `INSERT INTO ${table} (${refCol}, tenant_id, emp_ref, data_enc) VALUES ($1,$2,$3,$4)
-           ON CONFLICT (${refCol}) DO UPDATE SET updated_at=now(), emp_ref=EXCLUDED.emp_ref, data_enc=EXCLUDED.data_enc`,
+           ON CONFLICT (${refCol}) DO UPDATE SET updated_at=now(), emp_ref=EXCLUDED.emp_ref, data_enc=EXCLUDED.data_enc
+           WHERE ${table}.tenant_id=EXCLUDED.tenant_id RETURNING ${refCol}`,
           [ref, tenantId, empRef, encrypted]
         );
+        if (!saved.rowCount) return res.status(404).json({ error: 'not_found' });
         refs.push(ref);
       }
       res.status(201).json({ refs });
@@ -59,7 +61,8 @@ export function createCrudRouter({ table, refCol, refPrefix }) {
 
   router.get('/:refId', async (req, res, next) => {
     try {
-      const tenantId = req.headers['x-tenant-id'];
+      const tenantId = String(req.headers['x-tenant-id'] || '').trim();
+      if (!tenantId) return res.status(400).json({ error: 'tenant_required' });
       const { rows } = await query(
         `SELECT * FROM ${table} WHERE ${refCol}=$1 AND tenant_id=$2`,
         [req.params.refId, tenantId]
@@ -73,7 +76,8 @@ export function createCrudRouter({ table, refCol, refPrefix }) {
 
   router.put('/:refId', async (req, res, next) => {
     try {
-      const tenantId = req.headers['x-tenant-id'];
+      const tenantId = String(req.headers['x-tenant-id'] || '').trim();
+      if (!tenantId) return res.status(400).json({ error: 'tenant_required' });
       const incoming = req.body.data || req.body;
       const { rows } = await query(
         `SELECT data_enc FROM ${table} WHERE ${refCol}=$1 AND tenant_id=$2`,
@@ -103,7 +107,8 @@ export function createCrudRouter({ table, refCol, refPrefix }) {
 
   router.delete('/:refId', async (req, res, next) => {
     try {
-      const tenantId = req.headers['x-tenant-id'];
+      const tenantId = String(req.headers['x-tenant-id'] || '').trim();
+      if (!tenantId) return res.status(400).json({ error: 'tenant_required' });
       const { rowCount } = await query(
         `DELETE FROM ${table} WHERE ${refCol}=$1 AND tenant_id=$2`,
         [req.params.refId, tenantId]

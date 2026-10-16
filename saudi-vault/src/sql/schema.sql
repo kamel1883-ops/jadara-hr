@@ -58,6 +58,18 @@ CREATE TABLE IF NOT EXISTS vault_documents (
   sha256      TEXT,
   created_at  TIMESTAMPTZ DEFAULT now()
 );
+-- تُضاف الأعمدة أولاً: إنشاء الفهارس قبلها يُسقط الترحيل على جدول قديم بخطأ 42703.
+-- ترحيل آمن: يضمن أن جدول vault_documents يمتلك كل الأعمدة المتوقعة حتى لو أُنشئ
+-- بنسخة schema قديمة (كان سبب خطأ PostgreSQL 42703 على مسار رابط المستند).
+ALTER TABLE vault_documents ADD COLUMN IF NOT EXISTS doc_ref TEXT;
+ALTER TABLE vault_documents ADD COLUMN IF NOT EXISTS tenant_id TEXT;
+ALTER TABLE vault_documents ADD COLUMN IF NOT EXISTS emp_ref TEXT;
+ALTER TABLE vault_documents ADD COLUMN IF NOT EXISTS doc_type TEXT;
+ALTER TABLE vault_documents ADD COLUMN IF NOT EXISTS file_name TEXT;
+ALTER TABLE vault_documents ADD COLUMN IF NOT EXISTS mime_type TEXT;
+ALTER TABLE vault_documents ADD COLUMN IF NOT EXISTS file_path TEXT;
+ALTER TABLE vault_documents ADD COLUMN IF NOT EXISTS sha256 TEXT;
+ALTER TABLE vault_documents ADD COLUMN IF NOT EXISTS created_at TIMESTAMPTZ DEFAULT now();
 CREATE INDEX IF NOT EXISTS idx_vault_documents_tenant ON vault_documents(tenant_id);
 CREATE INDEX IF NOT EXISTS idx_vault_documents_emp ON vault_documents(emp_ref);
 CREATE INDEX IF NOT EXISTS idx_vault_documents_type ON vault_documents(tenant_id, doc_type);
@@ -251,3 +263,40 @@ CREATE TABLE IF NOT EXISTS vault_nitaqat_catalog (
   last_error    TEXT,
   updated_at    TIMESTAMPTZ DEFAULT now()
 );
+
+-- ============================================================
+-- ترحيل آمن لكل الجداول الموسّعة — يضمن وجود كل الأعمدة المتوقعة
+-- حتى لو أُنشئ الجدول بنسخة schema قديمة (CREATE TABLE IF NOT EXISTS لا يضيف أعمدة لجدول موجود).
+-- كان سبب خطأ PostgreSQL 42703 على UPDATE في crudFactory (عمود updated_at مفقود).
+-- ============================================================
+ALTER TABLE vault_payroll ADD COLUMN IF NOT EXISTS payroll_ref TEXT;
+ALTER TABLE vault_payroll ADD COLUMN IF NOT EXISTS emp_ref TEXT;
+ALTER TABLE vault_payroll ADD COLUMN IF NOT EXISTS tenant_id TEXT;
+ALTER TABLE vault_payroll ADD COLUMN IF NOT EXISTS period_key TEXT;
+ALTER TABLE vault_payroll ADD COLUMN IF NOT EXISTS base_salary_enc TEXT;
+ALTER TABLE vault_payroll ADD COLUMN IF NOT EXISTS housing_enc TEXT;
+ALTER TABLE vault_payroll ADD COLUMN IF NOT EXISTS transport_enc TEXT;
+ALTER TABLE vault_payroll ADD COLUMN IF NOT EXISTS other_enc TEXT;
+ALTER TABLE vault_payroll ADD COLUMN IF NOT EXISTS gross_enc TEXT;
+ALTER TABLE vault_payroll ADD COLUMN IF NOT EXISTS net_enc TEXT;
+ALTER TABLE vault_payroll ADD COLUMN IF NOT EXISTS gosi_employee_enc TEXT;
+ALTER TABLE vault_payroll ADD COLUMN IF NOT EXISTS gosi_employer_enc TEXT;
+ALTER TABLE vault_payroll ADD COLUMN IF NOT EXISTS created_at TIMESTAMPTZ DEFAULT now();
+
+ALTER TABLE vault_complaints    ADD COLUMN IF NOT EXISTS complaint_ref TEXT, ADD COLUMN IF NOT EXISTS tenant_id TEXT, ADD COLUMN IF NOT EXISTS emp_ref TEXT, ADD COLUMN IF NOT EXISTS data_enc TEXT, ADD COLUMN IF NOT EXISTS created_at TIMESTAMPTZ DEFAULT now(), ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ DEFAULT now();
+ALTER TABLE vault_warnings      ADD COLUMN IF NOT EXISTS warning_ref TEXT,   ADD COLUMN IF NOT EXISTS tenant_id TEXT, ADD COLUMN IF NOT EXISTS emp_ref TEXT, ADD COLUMN IF NOT EXISTS data_enc TEXT, ADD COLUMN IF NOT EXISTS created_at TIMESTAMPTZ DEFAULT now(), ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ DEFAULT now();
+ALTER TABLE vault_licenses      ADD COLUMN IF NOT EXISTS license_ref TEXT,   ADD COLUMN IF NOT EXISTS tenant_id TEXT, ADD COLUMN IF NOT EXISTS emp_ref TEXT, ADD COLUMN IF NOT EXISTS data_enc TEXT, ADD COLUMN IF NOT EXISTS created_at TIMESTAMPTZ DEFAULT now(), ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ DEFAULT now();
+ALTER TABLE vault_platform_subs ADD COLUMN IF NOT EXISTS sub_ref TEXT,        ADD COLUMN IF NOT EXISTS tenant_id TEXT, ADD COLUMN IF NOT EXISTS emp_ref TEXT, ADD COLUMN IF NOT EXISTS data_enc TEXT, ADD COLUMN IF NOT EXISTS created_at TIMESTAMPTZ DEFAULT now(), ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ DEFAULT now();
+ALTER TABLE vault_org_structure ADD COLUMN IF NOT EXISTS org_ref TEXT,       ADD COLUMN IF NOT EXISTS tenant_id TEXT, ADD COLUMN IF NOT EXISTS emp_ref TEXT, ADD COLUMN IF NOT EXISTS data_enc TEXT, ADD COLUMN IF NOT EXISTS created_at TIMESTAMPTZ DEFAULT now(), ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ DEFAULT now();
+ALTER TABLE vault_succession    ADD COLUMN IF NOT EXISTS succession_ref TEXT, ADD COLUMN IF NOT EXISTS tenant_id TEXT, ADD COLUMN IF NOT EXISTS emp_ref TEXT, ADD COLUMN IF NOT EXISTS data_enc TEXT, ADD COLUMN IF NOT EXISTS created_at TIMESTAMPTZ DEFAULT now(), ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ DEFAULT now();
+ALTER TABLE vault_training       ADD COLUMN IF NOT EXISTS training_ref TEXT,  ADD COLUMN IF NOT EXISTS tenant_id TEXT, ADD COLUMN IF NOT EXISTS emp_ref TEXT, ADD COLUMN IF NOT EXISTS data_enc TEXT, ADD COLUMN IF NOT EXISTS created_at TIMESTAMPTZ DEFAULT now(), ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ DEFAULT now();
+ALTER TABLE vault_performance   ADD COLUMN IF NOT EXISTS perf_ref TEXT,      ADD COLUMN IF NOT EXISTS tenant_id TEXT, ADD COLUMN IF NOT EXISTS emp_ref TEXT, ADD COLUMN IF NOT EXISTS data_enc TEXT, ADD COLUMN IF NOT EXISTS created_at TIMESTAMPTZ DEFAULT now(), ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ DEFAULT now();
+ALTER TABLE vault_eos           ADD COLUMN IF NOT EXISTS eos_ref TEXT,        ADD COLUMN IF NOT EXISTS tenant_id TEXT, ADD COLUMN IF NOT EXISTS emp_ref TEXT, ADD COLUMN IF NOT EXISTS data_enc TEXT, ADD COLUMN IF NOT EXISTS created_at TIMESTAMPTZ DEFAULT now(), ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ DEFAULT now();
+ALTER TABLE vault_equipment     ADD COLUMN IF NOT EXISTS equip_ref TEXT,     ADD COLUMN IF NOT EXISTS tenant_id TEXT, ADD COLUMN IF NOT EXISTS emp_ref TEXT, ADD COLUMN IF NOT EXISTS data_enc TEXT, ADD COLUMN IF NOT EXISTS created_at TIMESTAMPTZ DEFAULT now(), ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ DEFAULT now();
+ALTER TABLE vault_expenses      ADD COLUMN IF NOT EXISTS expense_ref TEXT,   ADD COLUMN IF NOT EXISTS tenant_id TEXT, ADD COLUMN IF NOT EXISTS emp_ref TEXT, ADD COLUMN IF NOT EXISTS data_enc TEXT, ADD COLUMN IF NOT EXISTS created_at TIMESTAMPTZ DEFAULT now(), ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ DEFAULT now();
+ALTER TABLE vault_business_trips ADD COLUMN IF NOT EXISTS trip_ref TEXT,     ADD COLUMN IF NOT EXISTS tenant_id TEXT, ADD COLUMN IF NOT EXISTS emp_ref TEXT, ADD COLUMN IF NOT EXISTS data_enc TEXT, ADD COLUMN IF NOT EXISTS created_at TIMESTAMPTZ DEFAULT now(), ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ DEFAULT now();
+ALTER TABLE vault_leaves        ADD COLUMN IF NOT EXISTS leave_ref TEXT,      ADD COLUMN IF NOT EXISTS tenant_id TEXT, ADD COLUMN IF NOT EXISTS emp_ref TEXT, ADD COLUMN IF NOT EXISTS data_enc TEXT, ADD COLUMN IF NOT EXISTS created_at TIMESTAMPTZ DEFAULT now(), ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ DEFAULT now();
+ALTER TABLE vault_approvals    ADD COLUMN IF NOT EXISTS approval_ref TEXT,   ADD COLUMN IF NOT EXISTS tenant_id TEXT, ADD COLUMN IF NOT EXISTS emp_ref TEXT, ADD COLUMN IF NOT EXISTS data_enc TEXT, ADD COLUMN IF NOT EXISTS created_at TIMESTAMPTZ DEFAULT now(), ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ DEFAULT now();
+ALTER TABLE vault_appointees    ADD COLUMN IF NOT EXISTS appointee_ref TEXT, ADD COLUMN IF NOT EXISTS tenant_id TEXT, ADD COLUMN IF NOT EXISTS emp_ref TEXT, ADD COLUMN IF NOT EXISTS data_enc TEXT, ADD COLUMN IF NOT EXISTS created_at TIMESTAMPTZ DEFAULT now(), ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ DEFAULT now();
+ALTER TABLE vault_reports       ADD COLUMN IF NOT EXISTS report_ref TEXT,    ADD COLUMN IF NOT EXISTS tenant_id TEXT, ADD COLUMN IF NOT EXISTS emp_ref TEXT, ADD COLUMN IF NOT EXISTS data_enc TEXT, ADD COLUMN IF NOT EXISTS created_at TIMESTAMPTZ DEFAULT now(), ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ DEFAULT now();
+ALTER TABLE vault_gosi          ADD COLUMN IF NOT EXISTS gosi_ref TEXT,      ADD COLUMN IF NOT EXISTS tenant_id TEXT, ADD COLUMN IF NOT EXISTS emp_ref TEXT, ADD COLUMN IF NOT EXISTS period_key TEXT, ADD COLUMN IF NOT EXISTS data_enc TEXT, ADD COLUMN IF NOT EXISTS created_at TIMESTAMPTZ DEFAULT now(), ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ DEFAULT now();

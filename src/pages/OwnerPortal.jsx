@@ -10,7 +10,7 @@ import SupportTicketsManager from "@/components/portal/SupportTicketsManager";
 import StrategicPlan from "@/pages/StrategicPlan";
 import Logo from "@/components/Logo";
 import LanguageToggle from "@/components/LanguageToggle";
-import NotificationsBell from "@/components/NotificationsBell";
+import OwnerNotificationsBell from "@/components/portal/OwnerNotificationsBell";
 import { useI18n } from "@/lib/i18n";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -208,7 +208,8 @@ export default function OwnerPortal() {
           <span className="hidden sm:inline text-sm text-[#6B5E8C] border-r border-[#E2D6F4] pr-3">{t.brandSub}</span>
         </div>
         <div className="flex items-center gap-2">
-          <NotificationsBell tone="dark" align={isAr ? "left" : "right"} />
+          {/* إشعارات المالك = إشعارات العمل فقط (تجارب/اشتراكات/مدفوعات) — لا موظفين ولا منشآت */}
+          <OwnerNotificationsBell isAr={isAr} align={isAr ? "left" : "right"} />
           <LanguageToggle />
           <Link to="/" className="text-sm text-[#6B5E8C] hover:text-[#2A2340] px-3 py-2 rounded-lg hidden sm:block hover:bg-white/60 transition">{t.back}</Link>
           {session && (

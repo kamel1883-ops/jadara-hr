@@ -1,17 +1,21 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import { base44 } from "@/api/base44Client";
 import { getCurrentOrgContext, invalidateCurrentOrg } from "@/lib/currentOrg";
 import PageHeader from "@/components/PageHeader";
-import { Users, UserCheck, Globe2, TrendingUp, AlertTriangle, ShieldCheck, Info } from "lucide-react";
+import { Users, UserCheck, Globe2, TrendingUp, AlertTriangle, ShieldCheck, Info, RefreshCw, CloudDownload, Loader2, Upload, ExternalLink } from "lucide-react";
+import { Button } from "@/components/ui/button";
 import {
   ResponsiveContainer, RadialBarChart, RadialBar, PolarAngleAxis,
   BarChart, Bar, XAxis, YAxis, ReferenceLine, Tooltip, CartesianGrid, Cell,
 } from "recharts";
-import { BAND_META, computeNitaqat, findActivity, loadNitaqatCatalog, saudisNeededForSafe } from "@/lib/nitaqat";
+import { BAND_META, computeNitaqat, findActivity, loadNitaqatCatalog, refreshNitaqatCatalog, saudisNeededForSafe } from "@/lib/nitaqat";
 import NitaqatIsicSelect from "@/components/NitaqatIsicSelect";
 import { useI18n } from "@/lib/i18n";
 import { useToast } from "@/components/ui/use-toast";
 import { cn } from "@/lib/utils";
+
+// حاسبة النطاقات الرسمية في منصة قوى — المصدر المعتمد لنسب التوطين.
+const QIWA_CALC_URL = "https://qiwa.sa/ar/tools-and-calculators/nitaqat-forecast-calculator";
 
 export default function Nitaqat() {
   const { lang } = useI18n();
@@ -33,6 +37,19 @@ export default function Nitaqat() {
     noBenefits: "لا توجد مزايا في هذا النطاق", noRisks: "لا توجد إشكاليات في هذا النطاق",
     saved: "تم تحديث النشاط", saving: "جارٍ الحفظ...",
     tierSafe: "آمن", tierWarn: "تحذير", tierDanger: "خطر",
+    syncTitle: "بيانات النسب من المصدر الرسمي (منصة قوى)",
+    syncNow: "مزامنة الآن", syncing: "جارٍ المزامنة…",
+    lastSync: "آخر مزامنة", sourceLabel: "المصدر", activitiesLabel: "نشاط تفصيلي",
+    statusOk: "مُزامَن مع المصدر الرسمي — أي تعديل وزاري في النسب ينتقل إلى النظام تلقائياً.",
+    statusUnchanged: "لا تغيير في نسب النشاط منذ آخر مزامنة مع المصدر الرسمي.",
+    statusFailed: "تعذّر الاتصال بالمصدر الرسمي الآن — المعروض هو آخر نسخة رسمية مخزّنة، ولم تُفقَد أي بيانات.",
+    statusBundled: "النسخة المُرفقة مع النظام — اضغط «مزامنة الآن» للقراءة من المصدر الرسمي.",
+    statusBlocked: "حاسبة قوى الرسمية تحجب القراءة الآلية من الخوادم (حماية الموقع)، لذلك المعروض هو آخر نسخة رسمية مخزّنة ولم تُفقَد أي بيانات. وعند صدور نسب محدّثة: افتح الحاسبة الرسمية، ونزّل النسب، ثم اعتمدها بزر «اعتماد نسخة رسمية محدّثة» — فتُطبَّق فوراً على كل المنشآت.",
+    openSource: "فتح حاسبة نطاقات قوى الرسمية",
+    syncDone: "تمت المزامنة مع المصدر الرسمي", syncFail: "تعذّر الاتصال بالمصدر الرسمي",
+    importLabel: "اعتماد نسخة رسمية محدّثة", importing: "جارٍ قراءة الملف…",
+    importHint: "إن حدّثت الوزارة النسب ونزّلت الملف الرسمي من منصة قوى، ارفعه هنا فيُعتمد فوراً لدى كل المنشآت.",
+    importDone: "تم اعتماد النسخة الرسمية المحدّثة", importFail: "ملف غير صالح — تأكد أنه ملف النسب الرسمي",
   } : {
     title: "Nitaqat (Saudization)", subtitle: "The band comes from the detailed activity plus the Saudi and expat counts",
     isicHint: "Choose the main activity, then the detailed activity under it.",
@@ -49,6 +66,19 @@ export default function Nitaqat() {
     noBenefits: "No benefits in this band", noRisks: "No issues in this band",
     saved: "Activity updated", saving: "Saving...",
     tierSafe: "Safe", tierWarn: "Warning", tierDanger: "Danger",
+    syncTitle: "Ratios from the official source (Qiwa)",
+    syncNow: "Sync now", syncing: "Syncing…",
+    lastSync: "Last sync", sourceLabel: "Source", activitiesLabel: "detailed activities",
+    statusOk: "Synced with the official source — any ministerial change to the ratios flows into the system automatically.",
+    statusUnchanged: "No change in the activity ratios since the last sync with the official source.",
+    statusFailed: "The official source could not be reached now — what you see is the last official data stored, and nothing was lost.",
+    statusBundled: "The copy bundled with the system — press “Sync now” to read from the official source.",
+    statusBlocked: "Qiwa's official calculator blocks automated server reads (the site's protection), so what you see is the last stored official copy and no data was lost. When the ratios change: open the official calculator, download them, then approve them with “Approve an updated official file” — they apply instantly to every company.",
+    openSource: "Open the official Qiwa Nitaqat calculator",
+    syncDone: "Synced with the official source", syncFail: "Could not reach the official source",
+    importLabel: "Approve an updated official file", importing: "Reading the file…",
+    importHint: "If the Ministry updates the ratios and you download the official file from Qiwa, upload it here and it applies instantly to every company.",
+    importDone: "The updated official file was applied", importFail: "Invalid file — make sure it is the official Nitaqat file",
   };
 
   const [org, setOrg] = useState(null);
@@ -57,6 +87,10 @@ export default function Nitaqat() {
   const [loading, setLoading] = useState(true);
   const [savingActivity, setSavingActivity] = useState(false);
   const [tenantUnified, setTenantUnified] = useState("");
+  const [catalogMeta, setCatalogMeta] = useState(null);
+  const [syncing, setSyncing] = useState(false);
+  const [importing, setImporting] = useState(false);
+  const importRef = useRef(null);
 
   useEffect(() => {
     (async () => {
@@ -76,7 +110,7 @@ export default function Nitaqat() {
       } catch (_) {}
       setLoading(false);
     })();
-    loadNitaqatCatalog().then(setCatalog).catch(() => {});
+    loadNitaqatCatalog().then((c) => { setCatalog(c); setCatalogMeta(c?.meta || null); }).catch(() => {});
   }, []);
 
   if (loading) return <div className="p-10 text-center text-muted-foreground">{t.subtitle}</div>;
@@ -105,6 +139,40 @@ export default function Nitaqat() {
     isic_activity_group: group,
   });
 
+  // مزامنة فورية مع المصدر الرسمي (منصة قوى) — ينتقل بعدها أي تعديل في النسب إلى النظام.
+  const syncNow = async () => {
+    setSyncing(true);
+    try {
+      const { catalog: fresh, result } = await refreshNitaqatCatalog();
+      setCatalog(fresh);
+      setCatalogMeta(fresh?.meta || null);
+      if (result && result.ok === false) toast({ title: t.syncFail, variant: "destructive" });
+      else toast({ title: t.syncDone });
+    } catch (_) {
+      toast({ title: t.syncFail, variant: "destructive" });
+    } finally {
+      setSyncing(false);
+    }
+  };
+
+  // اعتماد ملف النسب الرسمي المحدّث (من منصة قوى): يُخزَّن ويُعمَّم على كل المنشآت فوراً.
+  const onImportFile = async (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setImporting(true);
+    try {
+      const text = await file.text();
+      const { catalog: fresh, result } = await refreshNitaqatCatalog({ payload: text, source_name: file.name });
+      setCatalog(fresh);
+      setCatalogMeta(fresh?.meta || null);
+      toast({ title: result?.ok ? t.importDone : t.importFail, variant: result?.ok ? undefined : "destructive" });
+    } catch (_) {
+      toast({ title: t.importFail, variant: "destructive" });
+    } finally {
+      setImporting(false);
+      if (importRef.current) importRef.current.value = "";
+    }
+  };
   const th = result.thresholds;
   const bandBars = th ? [
     { name: isAr ? "أحمر" : "Red", from: 0, to: th.green_low, color: BAND_META.red.color },
@@ -132,6 +200,60 @@ export default function Nitaqat() {
           <div className="text-xs text-violet-800 leading-relaxed">{t.formulaNote}</div>
         </div>
         <p className="text-[11px] text-amber-700 mt-2 leading-relaxed">{t.provNote}</p>
+      </div>
+
+      {/* المصدر الرسمي للنسب + المزامنة */}
+      <div className="bg-white rounded-2xl border border-border p-5 mb-6">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div className="flex items-start gap-3">
+            <div className="w-10 h-10 rounded-xl bg-violet-50 border border-violet-100 flex items-center justify-center shrink-0">
+              <CloudDownload size={19} className="text-violet-600" />
+            </div>
+            <div>
+              <div className="font-semibold text-sm">{t.syncTitle}</div>
+              <div className="text-xs text-muted-foreground mt-1">
+                {catalogMeta?.source_name || "—"}
+                {catalogMeta?.fetched_at ? ` · ${t.lastSync}: ${String(catalogMeta.fetched_at).slice(0, 16).replace("T", " ")}` : ""}
+                {catalogMeta?.activities ? ` · ${catalogMeta.activities} ${t.activitiesLabel}` : ""}
+              </div>
+              <a href={QIWA_CALC_URL} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 text-[11px] text-violet-700 hover:underline mt-1">
+                <ExternalLink size={12} /> {t.openSource}
+              </a>
+            </div>
+          </div>
+          <div className="flex items-center gap-2">
+            <Button size="sm" variant="outline" onClick={syncNow} disabled={syncing} className="gap-2">
+              {syncing ? <Loader2 size={14} className="animate-spin" /> : <RefreshCw size={14} />}
+              {syncing ? t.syncing : t.syncNow}
+            </Button>
+            <Button size="sm" variant="ghost" onClick={() => importRef.current?.click()} disabled={importing} className="gap-2">
+              {importing ? <Loader2 size={14} className="animate-spin" /> : <Upload size={14} />}
+              {importing ? t.importing : t.importLabel}
+            </Button>
+            <input ref={importRef} type="file" accept=".json,application/json" className="hidden" onChange={onImportFile} />
+          </div>
+        </div>
+        <p className="text-[11px] text-muted-foreground mt-2 leading-relaxed">{t.importHint}</p>
+        <div
+          className={cn(
+            "mt-3 text-xs rounded-xl border p-2.5 leading-relaxed",
+            catalogMeta?.status === "failed"
+              ? "bg-rose-50 border-rose-200 text-rose-800"
+              : catalogMeta?.status === "bundled"
+                ? "bg-amber-50 border-amber-200 text-amber-800"
+                : "bg-emerald-50 border-emerald-200 text-emerald-800"
+          )}
+        >
+          {catalogMeta?.status === "failed" && /source_blocked/.test(String(catalogMeta?.error || ""))
+            ? t.statusBlocked
+            : catalogMeta?.status === "failed"
+            ? t.statusFailed
+            : catalogMeta?.status === "bundled"
+              ? t.statusBundled
+              : catalogMeta?.status === "unchanged"
+                ? t.statusUnchanged
+                : t.statusOk}
+        </div>
       </div>
 
       {!result.band && (

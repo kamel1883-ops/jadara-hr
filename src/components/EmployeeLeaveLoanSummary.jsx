@@ -8,6 +8,7 @@ import { Download, FileText, Loader2, RefreshCw, CalendarDays, Wallet } from "lu
 import { cn } from "@/lib/utils";
 import { StoredDocButton } from "@/components/VaultDocLink";
 import { useI18n } from "@/lib/i18n";
+import { leaveDocumentErrorText } from "@/lib/saveLeaveDocument";
 
 export default function EmployeeLeaveLoanSummary({ employee }) {
   const { lang } = useI18n();
@@ -51,7 +52,12 @@ export default function EmployeeLeaveLoanSummary({ employee }) {
     setOrg(o);
   };
 
-  useEffect(() => { load(); }, [employee?.id]);
+  // تصفير فوري عند تبديل الموظف — يمنع تسرب بيانات موظف سابق إلى ملف الموظف الجديد
+  useEffect(() => {
+    setLeaves([]);
+    setLoans([]);
+    if (employee?.id) load();
+  }, [employee?.id]);
 
   // رصيد الإجازات يعتمد اختيار المنشأة لكل موظف (21 أو 30) من ملف الموظف،
   // ويُلزم بـ30 بعد إكمال 5 سنوات خدمة. الخزنة أعلاه تتبع هذا الاختيار دائماً.
@@ -70,6 +76,7 @@ export default function EmployeeLeaveLoanSummary({ employee }) {
   const regenLeave = async (l) => {
     setBusy("l" + l.id);
     try { await generateLeaveSettlement(l, employee, org, leaves); await load(); }
+    catch (error) { alert(leaveDocumentErrorText(error, isAr)); }
     finally { setBusy(null); }
   };
   const genLoan = async (l) => {

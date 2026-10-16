@@ -22,6 +22,7 @@ import VaultDocLink from "@/components/VaultDocLink";
 import { uploadFileToVault } from "@/lib/vaultDocuments";
 import { enrichRecordsWithVault, VAULT_MODULES } from "@/lib/vaultGeneric";
 import { enrichEmployeesBatch, applySensitiveMap } from "@/lib/vaultSensitive";
+import { leaveDocumentErrorText } from "@/lib/saveLeaveDocument";
 
 export default function Approvals() {
   const { lang } = useI18n();
@@ -350,10 +351,8 @@ export default function Approvals() {
       };
       setLeaves((prev) => prev.map((x) => (x.id === r.id ? { ...x, ...patchDone } : x)));
       await base44.entities.LeaveRequest.update(r.id, patchDone);
-      if (r.leave_type === "permission" && emp) {
-        // الاستئذان لا يغيّر حالة الموظف الوظيفية ولا يخصم رصيد الإجازات
-      }
-    } catch (e) {}
+      await generateLeaveSettlement({ ...r, ...patchDone }, emp, org, leaves);
+    } catch (error) { alert(leaveDocumentErrorText(error, isAr)); }
     setNote(""); load();
   };
   const openReject = (type, r, stage) => { setActing({ type, req: r, action: "reject", stage }); setNote(""); };
@@ -404,7 +403,8 @@ export default function Approvals() {
 
   const makeSettlement = async (r) => {
     setGenBusy("l" + r.id);
-    try { await generateLeaveSettlement(r, empOf(r.employee_id), org, leaves); } catch (e) {}
+    try { await generateLeaveSettlement(r, empOf(r.employee_id), org, leaves); }
+    catch (error) { alert(leaveDocumentErrorText(error, isAr)); }
     finally { setGenBusy(null); load(); }
   };
   const makeLoanStatement = async (r) => {

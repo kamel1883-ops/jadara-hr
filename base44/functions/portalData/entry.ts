@@ -1,4 +1,4 @@
-import { createClientFromRequest } from "npm:@base44/sdk@0.8.40";
+import { createClientFromRequest } from "npm:@base44/sdk@0.8.54";
 import { verifyToken } from "../../shared/portalToken.ts";
 import {
   PAID_STATUSES, computeWorkDaysSet, computeWorkDaysInMonth,
@@ -6,8 +6,10 @@ import {
 } from "../../shared/payrollCompute.ts";
 import { notifyApproverForStatus } from "../../shared/approverNotify.ts";
 import { getDocumentLinkInCompany, buildDownloadUrl, storeDocument } from "../../shared/vaultClient.ts";
-import { vaultErrorCode } from "../../shared/vaultErrors.ts";
+import { vaultErrorCode, vaultErrorStatus } from "../../shared/vaultErrors.ts";
+import { saveLeaveDocument, canManageLeaveDocuments, companyOwnsLeaveDocument } from "../../shared/leaveDocuments.ts";
 import { tenantKeysForEmployee } from "../../shared/vaultIdentity.ts";
+import { employeeOwnsDocument, validVaultRef } from "../../shared/vaultAuthorization.ts";
 import {
   loadCompanyBag, organizationForEmployee, inCompany, canWrite, stampCompany, scopeQuery, filterPayload,
 } from "../../shared/companyScope.ts";
@@ -198,8 +200,13 @@ export default async function (req) {
     if (action === "document_link") {
       if (isOwnerSession) return Response.json({ ok: false, error: "forbidden" }, { status: 403 });
       const docRef = String(body.doc_ref || "").trim();
-      if (!docRef || docRef.length > 80 || /^https?:\/\//i.test(docRef))
+      if (!validVaultRef(docRef))
         return Response.json({ ok: false, error: "doc_ref_required" }, { status: 400 });
+      const ownsDocument = await employeeOwnsDocument(base44, emp, docRef);
+      const managesLeave = !ownsDocument && canManageLeaveDocuments(emp)
+        && await companyOwnsLeaveDocument(base44, emp, docRef);
+      if (!ownsDocument && !managesLeave)
+        return Response.json({ ok: false, error: 'not_found' }, { status: 404 });
       try {
         const keys = await tenantKeysForEmployee(base44, emp);
         const link = await getDocumentLinkInCompany(keys, docRef);
@@ -208,6 +215,24 @@ export default async function (req) {
         // نُعيد السبب الحقيقي (غير مُهيّأة/مفتاح مرفوض/غير موجود/مهلة) بدل not_found دائماً
         const code = vaultErrorCode(e);
         return Response.json({ ok: false, error: code }, { status: code === "not_found" ? 404 : 502 });
+      }
+    }
+
+    // أرشفة مستند الإجازة وربطه بطلب من نفس المنشأة بجلسة البوابة، لا بجلسة Base44 أخرى.
+    if (action === "store_leave_document") {
+      if (isOwnerSession || !canManageLeaveDocuments(emp))
+        return Response.json({ ok: false, error: 'forbidden' }, { status: 403 });
+      const unified = String(emp.unified_number || '').trim();
+      try {
+        const result = await saveLeaveDocument(base44, {
+          writeKey: unified || (await tenantKeysForEmployee(base44, emp))[0],
+          // موظف الطلب لا بد أن يكون من منشأة الموظف المُفوّض نفسه.
+          verify: async (owner) => !!unified && String(owner.unified_number || '').trim() === unified,
+        }, body);
+        return Response.json({ ok: true, data: result });
+      } catch (error) {
+        const code = vaultErrorCode(error);
+        return Response.json({ ok: false, error: code }, { status: vaultErrorStatus(code) });
       }
     }
 
@@ -297,6 +322,27 @@ export default async function (req) {
         x.employees_total_count = counts.total;
       }
       return Response.json({ ok: true, tenants: tenants || [], stats });
+    }
+
+    // ====== إشعارات المالك — إشعارات العمل فقط (تجارب/اشتراكات/مدفوعات) ======
+    // عزل صارم: لا يُعرض للمالك أي إشعار يخص موظفي المنشآت أو طلباتهم (إجازة/سلفة/حضور/تحقيق...).
+    // تلك الإشعارات تخص المنشأة وحدها وتظهر داخل بوابتها.
+    const OWNER_NOTIFICATION_TYPES = ["trial_ending", "sub_ending", "stripe_payment", "paypal_payment"];
+    if (action === "owner_notifications") {
+      if (!isOwner) return Response.json({ ok: false, error: "forbidden" }, { status: 403 });
+      const limit = Math.min(Number(body.limit) || 30, 200);
+      const rows = await base44.asServiceRole.entities.Notification.filter(
+        { type: { $in: OWNER_NOTIFICATION_TYPES } }, "-created_date", limit
+      );
+      return Response.json({ ok: true, notifications: rows || [] });
+    }
+    if (action === "owner_notifications_read") {
+      if (!isOwner) return Response.json({ ok: false, error: "forbidden" }, { status: 403 });
+      await base44.asServiceRole.entities.Notification.updateMany(
+        { type: { $in: OWNER_NOTIFICATION_TYPES }, is_read: false },
+        { $set: { is_read: true } }
+      );
+      return Response.json({ ok: true });
     }
 
     if (action === "owner_extend_trial") {

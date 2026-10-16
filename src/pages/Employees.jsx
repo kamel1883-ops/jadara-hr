@@ -75,25 +75,29 @@ export default function Employees() {
 
   const load = async () => {
     const seq = ++loadSeq.current;
-    const [data, orgs, tenantRes] = await Promise.all([
-      base44.entities.Employee.list("-created_date", 500),
+    // نحمّل المنشأة أولاً لنعرف الرقم الموحد، ثم نفلتر الموظفين به — عزل تام بين المنشآت
+    const [orgs, tenantRes] = await Promise.all([
       listCurrentOrg(),
       base44.functions.invoke("getMyTenant", {}).catch(() => null),
     ]);
+    if (seq !== loadSeq.current) return;
+    const td = tenantRes?.data || tenantRes;
+    const un = String(td?.tenant?.unified_number || "").trim();
+    setMyUnified(un);
+    const data = un
+      ? await base44.entities.Employee.filter({ unified_number: un }, "-created_date", 500)
+      : await base44.entities.Employee.list("-created_date", 500);
     if (seq !== loadSeq.current) return;
     const reverted = await revertExpiredLeaves(data);
     if (seq !== loadSeq.current) return;
     const rows = reverted.length ? data.map((e) => reverted.includes(e.id) ? { ...e, status: "active" } : e) : data;
     setEmployees(rows);
     setOrg(orgs[0] || null);
-    const td = tenantRes?.data || tenantRes;
-    setMyUnified(String(td?.tenant?.unified_number || "").trim());
     setLoading(false);
     // الهوية وتاريخ الميلاد والجوال في الخزنة السعودية. طلب واحد للقائمة كلها، للعرض فقط.
     const sensPromise = enrichEmployeesBatch(rows);
     // تعبئة رجعية آمنة: أي موظف أنشأه هذا المسؤول ويفتقد الرقم الموحّد يُربط بمنشأته.
     const meId = (await base44.auth.me().catch(() => null))?.id;
-    const un = String(td?.tenant?.unified_number || "").trim();
     const orphans = (rows || []).filter((e) => !e.unified_number && e.created_by_id === meId);
     if (orphans.length && un) {
       try {

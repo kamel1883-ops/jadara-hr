@@ -111,10 +111,15 @@ export default function EmployeeForm({ open, onClose, onSaved, employee, unified
     return () => { active = false; };
   }, [employee?.id, employee?.emp_ref, open]);
   useEffect(() => {
-    base44.entities.Employee.list("-created_date", 500).then((list) => setAllEmployees(list));
+    // عزل المنشآت: نحمّل موظفي هذه المنشأة فقط (بالرقم الموحد) لقائمة المديرين
+    const un = String(unifiedNumber || "").trim();
+    const empLoad = un
+      ? base44.entities.Employee.filter({ unified_number: un }, "-created_date", 500)
+      : base44.entities.Employee.list("-created_date", 500);
+    empLoad.then((list) => setAllEmployees(Array.isArray(list) ? list : (list?.items || []))).catch(() => setAllEmployees([]));
     base44.entities.Branch.list("-is_main", 500).then((list) => setBranches(list));
     getOrgOnce().then(setOrg);
-  }, [open]);
+  }, [open, unifiedNumber]);
   const set = (k, v) => setForm((f) => ({ ...f, [k]: v }));
 
   // قاعدة المملكة الموحّدة: رقم الهوية يبدأ بـ"1" → سعودي، بـ"2" → مقيم.

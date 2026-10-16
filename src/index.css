@@ -124,6 +124,21 @@
   }
 }
 
+/* === شريط شعارات العملاء في صفحة الهبوط — تمرير أفقي مستمر ===
+   حركة CSS خالصة (لا تعتمد على مكتبة الرسوم المتحركة) فلا تتوقف أبداً.
+   المسار يحتوي مجموعتين متطابقتين، وإزاحة 50% تعادل مجموعة واحدة تماماً (بلا فاصل). */
+@keyframes jadara-marquee {
+  from { transform: translateX(0); }
+  to { transform: translateX(-50%); }
+}
+.marquee-track {
+  animation: jadara-marquee 26s linear infinite;
+  will-change: transform;
+}
+@media (prefers-reduced-motion: reduce) {
+  .marquee-track { animation-duration: 60s; }
+}
+
 /* === Unified premium surfaces (navy / cream / purple) — internal app content === */
 main table thead { background-color: hsl(var(--muted) / 0.55); }
 main table thead th { font-size: 0.8125rem; font-weight: 600; color: hsl(var(--muted-foreground)); }
