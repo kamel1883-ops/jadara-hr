@@ -153,13 +153,12 @@ function gosiNum(value, fallback) {
   return Number.isFinite(n) && n > 0 ? n : fallback;
 }
 
-// تاريخ تسجيل الموظف في التأمينات: الحقل المخصص، وإلا تاريخ بداية العقد، وإلا تاريخ المباشرة.
+// تاريخ التسجيل في التأمينات = تاريخ مباشرة الموظف المسجَّل في ملفه.
 export function gosiRegistrationDate(employee) {
-  const raw = employee?.gosi_registration_date || employee?.contract_start_date || employee?.hire_date || "";
-  return String(raw).slice(0, 10);
+  return String(employee?.hire_date || "").slice(0, 10);
 }
 
-// فئة الاشتراك: مقيم / سعودي مسجل قبل 3 يوليو 2024 / سعودي مسجل من 3 يوليو 2024.
+// فئة الاشتراك: مقيم / سعودي مباشرته قبل 3 يوليو 2024 / سعودي مباشرته من 3 يوليو 2024.
 export function gosiCategory(employee) {
   const isSaudi = Boolean(employee?.is_saudi) || isSaudiNationalId(employee?.national_id);
   if (!isSaudi) return "expat";

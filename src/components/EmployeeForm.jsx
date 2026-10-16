@@ -22,7 +22,7 @@ const empty = {
   full_name: "",
   employee_number: "", national_id: "", email: "", gender: "male", is_saudi: false,
   birth_date: "", phone: "",
-  department: "", branch_id: "", branch_name: "", position: "", job_grade: "", role_level: "employee", hire_date: "", gosi_registration_date: "",
+  department: "", branch_id: "", branch_name: "", position: "", job_grade: "", role_level: "employee", hire_date: "",
   contract_type: "full_time", contract_start_date: "", contract_end_date: "", status: "active",
   termination_reason: "none", termination_date: "", manager_id: "",
   is_approver_manager: false, is_approver_finance: false, is_approver_hr: false,
@@ -46,7 +46,7 @@ export default function EmployeeForm({ open, onClose, onSaved, employee, unified
     fullName: "الاسم الكامل", empNo: "الرقم الوظيفي",
     natIdSaudi: "الهوية الوطنية", natIdExpat: "رقم الإقامة",
     email: "بريد العمل (لربط الحساب)", gender: "الجنس", male: "ذكر", female: "أنثى",
-    birth: "تاريخ الميلاد", phone: "رقم الجوال", dept: "الإدارة", branch: "الفرع", noBranch: "بدون فرع", position: "المسمى الوظيفي", jobGrade: "الدرجة الوظيفية", hireDate: "تاريخ المباشرة (ثابت — مرجع نهاية الخدمة والإجازات)", gosiRegDate: "تاريخ التسجيل في التأمينات (يحدد نسبة الاشتراك — افتراضياً تاريخ المباشرة)", contractStart: "تاريخ بدء العقد", contractEnd: "تاريخ نهاية العقد",
+    birth: "تاريخ الميلاد", phone: "رقم الجوال", dept: "الإدارة", branch: "الفرع", noBranch: "بدون فرع", position: "المسمى الوظيفي", jobGrade: "الدرجة الوظيفية", hireDate: "تاريخ المباشرة (ثابت — مرجع نهاية الخدمة والإجازات، وأساس فئة اشتراك التأمينات)", contractStart: "تاريخ بدء العقد", contractEnd: "تاريخ نهاية العقد",
     contract: "نوع العقد", full: "دوام كامل", part: "دوام جزئي", cont: "عقد",
     status: "الحالة الوظيفية", active: "على رأس العمل", onLeave: "في إجازة", terminated: "منهي", resigned: "مستقيل",
     base: "الراتب الأساسي (ريال)", housing: "بدل السكن", transport: "بدل المواصلات", other: "بدلات أخرى",
@@ -71,7 +71,7 @@ export default function EmployeeForm({ open, onClose, onSaved, employee, unified
     fullName: "Full name", empNo: "Employee number",
     natIdSaudi: "National ID", natIdExpat: "Iqama number",
     email: "Work email (account linking)", gender: "Gender", male: "Male", female: "Female",
-    birth: "Birth date", phone: "Phone", dept: "Department", branch: "Branch", noBranch: "No branch", position: "Job title", jobGrade: "Job grade", hireDate: "Commencement date (fixed — EOS & leave reference)", gosiRegDate: "GOSI registration date (sets the contribution rate — defaults to commencement date)", contractStart: "Contract start date", contractEnd: "Contract end date",
+    birth: "Birth date", phone: "Phone", dept: "Department", branch: "Branch", noBranch: "No branch", position: "Job title", jobGrade: "Job grade", hireDate: "Commencement date (fixed — EOS & leave reference; basis of the GOSI contribution category)", contractStart: "Contract start date", contractEnd: "Contract end date",
     contract: "Contract type", full: "Full-time", part: "Part-time", cont: "Contract",
     status: "Employment status", active: "Active", onLeave: "On leave", terminated: "Terminated", resigned: "Resigned",
     base: "Base salary (SAR)", housing: "Housing allowance", transport: "Transport allowance", other: "Other allowances",
@@ -231,7 +231,6 @@ export default function EmployeeForm({ open, onClose, onSaved, employee, unified
             </Field>
             <Field label={t.jobGrade}><Input value={form.job_grade} onChange={(e) => set("job_grade", e.target.value)} /></Field>
             <Field label={t.hireDate}><Input type="date" lang={isAr ? "ar" : "en"} value={form.hire_date} onChange={(e) => set("hire_date", e.target.value)} required /></Field>
-            <Field label={t.gosiRegDate}><Input type="date" lang={isAr ? "ar" : "en"} value={form.gosi_registration_date} onChange={(e) => set("gosi_registration_date", e.target.value)} /></Field>
             <Field label={t.annualLeaveEnt}>
               <MobileSelect value={String(mustBe30 ? 30 : (Number(form.annual_leave_entitlement) === 30 ? 30 : 21))} onValueChange={(v) => set("annual_leave_entitlement", Number(v))}>
                 
