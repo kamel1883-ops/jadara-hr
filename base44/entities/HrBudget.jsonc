@@ -1,0 +1,65 @@
+{
+  "name": "HrBudget",
+  "type": "object",
+  "properties": {
+    "unified_number": {
+      "type": "string",
+      "title": "الرقم الوطني الموحد للمنشأة"
+    },
+    "year": {
+      "type": "number",
+      "title": "سنة الميزانية"
+    },
+    "inputs_json": {
+      "type": "string",
+      "title": "مدخلات الميزانية (JSON — بنود التكاليف غير المحسوبة آلياً)"
+    },
+    "grand_total": {
+      "type": "number",
+      "default": 0,
+      "title": "إجمالي الميزانية المحسوب وقت الحفظ (ريال)"
+    },
+    "headcount": {
+      "type": "number",
+      "default": 0,
+      "title": "عدد الموظفين وقت الحفظ"
+    },
+    "notes": {
+      "type": "string",
+      "title": "ملاحظات"
+    },
+    "prepared_by_name": {
+      "type": "string",
+      "title": "أُعدّت بواسطة (الاسم) — الموظف المُفوَّض"
+    },
+    "prepared_by_id": {
+      "type": "string",
+      "title": "أُعدّت بواسطة (الهوية/الإيميل) — الموظف المُفوَّض"
+    }
+  },
+  "required": [
+    "year"
+  ],
+  "rls": {
+    "create": {
+      "user_condition": {
+        "role": "admin"
+      }
+    },
+    "read": {
+      "user_condition": {
+        "role": "admin"
+      }
+    },
+    "update": {
+      "user_condition": {
+        "role": "admin"
+      }
+    },
+    "delete": {
+      "user_condition": {
+        "role": "admin"
+      }
+    }
+  }
+}

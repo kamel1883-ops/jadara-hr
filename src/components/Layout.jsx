@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import { base44 } from "@/api/base44Client";
-import { LogOut, Menu, X, UserCircle, LayoutDashboard, Users, ClipboardCheck, Settings as SettingsIcon, ArrowRight, Fingerprint, CheckCircle2, CalendarDays, Plane, PlaneTakeoff, Wallet, Shield, Car, FileText, Target, GitBranch, Network, CalendarRange, MessageSquare, ClipboardList, ShieldAlert, FileSearch, BarChart3, FileBadge, Crown, Briefcase, GraduationCap, Globe, ScrollText, Gift, Bell, Package, MessageSquareWarning, ShieldCheck, HeartPulse, Headphones, Gauge } from "lucide-react";
+import { LogOut, Menu, X, UserCircle, LayoutDashboard, Users, ClipboardCheck, Settings as SettingsIcon, ArrowRight, Fingerprint, CheckCircle2, CalendarDays, Plane, PlaneTakeoff, Wallet, Shield, Car, FileText, Target, GitBranch, Network, CalendarRange, MessageSquare, ClipboardList, ShieldAlert, FileSearch, BarChart3, FileBadge, Crown, Briefcase, GraduationCap, Globe, ScrollText, Gift, Bell, Package, MessageSquareWarning, ShieldCheck, HeartPulse, Headphones, Gauge, Calculator } from "lucide-react";
 import { cn } from "@/lib/utils";
 import Logo from "@/components/Logo";
 import { Image } from "@/components/ui/image";
@@ -44,6 +44,7 @@ const appNav = [
   { to: "/licenses", ar: "إدارة التراخيص", en: "Licenses", icon: FileBadge, tile: "from-yellow-400 to-amber-500" },
   { to: "/platform-subscriptions", ar: "اشتراكات المنصات الحكومية", en: "Platform Subscriptions", icon: Globe, tile: "from-sky-500 to-blue-500" },
   { to: "/nitaqat", ar: "النطاقات (نسبة التوطين)", en: "Nitaqat (Saudization)", icon: Gauge, tile: "from-emerald-500 to-teal-600" },
+  { to: "/hr-budget", ar: "ميزانية الموارد البشرية", en: "HR Budget", icon: Calculator, tile: "from-cyan-600 to-blue-700" },
   { to: "/investigations", ar: "محضر التحقيق", en: "Investigation report", icon: FileSearch, tile: "from-amber-600 to-orange-700" },
   { to: "/warnings", ar: "إدارة الإنذارات", en: "Warnings", icon: ShieldAlert, tile: "from-red-500 to-orange-500" },
   { to: "/decisions", ar: "القرارات الإدارية", en: "Decisions", icon: ScrollText, tile: "from-stone-500 to-amber-600" },

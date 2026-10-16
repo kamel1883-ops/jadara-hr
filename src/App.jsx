@@ -51,6 +51,7 @@ const JobApply = lazy(() => import("@/pages/public/JobApply"));
 const Analytics = lazy(() => import("@/pages/Analytics"));
 const Licenses = lazy(() => import("@/pages/Licenses"));
 const PlatformSubscriptions = lazy(() => import("@/pages/PlatformSubscriptions"));
+const HrBudget = lazy(() => import("@/pages/HrBudget"));
 const Nitaqat = lazy(() => import("@/pages/Nitaqat"));
 const Landing = lazy(() => import("@/pages/Landing"));
 const Discounts = lazy(() => import("@/pages/Discounts"));
@@ -191,6 +192,7 @@ const AuthenticatedApp = () => {
         <Route path="/analytics" element={<Analytics />} />
         <Route path="/licenses" element={<Licenses />} />
         <Route path="/platform-subscriptions" element={<PlatformSubscriptions />} />
+        <Route path="/hr-budget" element={<HrBudget />} />
         <Route path="/nitaqat" element={<Nitaqat />} />
         <Route path="/customer-surveys" element={<CustomerSurveys />} />
         <Route path="/discounts" element={<Discounts />} />
