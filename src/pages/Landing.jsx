@@ -14,6 +14,7 @@ import HrKeywordField from "@/components/landing/HrKeywordField";
 import { useI18n } from "@/lib/i18n";
 import { getActiveSeason } from "@/lib/seasonalVideo";
 import SeasonalHero from "@/components/landing/SeasonalHero";
+import NitaqatSection from "@/components/landing/NitaqatSection";
 
 import { PRICING_TIERS_AR, PRICING_TIERS_EN } from "@/lib/pricing";
 import AssistantAvatar from "@/components/AssistantAvatar";
@@ -27,6 +28,7 @@ import {
   Gavel, HeartPulse, Stethoscope, LineChart, MessageCircle, MapPin, Crown,
   Network, ClipboardList, Plane, CalendarPlus, Server, Linkedin, Facebook, Twitter,
   Send, Music2, Languages, Share2, Headphones,
+  FileSearch, MessageSquareWarning, PackageCheck, Percent,
 } from "lucide-react";
 import { TiktokIcon, SnapchatIcon } from "@/components/SocialIcons";
 
@@ -66,6 +68,10 @@ const featuresAr = [
   { icon: Share2, title: "طلبات مشتركة وشفافة بين الموظف والإدارة", desc: "كل ما يرفعه الموظف (إجازات، سلف، رحلات عمل، مرفقات) يُحفظ في سجل موحّد مشترك بين الموظف والإدارة — يتابع الموظف حالته واعتماداته، وتطّلع الإدارة على أي لحظة، مع مستندات المخالصات وكشوف السلف والتصفية المتاحة في ملف الموظف فور اعتمادها وصرفها مالياً." },
   { icon: Plane, title: "حجوزات الطيران", desc: "احجز رحلاتك داخل نظام جداره نفسه — اختر الوجهة والتاريخ وعدد الركاب، وبعد البحث عن الرحلة يُحوّلك النظام تلقائياً عبر الروابط العميقة (Deep Links) إلى منصة المسافر أو المطار أو Skyscanner أو Wingie لإكمال بيانات الجواز والدفع في صفحتها الآمنة. تكامل مع أربعة من أكبر مزوّدي الطيران دون مغادرة تجربة جداره." },
   { icon: Headphones, title: "منتج عربي ودعم فني مستمر", desc: "منصة عربية سعودية بتصميم فاخر وواجهة عربية أصيلة، مع دعم فني عربي على مدار الساعة عبر واتساب والبريد الإلكتروني — فريقنا جاهز لمساعدتك في كل خطوة، من التفعيل حتى الترحيل والتدريب." },
+  { icon: FileSearch, title: "محاضر التحقيق", desc: "افتح محضر تحقيق رسمي برقمه وتاريخه ونوع المخالفة، وأضف أطراف الواقعة (موظف مُحقَّق معه أو شاهد)، واستقبل أقوال الموظف ومرفقاته من بوابته الذاتية، ثم اطبعه بترويسة منشأتك وشعارها — ويُحفظ المحضر كاملاً مرتبطاً بالإنذار الصادر عنه." },
+  { icon: MessageSquareWarning, title: "الشكاوى", desc: "يرفع الموظف شكواه من بوابته الذاتية، وإن كانت سرّية تُحال مباشرة إلى الموارد البشرية دون المرور بالمدير المباشر؛ تمر بمسار اعتماد ويُصدر قرار المعالجة في مستند رسمي قابل للطباعة، مع سجل كامل لكل شكوى وحالتها." },
+  { icon: PackageCheck, title: "العهد والمصروفات", desc: "تسليم العهد للموظفين (أجهزة، جوالات، خطوط، ملابس، أدوات) بطلب من بوابة الموظف ومسار موافقات، ومستند تسليم موقّع، وتتبّع الإرجاع والخصم عند التلف أو الفقد — مع تقييد المصروفات وربطها بتقارير المنصة." },
+  { icon: Percent, title: "النطاقات (التوطين) بمعادلة قوى", desc: "يُحسب نطاق منشأتك (بلاتيني/أخضر مرتفع/متوسط/منخفض/أحمر) بنفس معادلة حاسبة قوى: النشاط التفصيلي من الدليل الوطني للأنشطة الاقتصادية وعدد السعوديين والوافدين من موظفيك النشطين، مع مزايا كل نطاق ومخاطره وكم سعودياً تحتاج للخروج من الأحمر — والنسب مُزامَنة تلقائياً من المصدر الرسمي (منصة قوى)." },
 ];
 
 const featuresEn = [
@@ -93,6 +99,10 @@ const featuresEn = [
   { icon: Share2, title: "Shared, Transparent Requests", desc: "Everything an employee submits (leaves, loans, business trips, attachments) is kept in one shared record between the employee and management — the employee tracks their status and approvals, while management can review any request at any moment, with settlement, loan-statement and clearance documents available in the employee file as soon as they are approved and paid." },
   { icon: Plane, title: "Flight Bookings", desc: "Book your flights right inside Jadara — pick the destination, date, and passengers; after the search, the system redirects you automatically via Deep Links to Almosafer, Almatar, Skyscanner, or Wingie to complete passport details and payment on their secure checkout page. An integration with four of the largest flight providers without leaving the Jadara experience." },
   { icon: Headphones, title: "Arabic Product & Continuous Support", desc: "A Saudi Arabic platform with a premium, authentic Arabic-first design, plus round-the-clock Arabic technical support via WhatsApp and email — our team is ready to help at every step, from activation to onboarding and training." },
+  { icon: FileSearch, title: "Investigation Minutes", desc: "Open an official investigation minute with its number, date and violation type, add the case parties (the employee under investigation or a witness), receive the employee's statement and attachments from their self-service portal, then print it with your company letterhead and logo — the minute is kept in full, linked to the warning it produced." },
+  { icon: MessageSquareWarning, title: "Complaints", desc: "An employee files a complaint from their self-service portal, and a confidential one goes straight to HR without passing through the direct manager; it follows an approval flow and the resolution is issued as a printable official document, with a full record of every complaint and its status." },
+  { icon: PackageCheck, title: "Custody & Expenses", desc: "Hand over custody items (devices, phones, SIM lines, clothing, tools) through an employee-portal request and approval flow, with a signed handover document, plus return tracking and deductions for damage or loss — with expenses captured and reflected in the platform's reports." },
+  { icon: Percent, title: "Nitaqat (Saudization) with Qiwa's formula", desc: "Your band (Platinum / High / Medium / Low Green / Red) is calculated using Qiwa's own calculator formula: the detailed activity from the National Guide of Economic Activities plus the Saudi and expat counts from your active employees, with each band's benefits and risks and how many more Saudis you need to leave Red — and the ratios are synced automatically from the official source (Qiwa)." },
 ];
 
 const licensesAr = [
@@ -149,7 +159,7 @@ export default function Landing() {
   const integrations = isAr ? integrationsAr : integrationsEn;
 
   const t = isAr ? {
-    nav: { features: "المميزات", licenses: "التراخيص", integrations: "التكاملات", about: "عن المؤسس", pricing: "الباقات", contact: "تواصل" },
+    nav: { features: "المميزات", licenses: "التراخيص", nitaqat: "النطاقات", integrations: "التكاملات", about: "عن المؤسس", pricing: "الباقات", contact: "تواصل" },
     portal: "بوابة دخول الموظفين الذاتية", ownerPortal: "بوابة المالك الذاتية", login: "بوابة دخول الشركات", start: "ابدأ الآن",
     badge: "منصة الموارد البشرية السعودية",
     titlePre: "نظام الموارد البشرية",
@@ -198,7 +208,7 @@ export default function Landing() {
     footerDesc: "منصة الموارد البشرية السعودية المتكاملة — منصة واحدة تجمع كل ما تحتاجه لإدارة رأس المال البشري.",
     footContact: "تواصل معنا", footPlatform: "المنصة", copy: `© ${new Date().getFullYear()} جداره — جميع الحقوق محفوظة`,
   } : {
-    nav: { features: "Features", licenses: "Licenses", integrations: "Integrations", about: "Founder", pricing: "Pricing", contact: "Contact" },
+    nav: { features: "Features", licenses: "Licenses", nitaqat: "Nitaqat", integrations: "Integrations", about: "Founder", pricing: "Pricing", contact: "Contact" },
     portal: "Employee Self‑Service Portal", ownerPortal: "Owner Portal", login: "Company Portal", start: "Get Started",
     badge: "The Saudi HR Platform",
     titlePre: "The Latest & Most",
@@ -270,6 +280,7 @@ export default function Landing() {
           <nav className="hidden md:flex items-center gap-8 text-base text-foreground/70">
             <button onClick={() => scrollTo("features")} className="hover:text-violet-700 transition">{t.nav.features}</button>
             <button onClick={() => scrollTo("licenses")} className="hover:text-violet-700 transition">{t.nav.licenses}</button>
+            <button onClick={() => scrollTo("nitaqat")} className="hover:text-violet-700 transition">{t.nav.nitaqat}</button>
             <button onClick={() => scrollTo("integrations")} className="hover:text-violet-700 transition">{t.nav.integrations}</button>
             <button onClick={() => scrollTo("about")} className="hover:text-violet-700 transition">{t.nav.about}</button>
             <button onClick={() => scrollTo("pricing")} className="hover:text-violet-700 transition">{t.nav.pricing}</button>
@@ -443,6 +454,9 @@ export default function Landing() {
           </div>
         </div>
       </section>
+
+      {/* النطاقات (التوطين) — مطابقة حاسبة قوى ومزامنة من المصدر الرسمي */}
+      <NitaqatSection isAr={isAr} />
 
       {/* التكاملات */}
       <section id="integrations" className="max-w-[1600px] mx-auto px-6 lg:px-14 py-14">

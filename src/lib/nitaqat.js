@@ -3,41 +3,88 @@
 // حد اللون = م × لوغ(إجمالي العمالة) + ث ، ولوغ هو اللوغاريتم الطبيعي.
 // من يقل عن حد الأخضر المنخفض فهو في الأحمر.
 
+import { base44 } from "@/api/base44Client";
+
 let CATALOG = null;
 let CATALOG_PENDING = null;
+
+// البيانات الرسمية المُزامَنة: يكتبها إجراء syncNitaqat في سجل NitaqatCatalog بعد قراءتها
+// من المصدر الرسمي (منصة قوى / وزارة الموارد البشرية)، فينتقل أي تعديل في النسب إلى هنا تلقائياً.
+async function loadFromServer() {
+  const rows = await base44.entities.NitaqatCatalog.list("-fetched_at", 1);
+  const row = rows && rows[0];
+  if (!row || !row.payload) return null;
+  const data = JSON.parse(row.payload);
+  if (!data?.activities?.length) return null;
+  return {
+    data,
+    meta: {
+      source_name: row.source_name || "منصة قوى",
+      source_url: row.source_url || "",
+      fetched_at: row.fetched_at || "",
+      status: row.status || "ok",
+      error: row.error || "",
+      activities: data.activities.length,
+    },
+  };
+}
+
+// النسخة المرفقة مع النظام: خطة بديلة تعمل بلا اتصال بالمصدر.
+async function loadBundled() {
+  const res = await fetch(`${import.meta.env.BASE_URL}nitaqat-activities.json`);
+  const data = await res.json();
+  return {
+    data,
+    meta: { source_name: "النسخة المرفقة مع النظام", source_url: "", fetched_at: "", status: "bundled", error: "", activities: data?.activities?.length || 0 },
+  };
+}
+
+function buildCatalog(data, meta) {
+  const byCode = new Map();
+  const byGroup = new Map();
+  for (const row of data.activities) {
+    const bands = row.m
+      ? {
+          green_low: { m: row.m[0], c: row.c[0] },
+          green_medium: { m: row.m[1], c: row.c[1] },
+          green_high: { m: row.m[2], c: row.c[2] },
+          platinum: { m: row.m[3], c: row.c[3] },
+        }
+      : null;
+    const activity = { code: row.code, ar: row.ar, en: row.en || row.ar, group: row.group, bands };
+    byCode.set(row.code, activity);
+    const list = byGroup.get(row.group);
+    if (list) list.push(activity);
+    else byGroup.set(row.group, [activity]);
+  }
+  CATALOG = { groups: data.groups, byCode, byGroup, meta };
+  return CATALOG;
+}
 
 export function loadNitaqatCatalog() {
   if (CATALOG) return Promise.resolve(CATALOG);
   if (!CATALOG_PENDING) {
-    CATALOG_PENDING = fetch(`${import.meta.env.BASE_URL}nitaqat-activities.json`)
-      .then((r) => r.json())
-      .then((data) => {
-        const byCode = new Map();
-        const byGroup = new Map();
-        for (const row of data.activities) {
-          const bands = row.m
-            ? {
-                green_low: { m: row.m[0], c: row.c[0] },
-                green_medium: { m: row.m[1], c: row.c[1] },
-                green_high: { m: row.m[2], c: row.c[2] },
-                platinum: { m: row.m[3], c: row.c[3] },
-              }
-            : null;
-          const activity = { code: row.code, ar: row.ar, en: row.en || row.ar, group: row.group, bands };
-          byCode.set(row.code, activity);
-          const list = byGroup.get(row.group);
-          if (list) list.push(activity);
-          else byGroup.set(row.group, [activity]);
-        }
-        CATALOG = { groups: data.groups, byCode, byGroup };
-        return CATALOG;
-      })
-      .catch((err) => {
-        CATALOG_PENDING = null;
-        throw err;
-      });
+    CATALOG_PENDING = (async () => {
+      let loaded = null;
+      try { loaded = await loadFromServer(); } catch (_) { loaded = null; }
+      if (!loaded) loaded = await loadBundled();
+      return buildCatalog(loaded.data, loaded.meta);
+    })().catch((err) => {
+      CATALOG_PENDING = null;
+      throw err;
+    });
   }
   return CATALOG_PENDING;
+}
+
+// مزامنة فورية مع المصدر الرسمي ثم إعادة تحميل البيانات.
+// ويمكن تمرير نسخة رسمية محدّثة (payload) فتُعتمد فوراً وتُخزَّن كمرجع لكل المنشآت.
+export async function refreshNitaqatCatalog(payload = null) {
+  const res = await base44.functions.invoke("syncNitaqat", payload ? { payload } : {});
+  CATALOG = null;
+  CATALOG_PENDING = null;
+  const catalog = await loadNitaqatCatalog();
+  return { catalog, result: res?.data || null };
 }
 
 export function findActivity(catalog, code) {
