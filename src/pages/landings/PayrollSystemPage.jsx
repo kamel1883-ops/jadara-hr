@@ -26,7 +26,7 @@ const CONTENT = {
     featuresTitle: "مزايا نظام رواتب جداره",
     features: [
       { icon: Calculator, t: "احتساب دقيق", d: "راتب أساسي، بدلات، ساعات إضافية، استقطاعات، وصافي الدفع محسوب تلقائياً." },
-      { icon: Landmark, t: "التأمينات GOSI", d: "حساب مساهمات السعوديين (21%) والمقيمين (2%) مع توليد الكشوف." },
+      { icon: Landmark, t: "التأمينات GOSI", d: "حساب المساهمات حسب تاريخ التسجيل (21.5% أو 23.5% للسعوديين، و2% مخاطر مهنية للمقيمين) مع توليد الكشوف." },
       { icon: FileCheck, t: "حماية الأجور WPS", d: "تصدير بيانات مسير الرواتب بالهيكل المعتمد لمنصة مدد." },
       { icon: Banknote, t: "السلف والأقساط", d: "متابعة سلف الموظفين والأقساط الشهرية وخصمها من الراتب." },
       { icon: RefreshCw, t: "ربط مع الحضور", d: "خصم الغياب والتأخر تلقائياً من بيانات الحضور والانصراف." },
@@ -44,7 +44,7 @@ const CONTENT = {
     faqTitle: "أسئلة شائعة عن نظام الرواتب",
     faqs: [
       { q: "هل نظام رواتب جداره متوافق مع حماية الأجور؟", a: "نعم — يولّد جداره ملف مسير الرواتب بالهيكل المعتمد لمنصة مدد (WPS) جاهزاً للإرسال." },
-      { q: "هل يحسب التأمينات الاجتماعية GOSI تلقائياً؟", a: "نعم — يحتسب مساهمات السعوديين (21%) والمقيمين (2%) ويميز بين حصة الموظف وحصة صاحب العمل." },
+      { q: "هل يحسب التأمينات الاجتماعية GOSI تلقائياً؟", a: "نعم — يحتسب المساهمات حسب تاريخ تسجيل الموظف في التأمينات: 21.5% للمسجلين قبل 3 يوليو 2024، و23.5% للمسجلين من 3 يوليو 2024، والمقيم 2% مخاطر مهنية على صاحب العمل، مع تمييز حصة الموظف عن حصة صاحب العمل." },
       { q: "هل يدعم خصم الغياب من الحضور؟", a: "نعم — يربط نظام الرواتب بسجلات الحضور والانصراف ويخصم الغياب والتأخر وفق سياسة منشأتك." },
       { q: "هل يمكن طباعة كشف الراتب بشعار المنشأة؟", a: "نعم — كل كشوف الرواتب تُولّد PDF بشعار منشأتك يميناً وشعار جداره يساراً." },
       { q: "هل يدعم السلف والأقساط؟", a: "نعم — يسجّل سلف الموظف ويوزّعها على أقساط شهرية تُخصم تلقائياً من الرواتب." },
@@ -76,7 +76,7 @@ const CONTENT = {
     featuresTitle: "Jadara payroll system features",
     features: [
       { icon: Calculator, t: "Accurate Calculation", d: "Base salary, allowances, overtime, deductions and net pay computed automatically." },
-      { icon: Landmark, t: "GOSI", d: "Calculate Saudi (21%) and expat (2%) contributions and generate statements." },
+      { icon: Landmark, t: "GOSI", d: "Calculate contributions by registration date (21.5% or 23.5% for Saudis, 2% occupational-hazards for expats) and generate statements." },
       { icon: FileCheck, t: "WPS Wage Protection", d: "Export payroll data in the approved Mudad structure." },
       { icon: Banknote, t: "Loans & Installments", d: "Track employee loans and monthly installments deducted from salary." },
       { icon: RefreshCw, t: "Attendance Link", d: "Auto-deduct absence and lateness from attendance data." },
@@ -94,7 +94,7 @@ const CONTENT = {
     faqTitle: "Frequently asked payroll questions",
     faqs: [
       { q: "Is Jadara's payroll system WPS-compliant?", a: "Yes — Jadara generates the payroll file in the Mudad-approved WPS structure ready for submission." },
-      { q: "Does it compute GOSI automatically?", a: "Yes — it calculates Saudi (21%) and expat (2%) contributions and separates employee and employer shares." },
+      { q: "Does it compute GOSI automatically?", a: "Yes — it calculates contributions by the employee's GOSI registration date: 21.5% before 3 July 2024 and 23.5% from that date, with 2% occupational-hazards for expatriates (employer), separating employee and employer shares." },
       { q: "Does it deduct absence from attendance?", a: "Yes — payroll is linked to attendance records and deducts absence and lateness per your policy." },
       { q: "Can I print payslips with my company logo?", a: "Yes — all payroll PDFs include your company logo on the right and the Jadara logo on the left." },
       { q: "Does it support loans and installments?", a: "Yes — it records employee loans and splits them into monthly installments auto-deducted from payroll." },

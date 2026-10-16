@@ -136,16 +136,75 @@ export function isGosiSubscriber(employee) {
   return status !== "terminated" && status !== "resigned";
 }
 
+// === التأمينات الاجتماعية (GOSI) ===
+// النسبة ليست ثابتة لكل السعوديين: تختلف بحسب تاريخ تسجيل الموظف في التأمينات.
+// • المسجل قبل 3 يوليو 2024: 9.75% موظف + 11.75% صاحب عمل = 21.50%
+// • المسجل من 3 يوليو 2024 فصاعداً: 10.75% موظف + 12.75% صاحب عمل = 23.50% (النسب السارية من يوليو 2026)
+// • المقيم: 2% مخاطر مهنية على صاحب العمل، وحصة الموظف 0%.
+export const GOSI_NEW_REGISTRANT_FROM = "2024-07-03";
+export const GOSI_DEFAULTS = {
+  legacy_employee: 9.75, legacy_employer: 11.75,
+  new_employee: 10.75, new_employer: 12.75,
+  expat_employer: 2,
+};
+
+function gosiNum(value, fallback) {
+  const n = Number(value);
+  return Number.isFinite(n) && n > 0 ? n : fallback;
+}
+
+// تاريخ تسجيل الموظف في التأمينات: الحقل المخصص، وإلا تاريخ بداية العقد، وإلا تاريخ المباشرة.
+export function gosiRegistrationDate(employee) {
+  const raw = employee?.gosi_registration_date || employee?.contract_start_date || employee?.hire_date || "";
+  return String(raw).slice(0, 10);
+}
+
+// فئة الاشتراك: مقيم / سعودي مسجل قبل 3 يوليو 2024 / سعودي مسجل من 3 يوليو 2024.
+export function gosiCategory(employee) {
+  const isSaudi = Boolean(employee?.is_saudi) || isSaudiNationalId(employee?.national_id);
+  if (!isSaudi) return "expat";
+  const date = gosiRegistrationDate(employee);
+  return date && date >= GOSI_NEW_REGISTRANT_FROM ? "saudi_new" : "saudi_legacy";
+}
+
+// جدول النسب المطبقة لكل الفئات (من ملف المنشأة، وبالنسب النظامية افتراضياً).
+export function gosiRateTable(org) {
+  return {
+    legacy: {
+      employee: gosiNum(org?.gosi_saudi_employee_rate, GOSI_DEFAULTS.legacy_employee),
+      employer: gosiNum(org?.gosi_saudi_employer_rate, GOSI_DEFAULTS.legacy_employer),
+    },
+    fresh: {
+      employee: gosiNum(org?.gosi_new_saudi_employee_rate, GOSI_DEFAULTS.new_employee),
+      employer: gosiNum(org?.gosi_new_saudi_employer_rate, GOSI_DEFAULTS.new_employer),
+    },
+    expat: {
+      employee: 0,
+      employer: gosiNum(org?.gosi_expat_employer_rate, GOSI_DEFAULTS.expat_employer),
+    },
+  };
+}
+
+// نسب الاشتراك المطبقة على موظف بعينه (%).
+export function gosiRates({ employee, org }) {
+  const category = gosiCategory(employee);
+  const table = gosiRateTable(org);
+  const row = category === "saudi_new" ? table.fresh : category === "saudi_legacy" ? table.legacy : table.expat;
+  return { category, employee_rate: row.employee, employer_rate: row.employer };
+}
+
 export function computeGOSI({ employee, org }) {
   const gross = eosSalaryBasis(employee, "gross");
-  const isSaudi = employee.is_saudi || isSaudiNationalId(employee.national_id);
-  if (isSaudi) {
-    const empRate = (Number(org?.gosi_saudi_employee_rate) || 9.75) / 100;
-    const employerRate = (Number(org?.gosi_saudi_employer_rate) || 9.75) / 100;
-    return { isSaudi: true, gosi_employee: gross * empRate, gosi_employer: gross * employerRate, gross };
-  }
-  const expatRate = (Number(org?.gosi_expat_employer_rate) || 2) / 100;
-  return { isSaudi: false, gosi_employee: 0, gosi_employer: gross * expatRate, gross };
+  const { category, employee_rate, employer_rate } = gosiRates({ employee, org });
+  return {
+    category,
+    isSaudi: category !== "expat",
+    employee_rate,
+    employer_rate,
+    gosi_employee: gross * (employee_rate / 100),
+    gosi_employer: gross * (employer_rate / 100),
+    gross,
+  };
 }
 
 export function computeSettlement({ employee, org, lastWorkingDate, reason, leaveBalance, ticketAmount }) {

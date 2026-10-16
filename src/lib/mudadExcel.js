@@ -1,4 +1,5 @@
 import ExcelJS from "exceljs";
+import { gosiRates } from "@/lib/eos";
 
 // مولّد ملف مسير الرواتب لبوابة «مدد» — مطابق للنموذج الرسمي (xlsx)
 // شعار مدد أعلى الملف + لوحة الألوان الرسمية + أعمدة محمية مقفولة (A–F).
@@ -95,7 +96,6 @@ export async function downloadMudadExcel({ payrolls = [], employees = [], org = 
 
   const empMap = {};
   for (const e of employees) empMap[e.id] = e;
-  const saudiEmpRate = Number(org?.gosi_saudi_employee_rate) || 9.75;
 
   const wb = new ExcelJS.Workbook();
   wb.creator = "جداره — Jadara HR";
@@ -184,7 +184,8 @@ export async function downloadMudadExcel({ payrolls = [], employees = [], org = 
     const gross = Number((base + housing + transport).toFixed(2));
     const overtime = Number(p.overtime_amount) || 0;
     const otherEarnings = Number(((p.bonus || 0) + (p.other_allowances || 0)).toFixed(2));
-    const gosiPct = emp?.is_saudi ? saudiEmpRate : 0;
+    // نسبة حصة الموظف في التأمينات حسب فئة تسجيله (9.75% قبل 3 يوليو 2024 / 10.75% بعدها / 0% للمقيم)
+    const gosiPct = emp ? gosiRates({ employee: emp, org }).employee_rate : 0;
     const absent = Number(p.absent_days) || 0;
     const otherDeductions = Number(((p.deductions || 0) + (p.loan_installment || 0)).toFixed(2));
 
