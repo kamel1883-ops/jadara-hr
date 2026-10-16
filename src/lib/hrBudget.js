@@ -64,7 +64,7 @@ export const BUDGET_CATEGORIES = [
     key: "housing",
     ar: "السكن والمرافق", en: "Housing & Utilities",
     items: [
-      { key: "housing_allowance", ar: "بدل السكن النقدي (من الموظفين)", en: "Cash housing allowance (from employees)", source: "auto" },
+      { key: "housing_cash_annual", ar: "بدل السكن النقدي للموظفين (إجمالي سنوي — يُدفع خارج الرواتب بشيك/نقداً)", en: "Cash housing allowance paid to employees (annual total — paid outside payroll by check/cash)", source: "input" },
       { key: "housing_rent", ar: "إيجارات سكن إداري/مجمع سكني", en: "Administrative / staff housing rent", source: "input" },
       { key: "housing_utilities", ar: "كهرباء وماء للسكن أو المكاتب المخصصة", en: "Electricity & water for staff housing/offices", source: "input" },
       { key: "housing_maintenance", ar: "صيانة السكن، أثاث، إنترنت، رسوم بلدية", en: "Housing maintenance, furniture, internet, municipal fees", source: "input" },
@@ -87,8 +87,8 @@ export const BUDGET_CATEGORIES = [
     key: "eos",
     ar: "مخصص نهاية الخدمة والإجازات", en: "EOS & Leave Provisions",
     items: [
-      { key: "eos_provision", ar: "مخصص مكافأة نهاية الخدمة (مادة 84 — نصف شهر/سنة لأول 5 ثم شهر/سنة)", en: "EOS award provision (Art. 84 — half month/yr first 5, then full month/yr)", source: "auto" },
-      { key: "eos_leave", ar: "مخصص الإجازات السنوية (رصيد غير مستخدم)", en: "Annual leave provision (unused balance)", source: "auto_plus_input" },
+      { key: "eos_provision", ar: "مخصص مكافأة نهاية الخدمة (مادة 84 — نصف شهر/سنة لأول 5 ثم شهر/سنة) — لهذا العام فقط", en: "EOS award provision (Art. 84 — half month/yr first 5, then full month/yr) — this year only", source: "auto" },
+      { key: "eos_leave", ar: "مخصص الإجازات السنوية (تلقائي: 30 يوم لمن أكمل 5 سنوات، و21 أو 30 حسب سياسة الشركة لمن دونها)", en: "Annual leave provision (auto: 30 days after 5 years; 21 or 30 per company policy before)", source: "auto" },
       { key: "eos_settlements", ar: "بدل إجازات غير مستخدمة عند إنهاء + تسويات غير متوقعة", en: "Unused leave on termination + unexpected settlements", source: "input" },
     ],
   },
@@ -140,13 +140,13 @@ export const BUDGET_INPUT_DEFAULTS = {
   // الإقامات
   dependents_fee_borne: true, iqama_services: 0,
   // السكن
-  housing_rent: 0, housing_utilities: 0, housing_maintenance: 0, housing_tickets: 0,
+  housing_cash_annual: 0, housing_rent: 0, housing_utilities: 0, housing_maintenance: 0, housing_tickets: 0,
   // النقل
   fleet_fuel_monthly: 0, fleet_maintenance_annual: 0, fleet_insurance_annual: 0, fleet_inspection_fee: 0,
   rental_cars_count: 0, rental_monthly: 0,
   fuel_allowance_beneficiaries: 0, fuel_allowance_monthly: 0,
   // نهاية الخدمة
-  eos_leave_days_input: 0, eos_settlements: 0,
+  eos_settlements: 0,
   // التوظيف
   recruit_visas: 0, recruit_transfer: 0, recruit_medical: 0, recruit_agency: 0, recruit_ads: 0, recruit_bonus: 0,
   // التدريب
@@ -176,7 +176,7 @@ const round2 = (n) => Math.round(n * 100) / 100;
  */
 export function computeHrBudget({ employees = [], org = null, vehicles = [], platformSubs = [], inputs = {} } = {}) {
   const inp = { ...BUDGET_INPUT_DEFAULTS, ...inputs };
-  const active = employees.filter((e) => e && e.status !== "terminated" && e.status !== "resign");
+  const active = employees.filter((e) => e && e.status !== "terminated" && e.status !== "resigned");
   const saudis = active.filter((e) => e.is_saudi);
   const expats = active.filter((e) => !e.is_saudi);
   const today = todayISO();
@@ -208,7 +208,8 @@ export function computeHrBudget({ employees = [], org = null, vehicles = [], pla
   const iqamaPermit = expatCount * permitMonthly * 12;
   const iqamaFamily = inp.dependents_fee_borne ? dependentsCount * 400 * 12 : 0;
 
-  // مكافأة نهاية الخدمة — مخصص سنوي بحسب مدة خدمة كل موظف (مادة 84)
+  // مخصص نهاية الخدمة — مخصص سنوي لسنة الميزانية فقط بحسب مدة خدمة كل موظف (مادة 84):
+  // نصف شهر عن كل سنة لأول 5 سنوات، وشهر كامل لكل سنة بعدها — من تاريخ المباشرة في ملف الموظف.
   let eosProvision = 0;
   for (const e of active) {
     const years = computeYearsOfService(e.hire_date, today);
@@ -216,8 +217,15 @@ export function computeHrBudget({ employees = [], org = null, vehicles = [], pla
     const rate = years >= 5 ? 1 : 0.5; // شهر كامل/سنة بعد الخامسة، ونصف شهر قبلها
     eosProvision += wage * rate;
   }
-  // مخصص الإجازات: الرصيد الحالي لكل الموظفين + ما يُستهلك من بدل الأيام المدخل يدوياً
-  const leaveProvision = active.reduce((s, e) => s + (eosSalaryBasis(e, "gross") / 30) * (num(e.leave_balance) || 0), 0) + num(inp.eos_leave_days_input) * (monthlyPayroll / 30);
+  // مخصص الإجازات السنوية — تلقائي من ملف الموظف بلا أي إدخال يدوي:
+  // من أكمل 5 سنوات فمستحقه 30 يوماً (قاعدة الوزارة)، ومن دونها يُرجع لحقل استحقاقه
+  // في الملف (21 أو 30 يوماً حسب سياسة الشركة). القيمة = (الراتب الشهري ÷ 30) × الأيام.
+  let leaveProvision = 0;
+  for (const e of active) {
+    const years = computeYearsOfService(e.hire_date, today);
+    const days = years >= 5 ? 30 : (Number(e.annual_leave_entitlement) || Number(org?.annual_leave_days) || 21);
+    leaveProvision += (eosSalaryBasis(e, org?.eos_basis || "gross") / 30) * days;
+  }
 
   // أسطول المركبات — من سجل المركبات الفعلي
   const fleetCount = vehicles.length;
@@ -254,7 +262,7 @@ export function computeHrBudget({ employees = [], org = null, vehicles = [], pla
     iqama_family: iqamaFamily,
     iqama_services: num(inp.iqama_services),
 
-    housing_allowance: active.reduce((s, e) => s + num(e.housing_allowance), 0) * 12,
+    housing_cash_annual: num(inp.housing_cash_annual),
     housing_rent: num(inp.housing_rent),
     housing_utilities: num(inp.housing_utilities),
     housing_maintenance: num(inp.housing_maintenance),

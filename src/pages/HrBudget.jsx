@@ -57,6 +57,7 @@ const INPUT_SECTIONS = [
   {
     key: "housing", ar: "السكن والمرافق", en: "Housing & Utilities",
     fields: [
+      { key: "housing_cash_annual", ar: "بدل السكن النقدي — الإجمالي السنوي المدفوع للموظفين", en: "Cash housing allowance — annual total paid to employees" },
       { key: "housing_rent", ar: "إيجارات سكن إداري/سكني", en: "Administrative / staff rent" },
       { key: "housing_utilities", ar: "كهرباء وماء", en: "Electricity & water" },
       { key: "housing_maintenance", ar: "صيانة وأثاث وإنترنت ورسوم بلدية", en: "Maintenance, furniture, internet, fees" },
@@ -79,7 +80,6 @@ const INPUT_SECTIONS = [
   {
     key: "eos", ar: "نهاية الخدمة والإجازات", en: "EOS & Leave",
     fields: [
-      { key: "eos_leave_days_input", ar: "أيام إجازة مستحقة إضافية (قيمة أيام)", en: "Extra leave days value (SAR)" },
       { key: "eos_settlements", ar: "تسويات وإنهاءات غير متوقعة", en: "Unexpected settlements" },
     ],
   },
