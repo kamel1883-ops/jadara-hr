@@ -9,7 +9,7 @@ import {
   Crown, Building2, FlaskConical, FileText, BadgeCheck, Pause,
   Wallet, AlertTriangle, RefreshCw, MessageCircle, Search, Users,
   Check, Sparkles, Ban, Eye, Bell, Download, FileSignature,
-  UploadCloud, Stamp, Handshake,
+  UploadCloud, Stamp, Handshake, Percent,
 } from "lucide-react";
 import { ClientInfoDialog, waLink, daysLeft, isOwnerTenant } from "./ClientActionDialogs";
 import { StoredDocButton } from "@/components/VaultDocLink";
@@ -303,6 +303,11 @@ export default function ClientsManager({ session }) {
                                   )}
                                   {x.pricing_tier && <span>· {x.pricing_tier}</span>}
                                   {x.quoted_amount > 0 && <span className="font-semibold">· {Number(x.quoted_amount).toLocaleString()} {isAr ? "ر.س" : "SAR"}</span>}
+                                  {x.discount_code && Number(x.discount_percent) > 0 && (
+                                    <span className="text-rose-600 font-semibold inline-flex items-center gap-1 bg-rose-50 border border-rose-200 rounded-full px-1.5 py-px">
+                                      <Percent size={10} /> {x.discount_code} ({x.discount_percent}%)
+                                    </span>
+                                  )}
                                 </div>
                               )}
                               {owner && (x.employee_count > 0 || x.pricing_tier) && (

@@ -7,7 +7,6 @@ import { useI18n } from "@/lib/i18n";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Image } from "@/components/ui/image";
 import { Printer, Loader2, ArrowLeft, Copy, Check, MessageCircle, ShieldCheck, AlertTriangle, Building2, Sparkles, UserPlus, Banknote } from "lucide-react";
 import { PRICING_TIERS_AR, PRICING_TIERS_EN, tierForCount } from "@/lib/pricing";
 import TurnstileWidget from "@/components/TurnstileWidget";
@@ -265,6 +264,49 @@ export default function Quote() {
   const set = (k, v) => setForm((f) => ({ ...f, [k]: v }));
   const features = isAr ? featuresAr : featuresEn;
 
+  // بطاقة الباقة والسعر — مشتركة بين عرضي الشراء والتجربة/طلب عرض السعر،
+  // حتى يحصل العميل في كل الحالات على طباعة توضح الخصم: السعر الأصل، الرمز ونسبته، قيمة الخصم، والمبلغ بعد الخصم.
+  const pricingCard = (
+    <div className="py-6 border-t border-border">
+      <div className="rounded-2xl border border-violet-200 bg-violet-50/50 p-5 space-y-3">
+        {/* رأس الباقة */}
+        <div className="flex items-baseline justify-between gap-3 pb-2 border-b border-violet-200/70">
+          <div>
+            <div className="font-medium">{matchedTier ? matchedTier.tier : t.planTier}</div>
+            <div className="text-sm text-muted-foreground">{matchedTier ? matchedTier.range : t.planTierRange}</div>
+          </div>
+          <div className="text-sm text-muted-foreground">{company?.employee_count ? `${company.employee_count} ${isAr ? "موظفاً" : "employees"}` : ""}</div>
+        </div>
+
+        {/* ١) القيمة الإجمالية قبل الخصم */}
+        <div className="flex items-baseline justify-between gap-3">
+          <div className="font-medium">{t.beforeDiscLabel}</div>
+          <div className={discount ? "text-lg text-muted-foreground line-through" : "text-2xl font-extrabold text-violet-700"}>
+            {baseAnnual.toLocaleString()} {isAr ? "ريال" : "SAR"}
+          </div>
+        </div>
+
+        {/* ٢) نسبة الخصم وقيمته */}
+        {discount && (
+          <div className="flex items-baseline justify-between gap-3 pt-3 border-t border-violet-200/70">
+            <div>
+              <div className="font-medium">{t.discBadge} {discount.percent}% — {discount.code}</div>
+              <div className="text-sm text-muted-foreground">{t.discApplied}</div>
+            </div>
+            <div className="text-lg font-extrabold text-rose-600">- {discountAmount.toLocaleString()} {isAr ? "ريال" : "SAR"}</div>
+          </div>
+        )}
+
+        {/* ٣) المبلغ بعد الخصم = المبلغ المطلوب للسنة الأولى */}
+        <div className="flex items-baseline justify-between gap-3 -mx-5 -mb-5 px-5 py-4 bg-violet-100/80 rounded-b-2xl border-t-2 border-violet-300">
+          <div className="font-extrabold text-violet-900 text-base">{t.netLabel} ({isAr ? "إجمالي السنة الأولى" : "Year 1 total"})</div>
+          <div className="text-2xl font-extrabold text-violet-900">{isCustomT ? (isAr ? "تأثير خاص" : "Custom") : `${totalYear1.toLocaleString()} ${isAr ? "ريال" : "SAR"}`}</div>
+        </div>
+        <div className="text-sm text-muted-foreground pt-3">{t.renewNote}</div>
+      </div>
+    </div>
+  );
+
   // —— نموذج بيانات المنشأة
   if (!company) {
     return (
@@ -386,6 +428,15 @@ export default function Quote() {
               <div className="mt-3 text-sm text-slate-500 bg-violet-50/60 border border-violet-100 rounded-lg px-3 py-2">{t.portalNote}</div>
             </div>
           </div>
+
+          {/* تفاصيل الباقة والسعر — مع الخصم الكامل إن وُجد رمز، ليُطبع العميل عرض سعر واضحًا فيه الخصم ونسبته ومبلغه */}
+          {matchedTier && (
+            <div className="pt-6 mt-2 border-t border-dashed border-border">
+              <div className="text-lg font-bold mb-1">{isAr ? "عرض سعر الاشتراك السنوي" : "Annual subscription quote"}</div>
+              <div className="text-sm text-muted-foreground mb-2">{isAr ? "السعر المحسوب لعدد موظفيكم — شامل تفاصيل الخصم إن وُجد" : "Price computed for your headcount — with full discount details if any"}</div>
+              {pricingCard}
+            </div>
+          )}
         </div>
       ) : (
       <div className="max-w-4xl mx-auto px-5 py-8">
@@ -434,45 +485,8 @@ export default function Quote() {
             </div>
           </div>
 
-          {/* الأسعار */}
-          <div className="py-6 border-t border-border">
-            <div className="rounded-2xl border border-violet-200 bg-violet-50/50 p-5 space-y-3">
-              {/* رأس الباقة */}
-              <div className="flex items-baseline justify-between gap-3 pb-2 border-b border-violet-200/70">
-                <div>
-                  <div className="font-medium">{matchedTier ? matchedTier.tier : t.planTier}</div>
-                  <div className="text-sm text-muted-foreground">{matchedTier ? matchedTier.range : t.planTierRange}</div>
-                </div>
-                <div className="text-sm text-muted-foreground">{company?.employee_count ? `${company.employee_count} ${isAr ? "موظفاً" : "employees"}` : ""}</div>
-              </div>
-
-              {/* ١) القيمة الإجمالية قبل الخصم */}
-              <div className="flex items-baseline justify-between gap-3">
-                <div className="font-medium">{t.beforeDiscLabel}</div>
-                <div className={discount ? "text-lg text-muted-foreground line-through" : "text-2xl font-extrabold text-violet-700"}>
-                  {baseAnnual.toLocaleString()} {isAr ? "ريال" : "SAR"}
-                </div>
-              </div>
-
-              {/* ٢) نسبة الخصم وقيمته */}
-              {discount && (
-                <div className="flex items-baseline justify-between gap-3 pt-3 border-t border-violet-200/70">
-                  <div>
-                    <div className="font-medium">{t.discBadge} {discount.percent}% — {discount.code}</div>
-                    <div className="text-sm text-muted-foreground">{t.discApplied}</div>
-                  </div>
-                  <div className="text-lg font-extrabold text-rose-600">- {discountAmount.toLocaleString()} {isAr ? "ريال" : "SAR"}</div>
-                </div>
-              )}
-
-              {/* ٣) المبلغ بعد الخصم = المبلغ المطلوب للسنة الأولى */}
-              <div className="flex items-baseline justify-between gap-3 -mx-5 -mb-5 px-5 py-4 bg-violet-100/80 rounded-b-2xl border-t-2 border-violet-300">
-                <div className="font-extrabold text-violet-900 text-base">{t.netLabel} ({isAr ? "إجمالي السنة الأولى" : "Year 1 total"})</div>
-                <div className="text-2xl font-extrabold text-violet-900">{isCustomT ? (isAr ? "تأثير خاص" : "Custom") : `${totalYear1.toLocaleString()} ${isAr ? "ريال" : "SAR"}`}</div>
-              </div>
-              <div className="text-sm text-muted-foreground pt-3">{t.renewNote}</div>
-            </div>
-          </div>
+          {/* الأسعار — بطاقة مشتركة تعرض الخصم كاملًا (السعر الأصل، الرمز والنسبة، قيمة الخصم، بعد الخصم) */}
+          {pricingCard}
 
           {/* تفعيل الاشتراك عبر التحويل البنكي + الواتساب */}
           <div className="py-6 border-t border-border">

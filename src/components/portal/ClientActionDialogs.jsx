@@ -37,6 +37,25 @@ export function waLink(t, isAr) {
   else if (num && !num.startsWith("966")) num = "966" + num;
   const amount = Number(t.quoted_amount) || 0;
   const disc = Number(t.discount_percent) || 0;
+  const code = String(t.discount_code || "").trim();
+  // تفاصيل الخصم: السعر الأصل، الرمز ونسبته، قيمة الخصم، ثم المبلغ بعد الخصم — حتى يكون العرض شاملاً وواضحاً للعميل.
+  const baseAnnual = disc > 0 && amount > 0 ? Math.round(amount / (1 - disc / 100)) : amount;
+  const discAmount = disc > 0 ? Math.max(0, baseAnnual - amount) : 0;
+  const priceLines = isAr
+    ? [
+        `• السعر السنوي للباقة: ${baseAnnual.toLocaleString()} ريال`,
+        ...(disc > 0 ? [
+          `• قيمة الخصم${code ? ` (كود ${code})` : ""} — ${disc}%: - ${discAmount.toLocaleString()} ريال`,
+          `• الإجمالي بعد الخصم: ${amount.toLocaleString()} ريال`,
+        ] : []),
+      ]
+    : [
+        `• Annual price: ${baseAnnual.toLocaleString()} SAR`,
+        ...(disc > 0 ? [
+          `• Discount${code ? ` (code ${code})` : ""} — ${disc}%: - ${discAmount.toLocaleString()} SAR`,
+          `• Total after discount: ${amount.toLocaleString()} SAR`,
+        ] : []),
+      ];
   const lines = isAr ? [
     `السلام عليكم ${t.contact_name || ""}،`,
     `نسعد بكم في منصة «جداره» لإدارة الموارد البشرية.`,
@@ -44,7 +63,7 @@ export function waLink(t, isAr) {
     `عرض السعر لمنشأتكم «${t.name}»:`,
     `• شريحة الاشتراك: ${t.pricing_tier || "—"}`,
     `• عدد الموظفين المتوقع: ${t.employee_count || 0}`,
-    `• السعر السنوي للباقة: ${amount.toLocaleString()} ريال${disc > 0 ? ` (بعد خصم ${disc}%)` : ""}`,
+    ...priceLines,
     ``,
     `بيانات التحويل البنكي:`,
     `المستفيد: ${PROVIDER_BANK.beneficiaryAr}`,
@@ -61,7 +80,7 @@ export function waLink(t, isAr) {
     `Annual subscription quote for «${t.name}»:`,
     `• Tier: ${t.pricing_tier || "—"}`,
     `• Expected employees: ${t.employee_count || 0}`,
-    `• Annual price: ${amount.toLocaleString()} SAR${disc > 0 ? ` (after ${disc}% discount)` : ""}`,
+    ...priceLines,
     ``,
     `Bank transfer details:`,
     `Beneficiary: ${PROVIDER_BANK.beneficiaryEn}`,
