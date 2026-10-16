@@ -875,6 +875,7 @@ function OtherModules() {
     { i: FileText, t: "Warnings & Labor Policy", d: "Three-level warnings by violation type, recording the incident, hearing session, verification, legal reference, and approval." },
     { i: UserCog, t: "Exit Interviews", d: "A separate interview at end of service, analyze departure reasons, and propose workplace improvements to retain talent." },
     { i: BarChart3, t: "Analytics & Reports", d: "Attendance, payroll, leaves, and recruitment reports, with an analytics dashboard for decision-makers and performance levels." },
+    { i: Calculator, t: "Annual HR Budget", d: "Every riyal spent on employees is accounted for: salaries, GOSI, housing and end-of-service are computed automatically from your employee files, with charts, budget-vs-actual comparison and branded print." },
     { i: Settings, t: "Organization Settings", d: "GOSI rates, working hours and days, lateness grace period, check-in radius, and leave and ticket policies." },
     { i: Headphones, t: "Arabic Product & Continuous Support", d: "A Saudi Arabic platform with a premium, authentic Arabic-first design, plus round-the-clock Arabic technical support via WhatsApp and email — our team is ready to help from activation to onboarding and training." },
   ];
