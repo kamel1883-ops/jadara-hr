@@ -19,7 +19,7 @@ export type NitaqatGroup = { id: string; ar: string };
 // مصادر رسمية تُجرّب بالترتيب. يمكن تجاوزها بمتغيّر بيئة NITAQAT_SOURCE_URL
 // (منصة قوى أو وزارة الموارد البشرية) فيُجرَّب أولاً.
 export const OFFICIAL_SOURCES = [
-  { name: "منصة قوى — نطاقات المطور", url: "https://www.qiwa.sa/" },
+  { name: "حاسبة النطاقات — منصة قوى", url: "https://qiwa.sa/ar/tools-and-calculators/nitaqat-forecast-calculator" },
   { name: "وزارة الموارد البشرية والتنمية الاجتماعية", url: "https://www.hrsd.gov.sa/" },
 ];
 

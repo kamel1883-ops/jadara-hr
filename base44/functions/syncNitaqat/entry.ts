@@ -86,7 +86,14 @@ export default async function (req) {
           attempts.push({ url: source.url, error: `HTTP ${res.status}` });
           continue;
         }
-        const catalog = parseCatalog(await res.text());
+        const text = await res.text();
+        // حماية الموقع الرسمي (WAF) تردّ صفحة رفض قصيرة للطلبات الآلية — تُسجَّل صراحةً كحجب،
+        // حتى لا تختلط بسبب المصدر بخطأ صيغة، ويبقى سبب الحالة واضحاً للمالك.
+        if (/(Request Rejected|Access Denied|Request unsuccessful)/i.test(text) && text.length < 5000) {
+          attempts.push({ url: source.url, error: "source_blocked" });
+          continue;
+        }
+        const catalog = parseCatalog(text);
         const checksum = await fingerprint(JSON.stringify(catalog));
         const changed = existing?.checksum !== checksum;
         await store({ sourceName: source.name, sourceUrl: source.url, checksum, status: changed ? "ok" : "unchanged", catalog });
@@ -101,8 +108,8 @@ export default async function (req) {
 
     // تعذّرت كل المحاولات: لا نمسّ البيانات المخزّنة، ونُسجّل الحالة والسبب.
     await store({
-      sourceName: existing?.source_name || "المصدر الرسمي",
-      sourceUrl: existing?.source_url || sources[0].url,
+      sourceName: sources[0].name,
+      sourceUrl: sources[0].url,
       checksum: existing?.checksum || "",
       status: "failed",
       error: attempts.map((a) => `${a.url}: ${a.error}`).join(" | ").slice(0, 500),

@@ -13,18 +13,20 @@ let CATALOG_PENDING = null;
 async function loadFromServer() {
   const rows = await base44.entities.NitaqatCatalog.list("-fetched_at", 1);
   const row = rows && rows[0];
-  if (!row || !row.payload) return null;
-  const data = JSON.parse(row.payload);
-  if (!data?.activities?.length) return null;
+  if (!row) return null;
+  let data = null;
+  try { data = row.payload ? JSON.parse(row.payload) : null; } catch (_) { data = null; }
+  if (!data?.activities?.length) data = null;
+  // عند تعذّر آخر قراءة من المصدر الرسمي: تُعرض النسخة الرسمية المخزّنة، ويبقى سبب الحالة ظاهراً للمالك.
   return {
     data,
     meta: {
-      source_name: row.source_name || "منصة قوى",
+      source_name: data ? (row.source_name || "منصة قوى") : "النسخة الرسمية المخزّنة",
       source_url: row.source_url || "",
       fetched_at: row.fetched_at || "",
       status: row.status || "ok",
       error: row.error || "",
-      activities: data.activities.length,
+      ...(data ? { activities: data.activities.length } : {}),
     },
   };
 }
@@ -67,7 +69,11 @@ export function loadNitaqatCatalog() {
     CATALOG_PENDING = (async () => {
       let loaded = null;
       try { loaded = await loadFromServer(); } catch (_) { loaded = null; }
-      if (!loaded) loaded = await loadBundled();
+      if (!loaded?.data) {
+        const bundled = await loadBundled();
+        // النسب من النسخة الرسمية المخزّنة، وحالة آخر محاولة مزامنة من المصدر تبقى معروضة.
+        loaded = { data: bundled.data, meta: { ...bundled.meta, ...(loaded?.meta || {}) } };
+      }
       return buildCatalog(loaded.data, loaded.meta);
     })().catch((err) => {
       CATALOG_PENDING = null;
