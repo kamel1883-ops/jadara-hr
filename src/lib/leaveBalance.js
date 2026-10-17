@@ -100,11 +100,10 @@ export function sumUsedDays(leaves) {
     .reduce((s, l) => s + (Number(l.balance_deducted) || Number(l.days_count) || 0), 0);
 }
 
-// الإجمالي المستحق: يدوي إن حُدِّد صراحة في ملف الموظف (leave_entitled_manual)،
-// وإلا التلقائي من تاريخ المباشرة وسياسة المنشأة (21/30).
+// الإجمالي المستحق: يُولَّد دائماً من تاريخ المباشرة وسياسة المنشأة (21/30، و30 إلزامياً بعد 5 سنوات).
+// لا يوجد رصيد افتتاحي على جانب الاستحقاق إطلاقاً — الرصيد الافتتاحي الوحيد هو «الرصيد المستخدم»
+// (openingUsedDays) لمن رُفع ملفه عبر ملف إكسل. حقل leave_entitled_manual يُتجاهل تماماً.
 export function entitledLeaveDays(employee, org, asOf = new Date()) {
-  const manual = Number(employee?.leave_entitled_manual);
-  if (employee?.leave_entitled_manual != null && Number.isFinite(manual)) return Math.round(manual * 10) / 10;
   return computeLeaveEntitlement(employee?.hire_date, org, asOf, employee?.annual_leave_entitlement);
 }
 

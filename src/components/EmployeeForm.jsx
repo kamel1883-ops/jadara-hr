@@ -186,7 +186,7 @@ export default function EmployeeForm({ open, onClose, onSaved, employee, unified
   const submit = async (e) => {
     e.preventDefault(); setSaving(true);
     try {
-      const payload = { ...form, base_salary: Number(form.base_salary) || 0, housing_allowance: Number(form.housing_allowance) || 0, transport_allowance: Number(form.transport_allowance) || 0, other_allowances: Number(form.other_allowances) || 0, ticket_value: Number(form.ticket_value) || 0, prior_used_leave: fromExcel ? (Number(form.prior_used_leave) || 0) : 0, leave_entitled_manual: form.leave_entitled_manual == null || form.leave_entitled_manual === "" ? null : Number(form.leave_entitled_manual) || 0, leave_used_manual: form.leave_used_manual == null || form.leave_used_manual === "" ? null : Number(form.leave_used_manual) || 0 };
+      const payload = { ...form, base_salary: Number(form.base_salary) || 0, housing_allowance: Number(form.housing_allowance) || 0, transport_allowance: Number(form.transport_allowance) || 0, other_allowances: Number(form.other_allowances) || 0, ticket_value: Number(form.ticket_value) || 0, prior_used_leave: fromExcel ? (Number(form.prior_used_leave) || 0) : 0, leave_entitled_manual: null, leave_used_manual: form.leave_used_manual == null || form.leave_used_manual === "" ? null : Number(form.leave_used_manual) || 0 };
       // الكاش المحسوب (leave_balance) ملك الإصلاح والاعتماد — لا يُكتب من نموذج التعديل
       // حتى لا يعيد حفظ قيم قديمة ما تم إصلاحه بعد فتح النموذج.
       delete payload.leave_balance;
@@ -270,18 +270,8 @@ export default function EmployeeForm({ open, onClose, onSaved, employee, unified
               <Input type="number" min="0" disabled={!fromExcel} value={fromExcel ? (form.prior_used_leave ?? 0) : 0} onChange={(e) => set("prior_used_leave", e.target.value)} />
               <p className="text-xs text-muted-foreground mt-1.5 leading-relaxed">{fromExcel ? t.priorUsedHint : t.priorUsedExcelOnly}</p>
             </Field>
-            <Field label={t.manualEnt}>
-              <Input type="number" min="0" value={form.leave_entitled_manual ?? ""} onChange={(e) => set("leave_entitled_manual", e.target.value === "" ? null : Number(e.target.value) || 0)} placeholder={t.manualAuto} />
-            </Field>
             <Field label={t.manualUsed}>
               <Input type="number" min="0" value={form.leave_used_manual ?? ""} onChange={(e) => set("leave_used_manual", e.target.value === "" ? null : Number(e.target.value) || 0)} placeholder={t.manualAuto} />
-            </Field>
-            <Field label={t.manualRem}>
-              <div className="h-9 flex items-center text-sm font-bold">
-                {form.leave_entitled_manual != null && form.leave_used_manual != null
-                  ? `${Math.round((Number(form.leave_entitled_manual) - Number(form.leave_used_manual)) * 10) / 10} ${isAr ? "يوم" : "d"}`
-                  : <span className="text-muted-foreground font-normal text-xs">{t.manualRemAuto}</span>}
-              </div>
             </Field>
             <Field label={t.contractStart}><Input type="date" lang={isAr ? "ar" : "en"} value={form.contract_start_date} onChange={(e) => set("contract_start_date", e.target.value)} /></Field>
             <Field label={t.contractEnd}><Input type="date" lang={isAr ? "ar" : "en"} value={form.contract_end_date} onChange={(e) => set("contract_end_date", e.target.value)} /></Field>
