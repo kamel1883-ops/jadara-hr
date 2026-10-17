@@ -57,13 +57,16 @@ function yearsOfServiceHire(hireDate, asOf = new Date()) {
   if (b.getMonth() < a.getMonth() || (b.getMonth() === a.getMonth() && b.getDate() < a.getDate())) y--;
   return Math.max(0, y);
 }
-// رصيد الإجازات وفق سياسة جدارة: 5+ سنوات → 30 إلزامياً؛ أقل → خيار الشركة (21/30).
+// الرصيد الإجمالي المستحق وفق سياسة جدارة (نفس معادلة النظام في الواجهة — أيام فعلية):
+// 5+ سنوات خدمة → 30 يوماً إلزامياً؛ أقل → خيار الشركة/الموظف 21 أو 30 من تاريخ المباشرة الفعلي.
 function computeEntitlement(hireDate, annualDays) {
   if (!hireDate) return 0;
-  const months = monthDiff(hireDate, new Date().toISOString());
-  if (months <= 0) return 0;
+  const a = new Date(hireDate);
+  if (isNaN(a.getTime())) return 0;
+  const sd = Math.max(0, Math.floor((Date.now() - a.getTime()) / 86400000));
+  if (sd <= 0) return 0;
   const days = yearsOfServiceHire(hireDate) >= 5 ? 30 : (Number(annualDays) || 21);
-  return Math.round((months / 12) * days * 10) / 10;
+  return Math.round((sd / 365) * days * 100) / 100;
 }
 
 function normalizeRecord(r) {
@@ -240,18 +243,24 @@ export default async function (req) {
       const br = await resolveBranch(r.branch_name);
       if (br) { r.branch_id = br.id; r.branch_name = br.name; }
       else r.branch_name = r.branch_name || '';
-      // الرصيد الافتتاحي يُؤخذ من صفّ هذا الموظف وحده في الملف ولا يُعمَّم على غيره،
-      // وإذا لم تُملأ الأعمدة الثلاثة يكون 0 (لا رصيد افتتاحي).
+      // الرصيد المستخدم (إجمالي المستخدم) يُعتمد كما هو من ملف العميل لهذا الموظف وحده،
+      // ولا يُعدَّل عليه. إذا لم يُملأ يكون 0 (لا رصيد سابق).
       r.prior_used_leave = r.leave_used || r.prior_used_leave || 0;
       // مصدر الرصيد الافتتاحي: "excel" فقط للموظفين المرفوعين من ملف — وهو وحده ما تُحتسب
       // له أيام ما قبل النظام. من يُضاف داخل النظام يبقى "manual" ولا رصيد افتتاحي له.
       r.opening_balance_source = Number(r.prior_used_leave) > 0 ? 'excel' : 'manual';
-      const empChoice = r.annual_leave_entitlement === 30 ? 30 : 21;
-      const ent = (r.leave_total_entitled && r.leave_total_entitled > 0)
-        ? r.leave_total_entitled
-        : computeEntitlement(r.hire_date, empChoice);
+      // أساس الاحتساب: عمود الإجازات في الملف (21/30) إن مُلئ صريحاً، وإلا سياسة المنشأة.
+      const rawAnn = num(rawRow.annual_leave_entitlement);
+      const empChoice = rawAnn === 30 ? 30 : (rawAnn === 21 ? 21 : annualDays);
+      r.annual_leave_entitlement = empChoice;
+      // الإجمالي المستحق: يُحسب في النظام من تاريخ المباشرة الفعلي (21 أو 30 يوماً بالسنة،
+      // و30 إلزامياً بعد 5 سنوات خدمة). الرقم المكتوب في الإكسل يُستخدم للتحقق فقط:
+      // إن طابق المعتمد نعتمده، وإن خالف (قد يكون محسوباً بطريقة خاطئة) نعتمد حساب النظام.
+      const sysEntitled = computeEntitlement(r.hire_date, empChoice);
+      const excelEntitled = num(r.leave_total_entitled);
+      const entitledMatch = excelEntitled > 0 ? (Math.abs(excelEntitled - sysEntitled) <= 1) : null;
       // القيمة الصريحة (قد تكون سالبة عند تجاوز الاستحقاق) — لا تُصفَّر
-      r.leave_balance = Math.round((ent - r.prior_used_leave) * 10) / 10;
+      r.leave_balance = Math.round((sysEntitled - r.prior_used_leave) * 10) / 10;
       r.unified_number = myUnified;
       toCreate.push(r);
       validPreview.push({
@@ -260,6 +269,9 @@ export default async function (req) {
         department: r.department,
         position: r.position,
         branch_name: r.branch_name,
+        entitled_excel: excelEntitled || null,
+        entitled_system: sysEntitled,
+        entitled_match: entitledMatch,
       });
     }
 

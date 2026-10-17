@@ -49,6 +49,9 @@ export default function EmployeeImport({ open, onClose, onSaved }) {
     issuesTitle: "أخطاء مكتشفة في الملف",
     issuesHint: "الترقيم يبدأ من أول موظف في الملف (وليس رقم صف الإكسل) — افتح الملف وصحّح الموظف المذكور برقمه.",
     validList: "الموظفون الصالحون",
+    entitledHint: "الإجمالي المستحق يُحسب في النظام من تاريخ المباشرة الفعلي (21 أو 30 يوماً بالسنة، و30 إلزامياً بعد 5 سنوات) — ورقم الإجمالي المستحق في الإكسل يُتحقّق منه فقط: إن طابق نُعتمده، وإن خالف نُعتمد حساب النظام. أما الرصيد المستخدم فيُعتمد كما هو من الملف.",
+    matchOk: "المستحق مطابق للإكسل",
+    matchDiff: (sys) => `المستحق غير مطابق للإكسل — اعتُمد ${sys} يوم`,
     confirmQ: "هل ترغب بإضافة هؤلاء الموظفين إلى المنشأة؟ سيتم تثبيتهم في قائمة الموظفين النشطين.",
     confirmBtn: "إضافة الموظفين إلى المنشأة",
     adding: "جارٍ الإضافة…",
@@ -72,6 +75,9 @@ export default function EmployeeImport({ open, onClose, onSaved }) {
     issuesTitle: "Issues found in the file",
     issuesHint: "Numbering starts from the first employee in the file (not the Excel row number).",
     validList: "Valid employees",
+    entitledHint: "Total entitlement is calculated by the system from the actual hire date (21 or 30 days/year, 30 mandatory after 5 years) — the Excel entitlement figure is only cross-checked: adopted when it matches, system calculation adopted when it differs. The used balance is adopted as-is from the file.",
+    matchOk: "Entitlement matches Excel",
+    matchDiff: (sys) => `Entitlement differs from Excel — adopted ${sys} days`,
     confirmQ: "Do you want to add these employees to the organization? They will be confirmed in the active employees list.",
     confirmBtn: "Add employees to organization",
     adding: "Adding…",
@@ -251,10 +257,18 @@ export default function EmployeeImport({ open, onClose, onSaved }) {
                 {preview.valid > 0 && (
                   <div className="rounded-xl bg-white border border-border p-3 space-y-1.5">
                     <div className="text-sm font-medium text-emerald-700">{t.validList} ({preview.valid})</div>
+                    <p className="text-[11px] leading-relaxed text-muted-foreground">{t.entitledHint}</p>
                     <div className="max-h-44 overflow-y-auto divide-y divide-border">
                       {preview.preview.map((e, i) => (
                         <div key={i} className="py-1.5 flex items-center justify-between text-xs gap-2">
-                          <span className="font-medium">{e.full_name} <span className="text-muted-foreground">({e.employee_number})</span></span>
+                          <span className="font-medium">
+                            {e.full_name} <span className="text-muted-foreground">({e.employee_number})</span>
+                            {e.entitled_match != null && (
+                              <span className={e.entitled_match ? "ms-2 text-emerald-600" : "ms-2 text-amber-600"}>
+                                · {e.entitled_match ? t.matchOk : t.matchDiff(e.entitled_system)}
+                              </span>
+                            )}
+                          </span>
                           <span className="text-muted-foreground text-left">{e.department} · {e.branch_name}</span>
                         </div>
                       ))}
