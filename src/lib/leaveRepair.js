@@ -1,5 +1,5 @@
 import { base44 } from "@/api/base44Client";
-import { entitledLeaveDays, usedLeaveTotal, sumUsedDays } from "@/lib/leaveBalance";
+import { entitledLeaveDays, usedLeaveTotal } from "@/lib/leaveBalance";
 import { generateLeaveSettlement } from "@/lib/docGenerators";
 
 // حالات الطلبات التي لها مخالصة تصفية (تُعاد توليدها لتستبدل المستند القديم)
