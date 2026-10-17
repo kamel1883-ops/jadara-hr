@@ -23,8 +23,10 @@ import { enrichEmployeesBatch } from "@/lib/vaultSensitive";
 
 // === مساعدات احتساب الرواتب — مشتركة مع بوابة الموظف (المُفوّض بصلاحية الرواتب) ===
 import {
-  PAID_STATUSES, computeWorkDaysSet, computeWorkDaysInMonth, computeAbsentDeduction, computeNetFromAttendance,
+  computeWorkDaysSet, computeWorkDaysInMonth, computeAbsentDeduction, computeNetFromAttendance,
 } from "@/lib/payrollCompute";
+// === بناء كشف الشهر من ملفات الموظفين الحيّة (التوليد اليدوي + الاستكمال التلقائي) ===
+import { buildSheet } from "@/lib/payrollSheet";
 
 export default function Payroll() {
   const { lang } = useI18n();
@@ -77,6 +79,7 @@ export default function Payroll() {
   const [batching, setBatching] = useState(false);
   const [exporting, setExporting] = useState(false);
   const sheetRef = React.useRef(null);
+  const syncingRef = React.useRef(false);
 
   // إغناء بيانات الموظفين بالحقول الحساسة من الخزنة السعودية (وضع احتياطي للنمط القديم)
   const enrichEmps = async (emps) => {
@@ -91,9 +94,29 @@ export default function Payroll() {
         base44.entities.Employee.filter({ status: "active" }, "-created_date", 500),
         listCurrentOrg(),
       ]);
-      setPayrolls(Array.isArray(data) ? data : []);
-      setEmployees(Array.isArray(emps) ? emps : []);
+      const list = Array.isArray(data) ? data : [];
+      const active = Array.isArray(emps) ? emps : [];
+      setPayrolls(list);
+      setEmployees(active);
       setOrg(orgs?.[0] || null);
+      // استكمال تلقائي للكشف: أي موظف على رأس العمل (يدوي/إكسل/توظيف) غير موجود يُضاف،
+      // وتُحدَّث صفوف المسودة بأرقام ملفه وطريقة صرفه الحالية — بلا خطوة يدوية.
+      if (list.length > 0 && !syncingRef.current) {
+        const inSheet = new Set(list.map((p) => p.employee_id));
+        const needsSync = active.some((e) => !inSheet.has(e.id)) || list.some((p) => p.status === "draft");
+        if (needsSync) {
+          syncingRef.current = true;
+          try {
+            const { created, updates } = await buildSheet({ month, year, org: orgs?.[0] || null, activeEmps: active, payrolls: list });
+            if (created.length > 0 || updates.length > 0) {
+              if (created.length > 0) await base44.entities.Payroll.bulkCreate(created);
+              if (updates.length > 0) await base44.entities.Payroll.bulkUpdate(updates);
+              const fresh = await base44.entities.Payroll.filter({ month, year }, "-created_date", 500);
+              if (Array.isArray(fresh) && fresh.length > 0) setPayrolls(fresh);
+            }
+          } finally { syncingRef.current = false; }
+        }
+      }
     } catch {
       setPayrolls([]);
     } finally {
@@ -107,71 +130,9 @@ export default function Payroll() {
     // جلب الموظفين الفعليين النشطين لحظة التوليد (يستبني من ترك العمل تلقائياً، ويضم المنضمين الجدد)
     const activeEmps = await base44.entities.Employee.filter({ status: "active" }, "-created_date", 500);
     setEmployees(await enrichEmps(activeEmps));
-    const existing = new Set(payrolls.map((p) => p.employee_id));
-    const mm = String(month).padStart(2, "0");
-    const startDate = `${year}-${mm}-01`;
-    const endDay = new Date(year, month, 0).getDate();
-    const endDate = `${year}-${mm}-${String(endDay).padStart(2, "0")}`;
-    const attRecords = await base44.entities.Attendance.filter({ date: { $gte: startDate, $lte: endDate } }, "-created_date", 2000);
-    // أيام العمل الرسمية المعتمدة بالمنشأة (0=الأحد ... 6=السبت). الأيام خارجها = إجازة أسبوعية لا تُحسب.
-    const orgFresh = (org && org.work_days) ? org : ((await listCurrentOrg())[0] || {});
-    const workDaysSet = computeWorkDaysSet(orgFresh.work_days);
-    const workDaysInMonth = computeWorkDaysInMonth(year, month, workDaysSet);
-    const workHoursPerDay = Number(orgFresh.work_hours_per_day) || 0;
-    // إحصاء أيام الحضور المدفوعة لكل موظف: present/late/leave/holiday ضمن أيام العمل الرسمية فقط
-    const paidDaysByEmp = {};
-    // إحصاء ساعات النقص (التغيب الجزئي) لكل موظف: الفرق بين ساعات اليوم المطلوبة وساعات العمل الفعلية في أيام الحضور
-    const shortfallByEmp = {};
-    for (const a of attRecords) {
-      if (!a.employee_id) continue;
-      if (!PAID_STATUSES.has(a.status)) continue;
-      const dow = a.date ? new Date(a.date + "T00:00:00").getDay() : -1;
-      if (dow >= 0 && !workDaysSet.has(dow)) continue;
-      paidDaysByEmp[a.employee_id] = (paidDaysByEmp[a.employee_id] || 0) + 1;
-      if (workHoursPerDay > 0 && (a.status === "present" || a.status === "late")) {
-        const wh = Number(a.work_hours) || 0;
-        const gap = Number((workHoursPerDay - wh).toFixed(2));
-        if (gap > 0) shortfallByEmp[a.employee_id] = Number(((shortfallByEmp[a.employee_id] || 0) + gap).toFixed(2));
-      }
-    }
-    const created = [];
-    const updates = [];
-    const existingDrafts = {};
-    for (const p of payrolls) if (p.employee_id && p.status === "draft") existingDrafts[p.employee_id] = p;
-    for (const emp of activeEmps) {
-      const base = Number(emp.base_salary) || 0;
-      const housing = Number(emp.housing_allowance) || 0;
-      const transport = Number(emp.transport_allowance) || 0;
-      const other = Number(emp.other_allowances) || 0;
-      const gross = base + housing + transport + other;
-      const paidDays = Math.min(paidDaysByEmp[emp.id] || 0, workDaysInMonth);
-      const absentDays = Math.max(0, workDaysInMonth - paidDays);
-      const absentHours = shortfallByEmp[emp.id] || 0;
-      const absentDeduction = computeAbsentDeduction(gross, absentDays, absentHours, workDaysInMonth, workHoursPerDay);
-      if (existing.has(emp.id)) {
-        // مزامنة القيم المالية + إعادة حساب الصافي بحسب أيام الحضور من ملف الموظف الحالي
-        const p = existingDrafts[emp.id];
-        if (p) updates.push({
-          id: p.id,
-          base_salary: base, housing_allowance: housing, transport_allowance: transport, other_allowances: other,
-          gross_salary: gross, national_id: emp.emp_ref ? "" : (emp.national_id || p.national_id || ""), emp_ref: emp.emp_ref || p.emp_ref || "",
-          employee_name: emp.full_name || p.employee_name || "",
-          salary_payment_method: emp.salary_payment_method || p.salary_payment_method || "mudad",
-          absent_days: absentDays, absent_hours: absentHours, absent_deduction: absentDeduction,
-          net_salary: computeNetFromAttendance(gross, absentDays, absentHours, workDaysInMonth, workHoursPerDay, p.bonus, p.overtime_amount, p.deductions, p.loan_installment),
-        });
-        continue;
-      }
-      created.push({
-        employee_id: emp.id, employee_name: emp.full_name || "", national_id: emp.emp_ref ? "" : (emp.national_id || ""), emp_ref: emp.emp_ref || "",
-        month, year, salary_payment_method: emp.salary_payment_method || "mudad",
-        base_salary: base, housing_allowance: housing, transport_allowance: transport, other_allowances: other,
-        gross_salary: gross, bonus: 0, deductions: 0, loan_installment: 0,
-        overtime_hours: 0, overtime_amount: 0,
-        absent_days: absentDays, absent_hours: absentHours, absent_deduction: absentDeduction,
-        net_salary: computeNetFromAttendance(gross, absentDays, absentHours, workDaysInMonth, workHoursPerDay, 0, 0, 0, 0), status: "draft",
-      });
-    }
+    // البناء موحّد: نفس منطق الاستكمال التلقائي — كل موظف على رأس العمل يدخل الكشف،
+    // وتُحدَّث المسودات بأرقام ملفه وطريقة صرفه الحالية (مدد/كاش).
+    const { created, updates } = await buildSheet({ month, year, org, activeEmps, payrolls });
     if (created.length > 0) await base44.entities.Payroll.bulkCreate(created);
     if (updates.length > 0) await base44.entities.Payroll.bulkUpdate(updates);
     setGenerating(false);
