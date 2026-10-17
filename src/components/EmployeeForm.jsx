@@ -34,6 +34,7 @@ const empty = {
   bank_account: "", ticket_entitlement: "yearly", ticket_last_used_year: null, ticket_value: "",
   annual_leave_entitlement: 21,
   prior_used_leave: 0,
+  opening_balance_source: "manual",
   leave_entitled_manual: null,
   leave_used_manual: null,
   unified_number: "",
@@ -57,8 +58,9 @@ export default function EmployeeForm({ open, onClose, onSaved, employee, unified
     passNo: "رقم الجواز", passExp: "انتهاء الجواز", medExp: "انتهاء التأمين الطبي",
     ticket: "استحقاق التذاكر", ticketValue: "قيمة التذكرة (ريال — مفتوحة)", yearly: "سنوي", biennial: "كل سنتين", none: "بدون", bank: "الحساب البنكي",
     annualLeaveEnt: "رصيد الإجازات السنوي", d21: "21 يوم", d30: "30 يوم",
-    priorUsed: "الرصيد الافتتاحي (أيام مستخدمة قبل النظام — لهذا الموظف فقط)",
-    priorUsedHint: "يُخصم من رصيد هذا الموظف وحده ولا يُعمَّم على أي موظف آخر. اتركه 0 إذا لم يكن له رصيد سابق.",
+    priorUsed: "الرصيد الافتتاحي (أيام مستخدمة قبل النظام)",
+    priorUsedHint: "قيمة من ملف الإكسل المرفوع لهذا الموظف وحده — يمكن تصحيحها هنا، وتُخصم من رصيده.",
+    priorUsedExcelOnly: "لا يوجد رصيد افتتاحي: هذا الموظف لم يُرفع عبر ملف إكسل، ورصيده يُحسب من تاريخ المباشرة والإجازات السنوية المعتمدة داخل النظام فقط.",
     manualEnt: "إجمالي المستحق (يدوي — اختياري)", manualUsed: "إجمالي المستخدم (يدوي — اختياري)",
     manualAuto: "اتركه فارغاً للحساب التلقائي",
     manualRem: "المتبقي (يُحسب تلقائياً من الفرق)", manualRemAuto: "يُحسب تلقائياً: المستحق − المستخدم (يدوياً أو تلقائياً)",
@@ -87,8 +89,9 @@ export default function EmployeeForm({ open, onClose, onSaved, employee, unified
     passNo: "Passport number", passExp: "Passport expiry", medExp: "Insurance expiry",
     ticket: "Ticket entitlement", ticketValue: "Ticket value (SAR — open)", yearly: "Yearly", biennial: "Biennial", none: "None", bank: "Bank account",
     annualLeaveEnt: "Annual leave entitlement", d21: "21 days", d30: "30 days",
-    priorUsed: "Opening balance (days used before the system — this employee only)",
-    priorUsedHint: "Applies to this employee only and is never generalized to others. Leave 0 if none.",
+    priorUsed: "Opening balance (days used before the system)",
+    priorUsedHint: "Comes from this employee's uploaded Excel file only — editable here and deducted from the balance.",
+    priorUsedExcelOnly: "No opening balance: this employee was not uploaded from an Excel file, so the balance is computed from the hire date and approved in-system annual leaves only.",
     manualEnt: "Total accrued (manual — optional)", manualUsed: "Total used (manual — optional)",
     manualAuto: "Leave empty for automatic calculation",
     manualRem: "Remaining (auto-computed from the difference)", manualRemAuto: "Auto: accrued − used (manual or automatic)",
@@ -150,6 +153,8 @@ export default function EmployeeForm({ open, onClose, onSaved, employee, unified
   // - أكمل 5 سنوات خدمة → 30 يوماً إلزامياً (يُقفل 21 — لا تملك الشركة 21).
   // - أقل من 5 سنوات → خيار الشركة: 21 أو 30 يوماً لكل موظف (الخياران متاحان).
   const mustBe30 = yearsOfService(form.hire_date) >= 5;
+  // الرصيد الافتتاحي (أيام ما قبل النظام) يخص الموظفين المرفوعين عبر ملف إكسل فقط.
+  const fromExcel = String(form.opening_balance_source || "") === "excel";
   useEffect(() => {
     if (mustBe30 && Number(form.annual_leave_entitlement) !== 30) {
       set("annual_leave_entitlement", 30);
@@ -181,7 +186,7 @@ export default function EmployeeForm({ open, onClose, onSaved, employee, unified
   const submit = async (e) => {
     e.preventDefault(); setSaving(true);
     try {
-      const payload = { ...form, base_salary: Number(form.base_salary) || 0, housing_allowance: Number(form.housing_allowance) || 0, transport_allowance: Number(form.transport_allowance) || 0, other_allowances: Number(form.other_allowances) || 0, ticket_value: Number(form.ticket_value) || 0, prior_used_leave: Number(form.prior_used_leave) || 0, leave_entitled_manual: form.leave_entitled_manual == null || form.leave_entitled_manual === "" ? null : Number(form.leave_entitled_manual) || 0, leave_used_manual: form.leave_used_manual == null || form.leave_used_manual === "" ? null : Number(form.leave_used_manual) || 0 };
+      const payload = { ...form, base_salary: Number(form.base_salary) || 0, housing_allowance: Number(form.housing_allowance) || 0, transport_allowance: Number(form.transport_allowance) || 0, other_allowances: Number(form.other_allowances) || 0, ticket_value: Number(form.ticket_value) || 0, prior_used_leave: fromExcel ? (Number(form.prior_used_leave) || 0) : 0, leave_entitled_manual: form.leave_entitled_manual == null || form.leave_entitled_manual === "" ? null : Number(form.leave_entitled_manual) || 0, leave_used_manual: form.leave_used_manual == null || form.leave_used_manual === "" ? null : Number(form.leave_used_manual) || 0 };
       // الكاش المحسوب (leave_balance) ملك الإصلاح والاعتماد — لا يُكتب من نموذج التعديل
       // حتى لا يعيد حفظ قيم قديمة ما تم إصلاحه بعد فتح النموذج.
       delete payload.leave_balance;
@@ -204,14 +209,7 @@ export default function EmployeeForm({ open, onClose, onSaved, employee, unified
         <DialogHeader><DialogTitle>{employee ? t.edit : t.add}</DialogTitle></DialogHeader>
         {employee?.id && (
           <div className="mb-3 max-h-64 overflow-y-auto p-3 rounded-xl bg-slate-50/60 border border-border">
-            <EmployeeLeaveLoanSummary
-              employee={{ ...employee, ...form }}
-              onRepaired={(patch) => {
-                // 1) القيم الجديدة تدخل النموذج حتى يحفظها 2) تحديث قائمة الأب ليبقى ملف الموظف متوافقاً
-                setForm((f) => ({ ...f, ...patch }));
-                onSaved?.();
-              }}
-            />
+            <EmployeeLeaveLoanSummary employee={{ ...employee, ...form }} />
           </div>
         )}
         <form onSubmit={submit} className="space-y-4">
@@ -269,8 +267,8 @@ export default function EmployeeForm({ open, onClose, onSaved, employee, unified
               )}
             </Field>
             <Field label={t.priorUsed}>
-              <Input type="number" min="0" value={form.prior_used_leave ?? 0} onChange={(e) => set("prior_used_leave", e.target.value)} />
-              <p className="text-xs text-muted-foreground mt-1.5 leading-relaxed">{t.priorUsedHint}</p>
+              <Input type="number" min="0" disabled={!fromExcel} value={fromExcel ? (form.prior_used_leave ?? 0) : 0} onChange={(e) => set("prior_used_leave", e.target.value)} />
+              <p className="text-xs text-muted-foreground mt-1.5 leading-relaxed">{fromExcel ? t.priorUsedHint : t.priorUsedExcelOnly}</p>
             </Field>
             <Field label={t.manualEnt}>
               <Input type="number" min="0" value={form.leave_entitled_manual ?? ""} onChange={(e) => set("leave_entitled_manual", e.target.value === "" ? null : Number(e.target.value) || 0)} placeholder={t.manualAuto} />

@@ -16,8 +16,7 @@ import {
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription,
 } from "@/components/ui/dialog";
-import { repairOrgLeaves } from "@/lib/leaveRepair";
-import { Plus, Search, Pencil, Users, Network, Upload, GitBranch, Plane, FileText, UserX, Printer, Wrench, Loader2 } from "lucide-react";
+import { Plus, Search, Pencil, Users, Network, Upload, GitBranch, Plane, FileText, UserX, Printer } from "lucide-react";
 import { Link } from "react-router-dom";
 import { cn } from "@/lib/utils";
 import { formatCurrency, statusEmployeeLabel } from "@/lib/hr";
@@ -43,17 +42,7 @@ export default function Employees() {
     thTermReason: "سبب الإنهاء", thTermDate: "تاريخ الإنهاء",
     del: (n) => `حذف الموظف ${n}؟`, terminateTitle: "فسخ عقد", profileTitle: "ملف الموظف", tripsTitle: "انتدابات",
     yearFilter: "السنة", allYears: "كل السنوات", noInactive: "لا يوجد موظفون تركوا العمل",
-    exportPdf: "طباعة PDF",
-    repairBtn: "إصلاح رصيد الإجازات",
-    repairTitle: "إصلاح رصيد إجازات الموظفين",
-    repairDesc: "يعيد حساب رصيد كل موظف نشط من مصدر الحقيقة: المستحق تناسبياً من تاريخ المباشرة حسب سياسة المنشأة (21/30)، والمستخدم = الرصيد الافتتاحي + الإجازات السنوية المعتمدة فقط (لا مرضية ولا بدون راتب ولا طارئة).",
-    repairReset: "تصفير الأرصدة الافتتاحية (لمن ثبت أن قيمته خطأ فقط)",
-    repairResetHint: "يفعّل هذا فقط إذا كانت الأرصدة الافتتاحية كلها أُدخلتخطأً ولا تخص أحداً (مثل بيانات تجريبية) — يصبح الرصيد الافتتاحي 0 لكل موظف.",
-    repairDocs: "إعادة توليد مخالصات الإجازات (تستبدل القديمة)",
-    repairRun: "ابدأ الإصلاح", repairRunning: (n, total, name) => `جارٍ إصلاح ${n} من ${total} — ${name}`,
-    repairDone: (empN, docN, keptN) => `تم إصلاح ${empN} موظفاً — أُعيد توليد ${docN} مخالصة (بدّلت القديمة) وبقيت ${keptN} مطابقة كما هي`,
-    repairPartial: (failed) => `تعذّر إصلاح ${failed} موظف — أعد المحاولة`,
-    repairNoOrg: "لا توجد بيانات منشأة", close: "إغلاق",
+    exportPdf: "طباعة PDF", close: "إغلاق",
   } : {
     title: "Employees", subtitle: "Manage employee data and profiles", add: "New employee", importBtn: "Import from Excel", branchesBtn: "Branches",
     search: "Search by name, employee number or ID... (active & inactive)", allDepts: "All departments", allRoles: "All levels", allBranches: "All branches", loading: "Loading...",
@@ -63,17 +52,7 @@ export default function Employees() {
     thTermReason: "Termination reason", thTermDate: "Termination date",
     del: (n) => `Delete employee ${n}?`, terminateTitle: "Terminate", profileTitle: "Profile", tripsTitle: "Trips",
     yearFilter: "Year", allYears: "All years", noInactive: "No terminated employees",
-    exportPdf: "Export PDF",
-    repairBtn: "Repair leave balances",
-    repairTitle: "Repair employee leave balances",
-    repairDesc: "Recomputes every active employee from the source of truth: accrued proportionally from the hire date per org policy (21/30), used = opening balance + approved annual leaves only (no sick/unpaid/emergency).",
-    repairReset: "Reset opening balances (only those proven wrong)",
-    repairResetHint: "Enable only if every opening balance was entered by mistake and belongs to no one (e.g. demo data) — each employee's opening balance becomes 0.",
-    repairDocs: "Regenerate leave settlements (replace old ones)",
-    repairRun: "Start repair", repairRunning: (n, total, name) => `Repairing ${n} of ${total} — ${name}`,
-    repairDone: (empN, docN, keptN) => `Repaired ${empN} employee(s) — regenerated ${docN} settlement(s) replacing old ones, kept ${keptN} matching as-is`,
-    repairPartial: (failed) => `Could not repair ${failed} employee(s) — try again`,
-    repairNoOrg: "No organization data", close: "Close",
+    exportPdf: "Export PDF", close: "Close",
   };
 
   const [employees, setEmployees] = useState([]);
@@ -96,32 +75,6 @@ export default function Employees() {
   const [termEmp, setTermEmp] = useState(null);
   const [myUnified, setMyUnified] = useState("");
   const loadSeq = useRef(0);
-  const [repairOpen, setRepairOpen] = useState(false);
-  const [repairReset, setRepairReset] = useState(false);
-  const [repairDocs, setRepairDocs] = useState(true);
-  const [repairBusy, setRepairBusy] = useState(false);
-  const [repairProg, setRepairProg] = useState(null);
-  const [repairResult, setRepairResult] = useState(null);
-
-  const runRepair = async () => {
-    if (!org) return;
-    setRepairBusy(true); setRepairResult(null);
-    try {
-      const list = employees.filter((e) => e && !isInactive(e));
-      const results = await repairOrgLeaves(list, org, {
-        resetPrior: repairReset,
-        regenerateDocs: repairDocs,
-        onProgress: ({ index, total, employee }) => setRepairProg({ index: index + 1, total, name: employee?.full_name || "" }),
-      });
-      const fixed = results.filter((r) => !r.error).length;
-      const docs = results.reduce((s, r) => s + (r.docs || 0), 0);
-      const kept = results.reduce((s, r) => s + (r.kept || 0), 0);
-      setRepairResult({ fixed, docs, kept, failed: results.length - fixed });
-      load();
-    } finally {
-      setRepairBusy(false); setRepairProg(null);
-    }
-  };
 
   const load = async () => {
     const seq = ++loadSeq.current;
@@ -209,50 +162,9 @@ export default function Employees() {
             <Button onClick={() => { setEditTarget(null); setFormOpen(true); }} className="gap-2"><Plus size={18} /> {t.add}</Button>
             <Button variant="outline" onClick={() => setBranchOpen(true)} className="gap-2"><GitBranch size={18} /> {t.branchesBtn}</Button>
             <Button variant="outline" onClick={() => setImportOpen(true)} className="gap-2"><Upload size={18} /> {t.importBtn}</Button>
-            <Button variant="outline" onClick={() => { setRepairResult(null); setRepairOpen(true); }} className="gap-2"><Wrench size={18} /> {t.repairBtn}</Button>
           </div>
         )}
       />
-
-      {/* إصلاح رصيد الإجازات — يعيد الحساب من مصدر الحقيقة ويعيد توليد المخالصات */}
-      <Dialog open={repairOpen} onOpenChange={(v) => { if (!repairBusy) setRepairOpen(v); }}>
-        <DialogContent className="max-w-lg">
-          <DialogHeader>
-            <DialogTitle>{t.repairTitle}</DialogTitle>
-            <DialogDescription className="text-xs leading-relaxed">{t.repairDesc}</DialogDescription>
-          </DialogHeader>
-          <div className="space-y-3">
-            <label className="flex items-start gap-2 text-sm">
-              <input type="checkbox" checked={repairReset} onChange={(e) => setRepairReset(e.target.checked)} disabled={repairBusy} className="mt-0.5 w-4 h-4 accent-rose-600" />
-              <span>
-                {t.repairReset}
-                <span className="block text-[11px] text-rose-600 mt-0.5 leading-relaxed">{t.repairResetHint}</span>
-              </span>
-            </label>
-            <label className="flex items-start gap-2 text-sm">
-              <input type="checkbox" checked={repairDocs} onChange={(e) => setRepairDocs(e.target.checked)} disabled={repairBusy} className="mt-0.5 w-4 h-4 accent-violet-600" />
-              <span>{t.repairDocs}</span>
-            </label>
-            {repairProg && (
-              <div className="text-xs text-muted-foreground bg-slate-50 rounded-lg p-2">
-                {t.repairRunning(repairProg.index, repairProg.total, repairProg.name)}
-              </div>
-            )}
-            {repairResult && (
-              <div className={cn("text-xs rounded-lg p-2", repairResult.failed ? "bg-amber-50 text-amber-700" : "bg-emerald-50 text-emerald-700")}>
-                {t.repairDone(repairResult.fixed, repairResult.docs, repairResult.kept || 0)}
-                {repairResult.failed ? ` — ${t.repairPartial(repairResult.failed)}` : ""}
-              </div>
-            )}
-            <div className="flex justify-end gap-2 pt-1">
-              <Button variant="outline" onClick={() => setRepairOpen(false)} disabled={repairBusy}>{t.close}</Button>
-              <Button onClick={runRepair} disabled={repairBusy || !org} className="gap-2">
-                {repairBusy ? <Loader2 size={16} className="animate-spin" /> : <Wrench size={16} />} {t.repairRun}
-              </Button>
-            </div>
-          </div>
-        </DialogContent>
-      </Dialog>
 
       <div className="bg-white rounded-2xl border border-border">
         <div className="p-4 flex flex-col sm:flex-row gap-3 border-b border-border">

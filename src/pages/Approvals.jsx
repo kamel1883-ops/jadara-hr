@@ -716,7 +716,7 @@ export default function Approvals() {
               {acting.req.medical_report_url && <VaultDocLink value={acting.req.medical_report_url} label="تقرير طبي مرفق" className="text-xs h-6 px-2 rounded-full bg-rose-50 text-rose-600 border-0" />}
               {(() => {
                 const emp = empOf(acting.req.employee_id);
-                const entitled = computeLeaveEntitlement(emp?.hire_date, org);
+                const entitled = entitledLeaveDays(emp, org);
                 const used = usedLeaveTotal(emp, (leaves || []).filter((l) => l.id !== acting.req.id && l.employee_id === acting.req.employee_id));
                 const remaining = Math.max(0, Math.round((entitled - used) * 10) / 10);
                 const mw = (Number(emp?.base_salary) || 0) + (Number(emp?.housing_allowance) || 0) + (Number(emp?.transport_allowance) || 0) + (Number(emp?.other_allowances) || 0);

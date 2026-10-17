@@ -1,8 +1,7 @@
 import React, { useState, useEffect } from "react";
 import { base44 } from "@/api/base44Client";
-import { entitledLeaveDays, usedLeaveTotal, sumUsedDays, getOrgOnce, getEmployeeAnnualDays } from "@/lib/leaveBalance";
+import { entitledLeaveDays, usedLeaveTotal, sumUsedDays, getOrgOnce, getEmployeeAnnualDays, openingUsedDays } from "@/lib/leaveBalance";
 import { generateLeaveSettlement, generateLoanStatement } from "@/lib/docGenerators";
-import { repairEmployeeLeave } from "@/lib/leaveRepair";
 import { formatCurrency, leaveTypeLabel } from "@/lib/hr";
 import { badge } from "@/lib/approvals";
 import { Download, FileText, Loader2, RefreshCw, CalendarDays, Wallet } from "lucide-react";
@@ -11,12 +10,11 @@ import { StoredDocButton } from "@/components/VaultDocLink";
 import { useI18n } from "@/lib/i18n";
 import { leaveDocumentErrorText } from "@/lib/saveLeaveDocument";
 
-export default function EmployeeLeaveLoanSummary({ employee, onRepaired }) {
+export default function EmployeeLeaveLoanSummary({ employee }) {
   const { lang } = useI18n();
   const isAr = lang === "ar";
   const t = isAr ? {
     leaveTitle: "رصيد الإجازات (محسوب تلقائياً من تاريخ المباشرة)",
-    fixBtn: "إصلاح الرصيد", fixHint: "يعيد حساب المستحق والمستخدم (السنوية فقط) ويحدّث ملف الموظف — الرصيد الافتتاحي لا يتغير",
     entitled: "المستحق", used: "المستخدم", remaining: "المتبقي", day: "يوم",
     systemNote: (g) => g ? "30 يوماً/سنة عن كامل المدة (سياسة المنشأة) · تراكم يومي فعلي من تاريخ المباشرة" : "21 يوماً/سنة لأول 5 سنوات + 30 يوماً/سنة بعدها · تراكم يومي فعلي من تاريخ المباشرة",
     settlementsTitle: "سجل التصفيات", noSettlements: "لا توجد تصفيات بعد",
@@ -27,7 +25,6 @@ export default function EmployeeLeaveLoanSummary({ employee, onRepaired }) {
     paid: (v) => `تم سداد ${v}`, rem: (v) => `متبقي ${v}`, closed: "مغلقة", statement: "الكشف",
   } : {
     leaveTitle: "Leave balance (auto-calculated from hire date)",
-    fixBtn: "Fix balance", fixHint: "Recomputes accrued and used (annual only) and updates the employee record — opening balance unchanged",
     entitled: "Accrued", used: "Used", remaining: "Remaining", day: "days",
     systemNote: (g) => g ? "30 days/yr for full tenure (org policy) · accrued daily from hire date" : "21 days/yr first 5 years + 30 days/yr after · accrued daily from hire date",
     settlementsTitle: "Settlements log", noSettlements: "No settlements yet",
@@ -42,8 +39,6 @@ export default function EmployeeLeaveLoanSummary({ employee, onRepaired }) {
   const [loans, setLoans] = useState([]);
   const [org, setOrg] = useState(null);
   const [busy, setBusy] = useState(null);
-  // بعد الإصلاح: القيم الجديدة تُطبَّق على العرض فوراً (وتُمرَّر للنموذج الأب عبر onRepaired)
-  const [fix, setFix] = useState(null);
 
   const load = async () => {
     if (!employee?.id) return;
@@ -61,12 +56,10 @@ export default function EmployeeLeaveLoanSummary({ employee, onRepaired }) {
   useEffect(() => {
     setLeaves([]);
     setLoans([]);
-    setFix(null);
     if (employee?.id) load();
   }, [employee?.id]);
 
-  // القيم بعد الإصلاح (إن وُجد) تحل محل قيم الموظف المرسلة — حتى لا يعود الخلل القديم في العرض
-  const emp = fix ? { ...employee, ...fix } : employee;
+  const emp = employee;
   // رصيد الإجازات يعتمد اختيار المنشأة لكل موظف (21 أو 30) من ملف الموظف،
   // ويُلزم بـ30 بعد إكمال 5 سنوات خدمة. الخزنة أعلاه تتبع هذا الاختيار دائماً.
   const annualDays = getEmployeeAnnualDays(emp, org);
@@ -75,8 +68,9 @@ export default function EmployeeLeaveLoanSummary({ employee, onRepaired }) {
   // المستخدم الكلي = الرصيد الافتتاحي (prior_used_leave، ثابت) + المعتمد داخل النظام (sumUsedDays).
   const used = usedLeaveTotal(emp, leaves);
   const remaining = Math.round((entitlement - used) * 100) / 100;
-  // تفصيل «المستخدم» ليكون واضحاً أنه ليس أياماً أُخذت داخل النظام فقط
-  const priorUsed = Number(emp?.prior_used_leave) || 0;
+  // تفصيل «المستخدم» ليكون واضحاً أنه ليس أياماً أُخذت داخل النظام فقط —
+  // الرصيد الافتتاحي يُحتسب فقط لمن رُفع ملفه عبر ملف إكسل، وإلا فقيمته صفر.
+  const priorUsed = openingUsedDays(emp);
   const systemUsed = Math.round(sumUsedDays(leaves) * 10) / 10;
 
   const doneLeaves = leaves.filter((l) => l.status === "completed" || l.status === "paid");
@@ -86,18 +80,6 @@ export default function EmployeeLeaveLoanSummary({ employee, onRepaired }) {
     try { await generateLeaveSettlement(l, emp, org, leaves); await load(); }
     catch (error) { alert(leaveDocumentErrorText(error, isAr)); }
     finally { setBusy(null); }
-  };
-  // إصلاح سريع لرصيد هذا الموظف: يعيد الحساب من مصدر الحقيقة ويحدّث الكاش —
-  // ثم ينشر القيم الجديدة على النموذج الأبو (onRepaired) حتى لا تُكتب القديمة فوقها عند «حفظ».
-  const fixBalance = async () => {
-    setBusy("fix");
-    try {
-      const res = await repairEmployeeLeave(employee, org, { regenerateDocs: false });
-      const patch = res?.patch || {};
-      setFix(patch);
-      onRepaired?.(patch);
-      await load();
-    } finally { setBusy(null); }
   };
   const genLoan = async (l) => {
     setBusy("loan" + l.id);
@@ -109,14 +91,8 @@ export default function EmployeeLeaveLoanSummary({ employee, onRepaired }) {
     <div className="space-y-4">
       {/* رصيد الإجازات */}
       <div className="rounded-xl border border-border bg-white p-3">
-        <div className="flex items-center justify-between gap-2 mb-2">
-          <div className="flex items-center gap-2 text-sm font-semibold">
-            <CalendarDays size={16} className="text-violet-600" /> {t.leaveTitle}
-          </div>
-          <button type="button" onClick={fixBalance} disabled={busy === "fix"} title={t.fixHint}
-            className="inline-flex items-center gap-1 text-[11px] px-2 py-1 rounded-md bg-slate-50 text-slate-600 hover:bg-slate-100 disabled:opacity-50">
-            {busy === "fix" ? <Loader2 size={12} className="animate-spin" /> : <RefreshCw size={12} />} {t.fixBtn}
-          </button>
+        <div className="flex items-center gap-2 text-sm font-semibold mb-2">
+          <CalendarDays size={16} className="text-violet-600" /> {t.leaveTitle}
         </div>
         <div className="grid grid-cols-3 gap-2 text-center">
           <Stat label={t.entitled} value={`${entitlement} ${t.day}`} tone="slate" />
