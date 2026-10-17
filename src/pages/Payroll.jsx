@@ -11,7 +11,7 @@ import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue
 } from "@/components/ui/select";
 import { Input } from "@/components/ui/input";
-import { Wallet, FileCheck, Clock, TrendingUp, Sparkles, CheckCircle2, Shield, Fingerprint, FileDown, RotateCcw, Check, X, Send, Banknote } from "lucide-react";
+import { Wallet, FileCheck, Clock, TrendingUp, Sparkles, CheckCircle2, Shield, Fingerprint, FileDown, RotateCcw, Check, X, Send, Banknote, Lock } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { formatCurrency, payrollStatusLabel, todayISO } from "@/lib/hr";
 import { useI18n } from "@/lib/i18n";
@@ -49,6 +49,10 @@ export default function Payroll() {
     gosi: "التأمينات الاجتماعية", gosiHint: "احتساب اشتراكات GOSI وحفظها وتصديرها",
     thEmp: "الموظف", thBase: "أساسي", thHouse: "سكن", thTrans: "مواصلات", thBonus: "حوافز", thOvertime: "عمل إضافي", thGosi: "تأمينات (موظف)", thAbsent: "غياب (يوم/قيمة)", thAbsentHours: "غياب (ساعة/قيمة)", thDed: "خصومات أخرى", thLoan: "سلفة", thNet: "الصافي", thIncl: "يشمل الصرف", thStatus: "الحالة", thMethod: "طريقة الصرف", mudadBadge: "مدد", cashBadge: "كاش",
     totalIncludedLabel: "إجمالي الرواتب للمشمولين بالصرف هذا الشهر", excludedHint: (n) => `${n} موظف مستثنى من صرف هذا الشهر`, allIncluded: "كل الموظفين مشمولون بالصرف",
+    lockedAll: (n) => `معتمد لجميع الموظفين (${n}) — الكشف مقفل للعرض والطباعة فقط`,
+    lockedHint: "لإدخال رواتب شهر جديد انتقل إلى شهر رواتب آخر",
+    lockedShort: "مقفل — عرض وطباعة فقط",
+    lockedWarn: "رواتب هذا الشهر تم توليدها واعتمادها بالفعل — لا يمكن إعادة التوليد أو التعديل. انتقل إلى شهر رواتب آخر.",
   } : {
     title: "Payroll", subtitle: "Process monthly payroll sheets",
     gen: "Generate month sheet", gening: "Generating...",
@@ -67,6 +71,10 @@ export default function Payroll() {
     gosi: "Social Insurance (GOSI)", gosiHint: "Calculate, save and export GOSI subscriptions",
     thEmp: "Employee", thBase: "Base", thHouse: "Housing", thTrans: "Transport", thBonus: "Bonus", thOvertime: "Overtime", thGosi: "GOSI (emp)", thAbsent: "Absent (days/value)", thAbsentHours: "Absent (hrs/value)", thDed: "Other deductions", thLoan: "Loan", thNet: "Net", thIncl: "Include pay", thStatus: "Status", thMethod: "Method", mudadBadge: "Mudad", cashBadge: "Cash",
     totalIncludedLabel: "Total payroll for employees included in this month's pay", excludedHint: (n) => `${n} employee(s) excluded from this month's pay`, allIncluded: "All employees are included in pay",
+    lockedAll: (n) => `Approved for all employees (${n}) — the sheet is locked for view and print only`,
+    lockedHint: "To enter a new payroll month, move to another salary month",
+    lockedShort: "Locked — view & print only",
+    lockedWarn: "This month's payroll has already been generated and approved — it cannot be regenerated or edited. Move to another salary month.",
   };
 
   const [payrolls, setPayrolls] = useState([]);
@@ -101,7 +109,9 @@ export default function Payroll() {
       setOrg(orgs?.[0] || null);
       // استكمال تلقائي للكشف: أي موظف على رأس العمل (يدوي/إكسل/توظيف) غير موجود يُضاف،
       // وتُحدَّث صفوف المسودة بأرقام ملفه وطريقة صرفه الحالية — بلا خطوة يدوية.
-      if (list.length > 0 && !syncingRef.current) {
+      // شهر اعتُمد كشفه = مقفل: لا يُضاف إليه موظفون جدد ولا تُعاد كتابة صفوفه المعتمدة
+      const lockedMonth = list.length > 0 && !list.some((p) => p.include_in_payroll !== false && p.status === "draft");
+      if (list.length > 0 && !syncingRef.current && !lockedMonth) {
         const inSheet = new Set(list.map((p) => p.employee_id));
         const needsSync = active.some((e) => !inSheet.has(e.id)) || list.some((p) => p.status === "draft");
         if (needsSync) {
@@ -126,6 +136,8 @@ export default function Payroll() {
   useEffect(() => { load(); }, [month, year]);
 
   const generate = async () => {
+    // شهر معتمد = مقفل: لا إعادة توليد لنفس الشهر
+    if (locked) return lockedNote();
     setGenerating(true);
     // جلب الموظفين الفعليين النشطين لحظة التوليد (يستبني من ترك العمل تلقائياً، ويضم المنضمين الجدد)
     const activeEmps = await base44.entities.Employee.filter({ status: "active" }, "-created_date", 500);
@@ -141,6 +153,8 @@ export default function Payroll() {
 
   // إعادة مزامنة القيم المالية لكل سجلات الكشف من ملفات الموظفين الحالية (مع إعادة احتساب الصافي بحسب الحضور)
   const syncFromEmployees = async () => {
+    // شهر معتمد = مقفل: لا تُعاد كتابة قيمه المالية
+    if (locked) return lockedNote();
     setGenerating(true);
     try {
       const activeEmps = await base44.entities.Employee.filter({ status: "active" }, "-created_date", 500);
@@ -315,14 +329,20 @@ export default function Payroll() {
   // تحديد طريقة الصرف لكل سجل: لقطة من سجل الرواتب، وإلا من ملف الموظف، وإلا «مدد» افتراضياً
   const empMap = {};
   for (const e of employees) empMap[e.id] = e;
-  // طريقة الصرف: يُعتمد ملف الموظف الحي أولاً (يعكس أي تغيير في الإعداد) ثم لقطة سجل الرواتب
-  const methodOf = (p) => empMap[p.employee_id]?.salary_payment_method || p.salary_payment_method || "mudad";
+  // طريقة الصرف: للمسودة يُعتمد ملف الموظف الحي أولاً (يعكس أي تغيير في الإعداد)؛
+  // أما الصف المعتمد/المصروف فلقطته المحفوظة في الكشف هي المعتمدة (لا تتغير بعد الاعتماد).
+  const methodOf = (p) => (p.status !== "draft" && p.salary_payment_method)
+    ? p.salary_payment_method
+    : (empMap[p.employee_id]?.salary_payment_method || p.salary_payment_method || "mudad");
   const mudadPayrolls = includedPayrolls.filter((p) => methodOf(p) === "mudad");
   const cashPayrolls = includedPayrolls.filter((p) => methodOf(p) === "cash");
   const totalMudad = mudadPayrolls.reduce((s, p) => s + (Number(p.net_salary) || 0), 0);
   const totalCash = cashPayrolls.reduce((s, p) => s + (Number(p.net_salary) || 0), 0);
   const anyApprovedMudad = mudadPayrolls.some((p) => p.status === "approved");
   const anyApprovedCash = cashPayrolls.some((p) => p.status === "approved");
+  // === قفل الشهر: بمجرد اعتماد كشف الشهر يصبح للعرض والطباعة فقط (بلا تعديل أو إعادة توليد) ===
+  const locked = includedCount > 0 && !anyDraft;
+  const lockedNote = () => alert(t.lockedWarn);
 
   // تحويل المسير إلى مدد: يولّد ملف مسير الرواتب (xlsx) المطابق لنموذج مدد ويفتح بوابة الرفع
   const sendToMudad = async () => {
@@ -416,6 +436,11 @@ export default function Payroll() {
             <span className="text-muted-foreground">{t.monthStatus}</span>
             <span className={cn("px-3 py-1 rounded-full font-medium text-xs", payrollStatusLabel(monthStatus).cls)}>{payrollStatusLabel(monthStatus).label}</span>
             <span className="text-xs text-muted-foreground">{t.empCount(payrolls.length)}</span>
+            {locked && (
+              <span className="text-[11px] px-2 py-0.5 rounded-full bg-amber-50 text-amber-700 border border-amber-200 flex items-center gap-1">
+                <Lock size={12} /> {t.lockedShort}
+              </span>
+            )}
           </div>
           <div className="flex flex-wrap gap-2">
             {anyDraft ? (
@@ -461,6 +486,14 @@ export default function Payroll() {
             </div>
             )}
 
+      {payrolls.length > 0 && !loading && locked && (
+        <div className="bg-amber-50 border border-amber-200 text-amber-800 rounded-2xl px-4 py-3 mb-5 flex flex-wrap items-center gap-2 text-xs font-semibold">
+          <Lock size={15} />
+          <span>{t.lockedAll(includedCount)}</span>
+          <span className="font-normal text-amber-700/80">— {t.lockedHint}</span>
+        </div>
+      )}
+
             <div ref={sheetRef} className="relative bg-white rounded-2xl border border-border overflow-hidden">
         {loading ? (
           <div className="p-10 text-center text-muted-foreground">{t.loading}</div>
@@ -498,36 +531,45 @@ export default function Payroll() {
                    return (
                    <tr key={p.id} data-include={included ? "true" : "false"} data-method={methodOf(p)} className={cn("hover:bg-slate-50", !included && "opacity-60")}>
                      <td className="px-2 py-1 text-center">
-                       <button
-                         onClick={() => toggleInclude(p.id)}
-                         title={included ? (isAr ? "مشمول — اضغط لاستثنائه من هذا الشهر" : "Included — click to exclude") : (isAr ? "مستثنى — اضغط لإعادة إشراكه" : "Excluded — click to include")}
-                         className={cn("inline-flex items-center justify-center w-6 h-6 rounded-lg border-2 transition-all",
-                           included ? "border-emerald-400 bg-emerald-50 text-emerald-600" : "border-rose-400 bg-rose-50 text-rose-500")}>
-                         {included ? <Check size={14} /> : <X size={14} />}
-                       </button>
+                       {locked ? (
+                         <span
+                           title={included ? (isAr ? "مشمول بالصرف" : "Included in pay") : (isAr ? "مستثنى من صرف هذا الشهر" : "Excluded from this month")}
+                           className={cn("inline-flex items-center justify-center w-6 h-6 rounded-lg border-2",
+                             included ? "border-emerald-300 bg-emerald-50 text-emerald-600" : "border-rose-300 bg-rose-50 text-rose-500")}>
+                           {included ? <Check size={14} /> : <X size={14} />}
+                         </span>
+                       ) : (
+                         <button
+                           onClick={() => toggleInclude(p.id)}
+                           title={included ? (isAr ? "مشمول — اضغط لاستثنائه من هذا الشهر" : "Included — click to exclude") : (isAr ? "مستثنى — اضغط لإعادة إشراكه" : "Excluded — click to include")}
+                           className={cn("inline-flex items-center justify-center w-6 h-6 rounded-lg border-2 transition-all",
+                             included ? "border-emerald-400 bg-emerald-50 text-emerald-600" : "border-rose-400 bg-rose-50 text-rose-500")}>
+                           {included ? <Check size={14} /> : <X size={14} />}
+                         </button>
+                       )}
                      </td>
                      <td className="px-3 py-1 font-medium sticky right-0 bg-white z-10 max-w-[180px] truncate">{employees.find((e) => e.id === p.employee_id)?.full_name || p.employee_name}</td>
                      <td className="px-2 py-1 tabular-nums text-[11px]">{p.national_id || (employees.find((e) => e.id === p.employee_id)?.national_id || "—")}</td>
                      <td className="px-2 py-1 tabular-nums">{formatCurrency(p.base_salary)}</td>
-                     <td className="px-2 py-1"><EditableCell value={p.housing_allowance} onCommit={(v) => updateField(p.id, "housing_allowance", v)} /></td>
-                     <td className="px-2 py-1"><EditableCell value={p.transport_allowance} onCommit={(v) => updateField(p.id, "transport_allowance", v)} /></td>
+                     <td className="px-2 py-1"><EditableCell readOnly={locked} value={p.housing_allowance} onCommit={(v) => updateField(p.id, "housing_allowance", v)} /></td>
+                     <td className="px-2 py-1"><EditableCell readOnly={locked} value={p.transport_allowance} onCommit={(v) => updateField(p.id, "transport_allowance", v)} /></td>
                      <td className="px-2 py-1 font-bold tabular-nums text-slate-800">{formatCurrency(p.gross_salary)}</td>
-                     <td className="px-2 py-1"><EditableCell value={p.bonus} onCommit={(v) => updateField(p.id, "bonus", v)} /></td>
-                     <td className="px-2 py-1"><EditableCell value={p.overtime_amount || 0} onCommit={(v) => updateField(p.id, "overtime_amount", v)} /></td>
+                     <td className="px-2 py-1"><EditableCell readOnly={locked} value={p.bonus} onCommit={(v) => updateField(p.id, "bonus", v)} /></td>
+                     <td className="px-2 py-1"><EditableCell readOnly={locked} value={p.overtime_amount || 0} onCommit={(v) => updateField(p.id, "overtime_amount", v)} /></td>
                      <td className="px-2 py-1">
                        <div className="flex flex-col gap-0.5">
-                         <EditableCell value={p.absent_days || 0} onCommit={(v) => overrideAbsentDays(p.id, v)} />
+                         <EditableCell readOnly={locked} value={p.absent_days || 0} onCommit={(v) => overrideAbsentDays(p.id, v)} />
                          {(() => { const v = computeAbsentDeduction(p.gross_salary, p.absent_days, 0, orgWorkDaysInMonth(), orgWorkHoursPerDay()); return v ? <span className="text-[10px] text-rose-600 tabular-nums">−{formatCurrency(v)}</span> : null; })()}
                        </div>
                      </td>
                      <td className="px-2 py-1">
                        <div className="flex flex-col gap-0.5">
-                         <EditableCell value={p.absent_hours || 0} onCommit={(v) => overrideAbsentHours(p.id, v)} />
+                         <EditableCell readOnly={locked} value={p.absent_hours || 0} onCommit={(v) => overrideAbsentHours(p.id, v)} />
                          {(() => { const v = computeAbsentDeduction(p.gross_salary, 0, p.absent_hours, orgWorkDaysInMonth(), orgWorkHoursPerDay()); return v ? <span className="text-[10px] text-rose-600 tabular-nums">−{formatCurrency(v)}</span> : null; })()}
                        </div>
                      </td>
-                     <td className="px-2 py-1"><EditableCell value={p.deductions} onCommit={(v) => updateField(p.id, "deductions", v)} /></td>
-                     <td className="px-2 py-1"><EditableCell value={p.loan_installment || 0} onCommit={(v) => updateField(p.id, "loan_installment", v)} /></td>
+                     <td className="px-2 py-1"><EditableCell readOnly={locked} value={p.deductions} onCommit={(v) => updateField(p.id, "deductions", v)} /></td>
+                     <td className="px-2 py-1"><EditableCell readOnly={locked} value={p.loan_installment || 0} onCommit={(v) => updateField(p.id, "loan_installment", v)} /></td>
                      <td className="px-2 py-1 font-bold tabular-nums text-primary sticky left-0 bg-white z-10">{formatCurrency(p.net_salary)}</td>
                      <td className="px-2 py-1">
                        <span className={cn("text-[10px] px-2 py-0.5 rounded-full font-medium whitespace-nowrap", methodOf(p) === "mudad" ? "bg-[#0B2545]/10 text-[#0B2545]" : "bg-emerald-100 text-emerald-700")}>{methodOf(p) === "mudad" ? t.mudadBadge : t.cashBadge}</span>
@@ -547,9 +589,11 @@ export default function Payroll() {
   );
 }
 
-function EditableCell({ value, onCommit }) {
+function EditableCell({ value, onCommit, readOnly }) {
   const [v, setV] = useState(value || 0);
   useEffect(() => { setV(value || 0); }, [value]);
+  // خانة مقفلة (كشف شهر معتمد): تُعرض القيمة نصاً ثابتاً بلا أي إمكانية تعديل
+  if (readOnly) return <span className="inline-block px-1.5 py-0.5 text-[11px] tabular-nums font-medium text-slate-700">{Number(value || 0).toLocaleString("en-US")}</span>;
   return (
     <input type="number" value={v} onChange={(e) => setV(e.target.value)} onBlur={() => onCommit(v)}
       onKeyDown={(e) => { if (e.key === "Enter") e.target.blur(); }}
