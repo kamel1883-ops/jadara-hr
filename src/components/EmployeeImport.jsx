@@ -49,9 +49,13 @@ export default function EmployeeImport({ open, onClose, onSaved }) {
     issuesTitle: "أخطاء مكتشفة في الملف",
     issuesHint: "الترقيم يبدأ من أول موظف في الملف (وليس رقم صف الإكسل) — افتح الملف وصحّح الموظف المذكور برقمه.",
     validList: "الموظفون الصالحون",
-    entitledHint: "الإجمالي المستحق: يُطابَق رقم الإكسل بمنحنى الاستحقاق من تاريخ المباشرة الفعلي (21 أو 30 يوماً بالسنة، و30 إلزامياً بعد 5 سنوات) لمعرفة تاريخ بدء السحب الذي يوافقه، ثم تبدأ الزيادات بالكسور والأيام من ذلك التاريخ. وإذا تجاوز الرقم مدة خدمته (غير مطابق) نعتمد حساب النظام من تاريخ المباشرة. أما الرصيد المستخدم فيُعتمد كما هو من الملف.",
-    matchOk: (d) => `المستحق مطابق للإكسل — السحب من ${d}`,
-    matchDiff: (sys) => `المستحق غير مطابق (يتجاوز مدة الخدمة) — اعتُمد ${sys} يوم`,
+    entitledHint: "الإجمالي المستحق: يُحسب في النظام من تاريخ المباشرة حتى تاريخ رفع الملف (اليوم) بمعدل 21 أو 30 يوماً بالسنة، و30 إلزامياً بعد 5 سنوات، ثم يُقارن برقم الإكسل. يُقبل الملف إذا كان الفرق 3 أيام أو أقل لكل موظف؛ وما تجاوز ذلك يُرفض الملف كاملاً. الرصيد المستخدم يُعتمد كما هو من الملف.",
+    matchOk: (excel, sys) => `مطابق (الإكسل ${excel} · النظام ${sys})`,
+    matchDiff: (diff) => `غير مطابق — الفرق ${diff} يوم`,
+    rejectedTitle: "الملف غير مقبول — إجمالي رصيد الإجازات المستحق",
+    rejectedHint: "هؤلاء الموظفون تجاوز فرق إجمالي الرصيد المستحق بين الإكسل وحساب النظام من تاريخ المباشرة حدّ الثلاثة أيام. لا يتم استيراد أي موظف من هذا الملف حتى تصحيح الأرقام وإعادة الرفع.",
+    rejectedBanner: "الملف غير مقبول: صحّح عمود «إجمالي رصيد الإجازات المستحق» ثم أعد رفع الملف.",
+    colEmployee: "الموظف", colHire: "تاريخ المباشرة", colExcel: "إجمالي الإكسل", colSystem: "حساب النظام", colDiff: "الفرق", colRate: "المعدل",
     confirmQ: "هل ترغب بإضافة هؤلاء الموظفين إلى المنشأة؟ سيتم تثبيتهم في قائمة الموظفين النشطين.",
     confirmBtn: "إضافة الموظفين إلى المنشأة",
     adding: "جارٍ الإضافة…",
@@ -75,9 +79,13 @@ export default function EmployeeImport({ open, onClose, onSaved }) {
     issuesTitle: "Issues found in the file",
     issuesHint: "Numbering starts from the first employee in the file (not the Excel row number).",
     validList: "Valid employees",
-    entitledHint: "Total entitlement: the Excel figure is matched against the accrual curve from the actual hire date (21 or 30 days/year, 30 mandatory after 5 years) to find the pull date it corresponds to, and increments then accrue from that date. If the figure exceeds the employee's service period (mismatch), the system calculation from the hire date is adopted. The used balance is adopted as-is from the file.",
-    matchOk: (d) => `Entitlement matches Excel — accrual from ${d}`,
-    matchDiff: (sys) => `Entitlement mismatch (exceeds service period) — adopted ${sys} days`,
+    entitledHint: "Total entitlement is computed in the system from the hire date up to the file upload date (today) at 21 or 30 days/year, 30 mandatory after 5 years, then compared with the Excel figure. The file is accepted when the difference is 3 days or fewer per employee; anything beyond rejects the whole file. The used balance is adopted as-is from the file.",
+    matchOk: (excel, sys) => `Matched (Excel ${excel} · system ${sys})`,
+    matchDiff: (diff) => `Mismatch — difference ${diff} days`,
+    rejectedTitle: "File not accepted — total accrued leave balance",
+    rejectedHint: "These employees' total accrued balance differs from the system calculation from the hire date by more than three days. No employee is imported from this file until the figures are corrected and re-uploaded.",
+    rejectedBanner: "File not accepted: fix the 'Total Accrued Leave Balance' column, then re-upload the file.",
+    colEmployee: "Employee", colHire: "Hire date", colExcel: "Excel total", colSystem: "System", colDiff: "Diff", colRate: "Rate",
     confirmQ: "Do you want to add these employees to the organization? They will be confirmed in the active employees list.",
     confirmBtn: "Add employees to organization",
     adding: "Adding…",
@@ -264,8 +272,8 @@ export default function EmployeeImport({ open, onClose, onSaved }) {
                           <span className="font-medium">
                             {e.full_name} <span className="text-muted-foreground">({e.employee_number})</span>
                             {e.entitled_match != null && (
-                              <span className={e.entitled_match ? "ms-2 text-emerald-600" : "ms-2 text-amber-600"}>
-                                · {e.entitled_match ? t.matchOk(e.entitled_from_date) : t.matchDiff(e.entitled_system)}
+                              <span className={e.entitled_match ? "ms-2 text-emerald-600" : "ms-2 text-rose-600"}>
+                                · {e.entitled_match ? t.matchOk(e.entitled_excel, e.entitled_system) : t.matchDiff(e.entitled_diff)}
                               </span>
                             )}
                           </span>
@@ -276,7 +284,42 @@ export default function EmployeeImport({ open, onClose, onSaved }) {
                   </div>
                 )}
 
-                {preview.valid > 0 ? (
+                {preview.entitlement_rejected && (
+                  <div className="rounded-xl bg-rose-50 border border-rose-200 p-3 space-y-2">
+                    <div className="flex items-center gap-2 text-rose-700 text-sm font-medium"><AlertTriangle size={14} /> {t.rejectedTitle}</div>
+                    <p className="text-[11px] leading-relaxed text-rose-600">{t.rejectedHint}</p>
+                    <div className="max-h-56 overflow-auto">
+                      <table className="w-full text-xs">
+                        <thead>
+                          <tr className="text-rose-700">
+                            <th className="text-start font-semibold py-1 pe-2">{t.colEmployee}</th>
+                            <th className="text-start font-semibold py-1 pe-2">{t.colHire}</th>
+                            <th className="text-start font-semibold py-1 pe-2">{t.colRate}</th>
+                            <th className="text-start font-semibold py-1 pe-2">{t.colExcel}</th>
+                            <th className="text-start font-semibold py-1 pe-2">{t.colSystem}</th>
+                            <th className="text-start font-semibold py-1">{t.colDiff}</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-rose-200">
+                          {preview.entitlement_mismatches.map((m, i) => (
+                            <tr key={i}>
+                              <td className="py-1.5 pe-2 font-medium">{m.name}<span className="text-muted-foreground"> ({m.employee_number})</span></td>
+                              <td className="py-1.5 pe-2">{m.hire_date}</td>
+                              <td className="py-1.5 pe-2">{m.annual_days}</td>
+                              <td className="py-1.5 pe-2">{m.entitled_excel}</td>
+                              <td className="py-1.5 pe-2">{m.entitled_system}</td>
+                              <td className="py-1.5 font-bold">{m.entitled_diff > 0 ? `+${m.entitled_diff}` : m.entitled_diff}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                )}
+
+                {preview.entitlement_rejected ? (
+                  <div className="text-sm text-rose-600 bg-rose-50 border border-rose-200 rounded-lg p-3">{t.rejectedBanner}</div>
+                ) : preview.valid > 0 ? (
                   <div className="rounded-xl border border-violet-200 bg-violet-50/60 p-3 space-y-2">
                     <div className="text-sm text-violet-700 font-medium">{t.confirmQ}</div>
                     <Button type="button" onClick={runConfirm} disabled={saving} className="gap-2 w-full">

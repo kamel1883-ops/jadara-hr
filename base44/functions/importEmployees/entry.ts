@@ -202,6 +202,8 @@ export default async function (req) {
       if (n) fileNumbers.add(n);
     }
     const issues = []; // { row, name, employee_number, problems: [] }
+    // موظفون تجاوز فرق الإجمالي المستحق حدّ المسامحة (3 أيام) → يُرفض الملف كاملاً بلا استيراد جزئي
+    const entitlementMismatch = [];
     let rowNo = 0;
 
     for (const rawRow of records) {
@@ -253,25 +255,29 @@ export default async function (req) {
       const rawAnn = num(rawRow.annual_leave_entitlement);
       const empChoice = rawAnn === 30 ? 30 : (rawAnn === 21 ? 21 : annualDays);
       r.annual_leave_entitlement = empChoice;
-      // الإجمالي المستحق: يُحسب في النظام من تاريخ المباشرة الفعلي (21 أو 30 يوماً بالسنة،
-      // و30 إلزامياً بعد 5 سنوات خدمة).
+      // الإجمالي المستحق: يُحسب في النظام من تاريخ المباشرة الفعلي حتى تاريخ رفع الملف (اليوم)،
+      // بمعدل 21 أو 30 يوماً بالسنة، و30 إلزامياً بعد 5 سنوات خدمة. تاريخ رفع الملف مرجع للمقارنة
+      // فقط ولا يُخزَّن كأساس دائم — الاحتساب يبقى من تاريخ المباشرة.
       const sysEntitled = computeEntitlement(r.hire_date, empChoice);
-      // تاريخ بدء السحب: رقم الإجمالي المستحق في الإكسل يُطابَق بمنحنى الاستحقاق نفسه
-      // (بالكسور والأيام من تاريخ المباشرة) لمعرفة التاريخ الذي يوافقه — ومنه يبدأ الزحف
-      // بالزيادات. إن كان الرقم يتجاوز ما يمكن استحقاقه خلال مدة خدمته فهو غير مطابق
-      // (محسوب بطريقة خاطئة) ونعتمد حينها حساب نظام العمل من تاريخ المباشرة.
       const rate = yearsOfServiceHire(r.hire_date) >= 5 ? 30 : empChoice;
       const excelEntitled = num(r.leave_total_entitled);
-      const hireMs = r.hire_date ? new Date(r.hire_date).getTime() : NaN;
-      const svcDays = isNaN(hireMs) ? 0 : Math.max(0, Math.floor((Date.now() - hireMs) / 86400000));
-      let pullDate = null;
+      // المقارنة: فرق مطلق حتى 3 أيام مقبول (زائداً أو ناقصاً)؛ وما زاد عليه يجعل الملف غير مقبول كاملاً.
+      let entitledDiff = null;
       let entitledMatch = null;
-      if (excelEntitled > 0 && svcDays > 0) {
-        const pullDays = Math.round((excelEntitled / rate) * 365);
-        entitledMatch = pullDays <= svcDays + 1;
-        if (entitledMatch) {
-          const d = new Date(hireMs + pullDays * 86400000);
-          pullDate = `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+      if (excelEntitled > 0) {
+        entitledDiff = Math.round((excelEntitled - sysEntitled) * 100) / 100;
+        entitledMatch = Math.abs(entitledDiff) <= 3;
+        if (!entitledMatch) {
+          entitlementMismatch.push({
+            row: rowNo,
+            name: r.full_name || '—',
+            employee_number: r.employee_number || '—',
+            hire_date: r.hire_date,
+            annual_days: rate,
+            entitled_excel: excelEntitled,
+            entitled_system: sysEntitled,
+            entitled_diff: entitledDiff,
+          });
         }
       }
       // القيمة الصريحة (قد تكون سالبة عند تجاوز الاستحقاق) — لا تُصفَّر
@@ -287,15 +293,17 @@ export default async function (req) {
         entitled_excel: excelEntitled || null,
         entitled_system: sysEntitled,
         entitled_match: entitledMatch,
-        entitled_from_date: pullDate,
+        entitled_diff: entitledDiff,
+        entitled_rate: rate,
       });
     }
 
     let saved = 0, managersLinked = 0, managersUnresolved = 0;
     const errors = [];
 
-    // مرحلة التأكيد فقط: نُنشئ الموظفين فعلياً ونربط المديرين المباشرين
-    if (confirm && toCreate.length) {
+    // مرحلة التأكيد فقط: نُنشئ الموظفين فعلياً ونربط المديرين المباشرين.
+    // رفض شامل للدفعة: أي موظف تجاوز فرق الإجمالي المستحق حدّ 3 أيام يمنع الحفظ كاملاً.
+    if (confirm && toCreate.length && entitlementMismatch.length === 0) {
       // === عزل البيانات الحساسة في الخزنة السعودية ===
       // الحقول الحساسة تُرسل للخزنة وتُستبدل برمز معتم (emp_ref) في Base44.
       // إن لم تكن الخزنة مُهيّأة بعد، نستمر بالنمط القديم (تخزين محلي) حتى لا ينكسر الاستيراد.
@@ -362,6 +370,10 @@ export default async function (req) {
       incomplete_count: incomplete.length,
       incomplete: incomplete.slice(0, 100),
       issues: issues.slice(0, 200),
+      // رفض الملف: الفرق بين إجمالي المستحق في الإكسل وحساب النظام من تاريخ المباشرة يتجاوز 3 أيام
+      entitlement_rejected: entitlementMismatch.length > 0,
+      entitlement_mismatch_count: entitlementMismatch.length,
+      entitlement_mismatches: entitlementMismatch.slice(0, 200),
       preview: confirm ? [] : validPreview.slice(0, 200),
       confirm,
       saved,
