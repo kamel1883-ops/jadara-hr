@@ -90,11 +90,13 @@ export function getEmployeeAnnualDays(employee, org) {
 
 // مجموع الأيام المستخدمة من طلبات الإجازة السنوية المعتمدة/المكتملة فقط —
 // الإجازات المرضية وبدون راتب والاضطرارية والإذن لا تُخصم من رصيد الإجازات السنوية.
+// الإجازة السنوية بأي وضع (سنوية عادية أو تصفية شاملة) تُخصم وتُضاف للمستخدم تلقائياً — مطابقةً
+// لما يخصمه الاعتماد فعلياً (balance_deducted)، فلا تبقى أيام مخصومة خارج الرصيد المستخدم.
 export function sumUsedDays(leaves) {
   if (!Array.isArray(leaves)) return 0;
   const consume = new Set(["completed", "paid", "approved", "hr_approved", "awaiting_finance", "manager_approved"]);
   return leaves
-    .filter((l) => l.status !== "rejected" && consume.has(l.status) && l.leave_type === "annual")
+    .filter((l) => l.status !== "rejected" && consume.has(l.status) && (l.leave_type === "annual" || l.is_full_clearance))
     .reduce((s, l) => s + (Number(l.balance_deducted) || Number(l.days_count) || 0), 0);
 }
 
