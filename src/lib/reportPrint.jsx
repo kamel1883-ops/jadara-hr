@@ -92,6 +92,15 @@ export function buildPrintWrapper(node, { org, title, subtitle, landscape, filte
 
   const clone = node.cloneNode(true);
   clone.style.width = "100%";
+  // بعض حاويات الطباعة (الميزانية مثلاً) مُثبَّتة خارج الشاشة بـ position: fixed — ولو بقيت
+  // مثبّتة داخل غلاف الطباعة لخرجت نسختها عن إطار الالتقاط تماماً وظهرت الورقة فاضية بلا محتوى.
+  // لذا تُعاد النسخة إلى التدفق الطبيعي داخل الغلاف قبل الالتقاط.
+  clone.style.position = "static";
+  clone.style.top = "auto";
+  clone.style.bottom = "auto";
+  clone.style.right = "auto";
+  clone.style.left = "auto";
+  clone.style.zIndex = "auto";
   if (filterInclude) {
     clone.querySelectorAll('tr[data-include="false"]').forEach((el) => el.remove());
   }
@@ -121,7 +130,7 @@ export async function printReport(node, opts = {}) {
     org, title, subtitle, stamp, landscape, draft,
     filterInclude, filterMethod,
     empRef = null, docType = "report",
-    fileName, noArchive = false,
+    fileName, noArchive = false, open = true,
   } = opts;
 
   const { wrapper, useLandscape } = buildPrintWrapper(node, { org, title, subtitle, landscape, filterInclude, filterMethod });
@@ -137,9 +146,12 @@ export async function printReport(node, opts = {}) {
       docRef = await archiveBlobToVault(blob, { fileName: fname, empRef, docType });
     }
 
-    const url = URL.createObjectURL(blob);
-    window.open(url, "_blank");
-    setTimeout(() => URL.revokeObjectURL(url), 60000);
+    // open=false: أرشفة صامتة بلا فتح نافذة الطباعة — تُستخدم عند حفظ نسخة المستند
+    if (open) {
+      const url = URL.createObjectURL(blob);
+      window.open(url, "_blank");
+      setTimeout(() => URL.revokeObjectURL(url), 60000);
+    }
   } finally {
     wrapper.remove();
   }

@@ -14,6 +14,7 @@ import { computeHrBudget, computeBudgetKpis, monthlyActualsFromPayrolls, budgetM
 import { formatCurrency } from "@/lib/hr";
 import { getCurrentOrgContext } from "@/lib/currentOrg";
 import { printReport } from "@/lib/reportPrint";
+import DocApprovalMark from "@/components/docs/DocApprovalMark";
 import { useI18n } from "@/lib/i18n";
 import { useToast } from "@/components/ui/use-toast";
 import { cn } from "@/lib/utils";
@@ -211,6 +212,7 @@ export default function HrBudget() {
   const [payrolls, setPayrolls] = useState([]);
   const [inputs, setInputs] = useState({ ...BUDGET_INPUT_DEFAULTS });
   const [recordId, setRecordId] = useState(null);
+  const [savedMeta, setSavedMeta] = useState(null);
   const [printing, setPrinting] = useState(false);
   const printRef = useRef(null);
   const [printMe, setPrintMe] = useState("");
@@ -242,13 +244,15 @@ export default function HrBudget() {
         const row = rows && rows[0];
         if (row) {
           setRecordId(row.id);
+          setSavedMeta({ date: row.created_date || "", by: row.prepared_by_name || "" });
           try { setInputs({ ...BUDGET_INPUT_DEFAULTS, ...(row.inputs_json ? JSON.parse(row.inputs_json) : {}) }); }
           catch { setInputs({ ...BUDGET_INPUT_DEFAULTS }); }
         } else {
           setRecordId(null);
+          setSavedMeta(null);
           setInputs({ ...BUDGET_INPUT_DEFAULTS });
         }
-      } catch { setRecordId(null); }
+      } catch { setRecordId(null); setSavedMeta(null); }
     })();
   }, [unified, year]);
 
@@ -289,6 +293,8 @@ export default function HrBudget() {
         title: t.printStampYear(year),
         subtitle: t.title,
         landscape: true,
+        // قبل الحفظ: نسخة مسودة لا تُؤرشف. بعد الحفظ: معتمدة وتُؤرشف على الخزنة.
+        draft: !recordId,
       });
     } finally {
       setPrinting(false);
@@ -321,6 +327,7 @@ export default function HrBudget() {
         const created = await base44.entities.HrBudget.create(payload);
         setRecordId(created?.id || null);
       }
+      setSavedMeta({ date: new Date().toISOString(), by: payload.prepared_by_name });
       toast({ title: t.saved });
     } catch {
       toast({ title: t.saveFail, variant: "destructive" });
@@ -331,6 +338,7 @@ export default function HrBudget() {
   if (loading) return <div className="p-10 text-center text-muted-foreground" dir={isAr ? "rtl" : "ltr"}>{t.loading}</div>;
 
   const pctFmt = (v) => `${(v || 0).toFixed(1)}%`;
+  const savedDate = savedMeta?.date ? new Date(savedMeta.date).toLocaleDateString(isAr ? "ar-SA" : "en-GB") : "";
 
   // نسبة كل عمود من إجمالي البنود، تُرسم أعلى العمود
   const renderBarPct = (size) => (props) => {
@@ -354,6 +362,7 @@ export default function HrBudget() {
               <Label className="text-xs text-muted-foreground">{t.yearLabel}</Label>
               <Input type="number" value={year} onChange={(e) => setYear(Number(e.target.value) || new Date().getFullYear())} className="w-24" />
             </div>
+            <DocApprovalMark variant="chip" approved={!!recordId} isAr={isAr} date={savedDate} by={savedMeta?.by} />
             <Button variant="outline" onClick={onPrint} disabled={printing} className="gap-2">
               {printing ? <Loader2 size={16} className="animate-spin" /> : <Printer size={16} />} {printing ? t.printing : t.print}
             </Button>
@@ -519,6 +528,11 @@ export default function HrBudget() {
         dir={isAr ? "rtl" : "ltr"}
         style={{ position: "fixed", top: 0, right: isAr ? "auto" : "-99999px", left: isAr ? "-99999px" : "auto", width: "1075px", background: "#fff", color: "#0b1120", padding: 0, zIndex: -1, fontFamily: "inherit" }}
       >
+        {/* ختم حالة الميزانية داخل المستند: مسودة قبل الحفظ، معتمدة بعده */}
+        <div style={{ display: "flex", justifyContent: "flex-start", marginBottom: "10px" }}>
+          <DocApprovalMark approved={!!recordId} isAr={isAr} date={savedDate} by={savedMeta?.by} />
+        </div>
+
         {/* مؤشرات */}
         <table style={{ width: "100%", borderCollapse: "collapse", marginBottom: "14px", fontSize: "11px" }}>
           <tbody>

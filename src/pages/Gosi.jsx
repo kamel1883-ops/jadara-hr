@@ -9,7 +9,8 @@ import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue
 } from "@/components/ui/select";
 import { Input } from "@/components/ui/input";
-import { Shield, FileDown, Save, CheckCircle2, BadgeCheck, Wallet, Building2, ArrowRight } from "lucide-react";
+import { Shield, FileDown, Save, CheckCircle2, Wallet, Building2, ArrowRight } from "lucide-react";
+import DocApprovalMark from "@/components/docs/DocApprovalMark";
 import { cn } from "@/lib/utils";
 import { formatCurrency } from "@/lib/hr";
 import { computeGOSI, gosiRateTable, isGosiSubscriber } from "@/lib/eos";
@@ -112,6 +113,7 @@ export default function Gosi() {
   const totalGrand = totalEmp + totalEmpr;
   const totalGross = rows.reduce((s, r) => s + r.gross_wage, 0);
   const isSaved = records.length > 0;
+  const savedDate = records[0]?.created_date ? new Date(records[0].created_date).toLocaleDateString(isAr ? "ar-SA" : "en-GB") : "";
 
   const save = async () => {
     setSaving(true);
@@ -119,7 +121,11 @@ export default function Gosi() {
       if (records.length) await base44.entities.GosiRecord.deleteMany({ period_key: `${year}-${month}` });
       // عزل الهوية في الخزنة: يُحفظ emp_ref فقط، وتُترك national_id فارغة في السجل اللقطي
       // فئة الاشتراك للعرض فقط؛ الحقلان employee_rate/employer_rate يوثّقان النسبة المطبقة على كل موظف.
-      const payload = rows.map(({ category, ...r }) => ({ ...r, national_id: "", emp_ref: r.emp_ref || "", month, year, period_key: `${year}-${month}`, status: "saved" }));
+      const me = await base44.auth.me().catch(() => null);
+      const payload = rows.map(({ category, ...r }) => ({
+        ...r, national_id: "", emp_ref: r.emp_ref || "", month, year, period_key: `${year}-${month}`, status: "saved",
+        prepared_by_name: me?.full_name || me?.name || "", prepared_by_id: me?.id || me?.email || "",
+      }));
       if (payload.length) await base44.entities.GosiRecord.bulkCreate(payload);
       await load();
     } finally { setSaving(false); }
@@ -133,6 +139,8 @@ export default function Gosi() {
         org,
         title: isAr ? `كشف التأمينات الاجتماعية ${t.months[month - 1]} ${year}` : `GOSI sheet ${t.months[month - 1]} ${year}`,
         subtitle: isAr ? `إجمالي الاشتراكات: ${formatCurrency(totalGrand)} — ${rows.length} موظف` : `Total: ${formatCurrency(totalGrand)} — ${rows.length} employees`,
+        // قبل الحفظ: مسودة لا تُؤرشف. بعد حفظ السجلات: معتمد ويُؤرشف على الخزنة.
+        draft: !isSaved,
       });
     } finally { setExporting(false); }
   };
@@ -173,11 +181,7 @@ export default function Gosi() {
             <label className="text-xs font-medium text-muted-foreground">{t.year}</label>
             <Input type="number" value={year} onChange={(e) => setYear(Number(e.target.value))} className="w-28" />
           </div>
-          <div className="flex items-center gap-2 px-3 h-9 rounded-lg bg-emerald-50 border border-emerald-200">
-            {isSaved ? <CheckCircle2 size={15} className="text-emerald-600" /> : <BadgeCheck size={15} className="text-slate-400" />}
-            <span className={cn("text-xs font-medium", isSaved ? "text-emerald-700" : "text-slate-500")}>{isSaved ? t.saved : t.notSaved}</span>
-            {isSaved && records[0]?.created_date && <span className="text-[11px] text-muted-foreground">{t.savedOn} {new Date(records[0].created_date).toLocaleDateString(isAr ? "ar-SA" : "en-GB")}</span>}
-          </div>
+          <DocApprovalMark variant="chip" approved={isSaved} isAr={isAr} date={savedDate} by={records[0]?.prepared_by_name} />
         </div>
         <div className="flex flex-wrap gap-2">
           <Button onClick={save} disabled={saving || rows.length === 0} className="gap-2 bg-emerald-600 hover:bg-emerald-700">
@@ -213,7 +217,13 @@ export default function Gosi() {
             <p className="text-muted-foreground">{t.empty}</p>
           </div>
         ) : (
-          <div className="overflow-x-auto">
+          <div>
+            {/* ترويسة الكشف + ختم الحالة: مسودة قبل حفظ السجلات، معتمد بعد الحفظ */}
+            <div className="flex flex-wrap items-center justify-between gap-3 px-4 py-3 border-b border-border bg-slate-50/60">
+              <div className="text-sm font-semibold">{t.title} — {t.months[month - 1]} {year}</div>
+              <DocApprovalMark approved={isSaved} isAr={isAr} date={savedDate} by={records[0]?.prepared_by_name} />
+            </div>
+            <div className="overflow-x-auto">
             <table className="w-full text-sm">
               <thead className="bg-slate-50 text-muted-foreground text-xs">
                 <tr>
@@ -262,6 +272,7 @@ export default function Gosi() {
                 </tr>
               </tfoot>
             </table>
+            </div>
           </div>
         )}
       </div>

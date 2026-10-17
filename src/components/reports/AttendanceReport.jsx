@@ -2,10 +2,12 @@ import React, { useEffect, useMemo, useRef, useState } from "react";
 import { base44 } from "@/api/base44Client";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Button } from "@/components/ui/button";
-import { Printer, CalendarRange, Users2, CheckCircle2, Clock, XCircle, CalendarOff } from "lucide-react";
+import { Printer, CalendarRange, Users2, CheckCircle2, Clock, XCircle, CalendarOff, Save } from "lucide-react";
 import { printReport } from "@/lib/reportPrint";
+import DocApprovalMark from "@/components/docs/DocApprovalMark";
+import { useToast } from "@/components/ui/use-toast";
 import { cn } from "@/lib/utils";
-import { attendanceStatusLabel, isOrgWeeklyOff } from "@/lib/hr";
+import { attendanceStatusLabel, isOrgWeeklyOff, todayISO } from "@/lib/hr";
 import { useI18n } from "@/lib/i18n";
 
 const MONTHS = {
@@ -27,7 +29,10 @@ export default function AttendanceReport({ org }) {
   const empOf = (id) => employees.find((e) => e.id === id);
   const [selKey, setSelKey] = useState("");
   const [exporting, setExporting] = useState(false);
+  const [sheets, setSheets] = useState([]);
+  const [saving, setSaving] = useState(false);
   const ref = useRef(null);
+  const { toast } = useToast();
 
   const t = isAr ? {
     loading: "جارٍ تحميل سجلات الحضور الشهرية…",
@@ -41,6 +46,8 @@ export default function AttendanceReport({ org }) {
     weeklyOff: "إجازة أسبوعية",
     pdfTitle: (m) => `تقرير الحضور والانصراف — ${m}`,
     pdfSub: (tot, c) => `إجمالي السجلات: ${tot} — حاضر: ${c.present} · متأخر: ${c.late} · غائب: ${c.absent} · إجازة: ${c.leave}`,
+    save: "حفظ النسخة", saving: "جارٍ حفظ النسخة…",
+    savedToast: "تم حفظ نسخة الشهر — التقرير الآن معتمد", savedFail: "تعذّر حفظ النسخة",
   } : {
     loading: "Loading monthly attendance records…",
     empty: "No monthly attendance records yet — a downloadable monthly PDF report will appear here as soon as the first attendance is recorded.",
@@ -53,6 +60,8 @@ export default function AttendanceReport({ org }) {
     weeklyOff: "Weekly off",
     pdfTitle: (m) => `Attendance report — ${m}`,
     pdfSub: (tot, c) => `Total records: ${tot} — Present: ${c.present} · Late: ${c.late} · Absent: ${c.absent} · Leave: ${c.leave}`,
+    save: "Save version", saving: "Saving version…",
+    savedToast: "Month version saved — the report is now approved", savedFail: "Could not save the version",
   };
 
   const monthLabel = (y, m) => `${MONTHS[isAr ? "ar" : "en"][(m || 1) - 1] || ""} ${y}`;
@@ -65,10 +74,14 @@ export default function AttendanceReport({ org }) {
     (async () => {
       setLoading(true);
       try {
-        const all = await base44.entities.Attendance.list("-created_date", 1000);
-        const emps = await base44.entities.Employee.list("-created_date", 500);
+        const [all, emps, versions] = await Promise.all([
+          base44.entities.Attendance.list("-created_date", 1000),
+          base44.entities.Employee.list("-created_date", 500),
+          base44.entities.AttendanceSheet.list("-created_date", 200).catch(() => []),
+        ]);
         setRecords(all || []);
         setEmployees(emps || []);
+        setSheets(Array.isArray(versions) ? versions : []);
       } catch {
         setRecords([]);
       } finally {
@@ -95,6 +108,12 @@ export default function AttendanceReport({ org }) {
   }, [groups, selKey]);
 
   const sel = groups.find((g) => g.key === selKey) || groups[0] || null;
+  // النسخة المحفوظة للشهر: وجودها يعني أن التقرير معتمد، وغيابها يعني أنه مسودة
+  const periodKey = sel ? `${sel.year}-${String(sel.month).padStart(2, "0")}` : "";
+  const saved = sheets.find((s) => s.period_key === periodKey) || null;
+  const savedDate = saved?.saved_at
+    ? new Date(saved.saved_at).toLocaleDateString(isAr ? "ar-SA" : "en-GB")
+    : (saved?.created_date ? new Date(saved.created_date).toLocaleDateString(isAr ? "ar-SA" : "en-GB") : "");
 
   const counts = useMemo(() => {
     const c = { present: 0, late: 0, absent: 0, leave: 0 };
@@ -104,19 +123,59 @@ export default function AttendanceReport({ org }) {
     return c;
   }, [sel]);
 
+  const printOpts = () => ({
+    org,
+    title: t.pdfTitle(monthLabel(sel.year, sel.month)),
+    subtitle: t.pdfSub(sel.rows.length, counts),
+    landscape: true,
+    // التقارير غير المحفوظة تُطبع مسودة ولا تُؤرشف، والمحفوظة معتمدة وتُؤرشف على الخزنة
+    draft: !saved,
+  });
+
   const onExport = async () => {
     if (!ref.current || !sel) return;
     setExporting(true);
     try {
-      await printReport(ref.current, {
-        org,
-        title: t.pdfTitle(monthLabel(sel.year, sel.month)),
-        subtitle: t.pdfSub(sel.rows.length, counts),
-        stamp: false,
-        landscape: true,
-      });
+      await printReport(ref.current, printOpts());
     } finally {
       setExporting(false);
+    }
+  };
+
+  // حفظ نسخة الشهر: يثبّت الشهر كمعتمد ويؤرشف نسخته PDF بلا فتح نافذة الطباعة،
+  // فيبقى الشهر — حتى الماضي منه — معتمداً عند الطباعة لاحقاً.
+  const onSaveVersion = async () => {
+    if (!ref.current || !sel) return;
+    setSaving(true);
+    try {
+      const me = await base44.auth.me().catch(() => null);
+      const payload = {
+        unified_number: org?.unified_number || "",
+        period_key: periodKey,
+        year: sel.year,
+        month: sel.month,
+        status: "approved",
+        records_count: sel.rows.length,
+        present_count: counts.present,
+        late_count: counts.late,
+        absent_count: counts.absent,
+        leave_count: counts.leave,
+        saved_at: todayISO(),
+        prepared_by_name: me?.full_name || me?.name || "",
+        prepared_by_id: me?.id || me?.email || "",
+      };
+      if (saved) await base44.entities.AttendanceSheet.update(saved.id, payload);
+      else await base44.entities.AttendanceSheet.create(payload);
+      const rows = await base44.entities.AttendanceSheet.list("-created_date", 200).catch(() => []);
+      if (Array.isArray(rows) && rows.length) setSheets(rows);
+      // ننتظر ظهور ختم الاعتماد على التقرير قبل أرشفة النسخة
+      await new Promise((r) => setTimeout(r, 150));
+      await printReport(ref.current, { ...printOpts(), draft: false, open: false, docType: "attendance", fileName: `attendance-${periodKey}.pdf` });
+      toast({ title: t.savedToast });
+    } catch {
+      toast({ title: t.savedFail, variant: "destructive" });
+    } finally {
+      setSaving(false);
     }
   };
 
@@ -154,17 +213,26 @@ export default function AttendanceReport({ org }) {
             ))}
           </select>
         </div>
-        <Button onClick={onExport} disabled={exporting || !sel} className="gap-2">
+        <Button onClick={onExport} variant="outline" disabled={exporting || !sel} className="gap-2">
           {exporting ? <Printer size={16} className="animate-spin" /> : <Printer size={16} />}
           {exporting ? t.exporting : t.btn}
         </Button>
+        <Button onClick={onSaveVersion} disabled={saving || !sel} className="gap-2">
+          {saving ? <Save size={16} className="animate-spin" /> : <Save size={16} />}
+          {saving ? t.saving : t.save}
+        </Button>
+        <DocApprovalMark variant="chip" approved={!!saved} isAr={isAr} date={savedDate} by={saved?.prepared_by_name} />
       </div>
 
       {sel && (
         <div ref={ref} className="bg-white rounded-2xl border border-border p-5">
-          <h3 className="text-sm font-semibold mb-3 flex items-center gap-2">
-            <CalendarRange size={16} className="text-violet-600" /> {monthLabel(sel.year, sel.month)}
-          </h3>
+          <div className="flex flex-wrap items-center justify-between gap-3 mb-3">
+            <h3 className="text-sm font-semibold flex items-center gap-2">
+              <CalendarRange size={16} className="text-violet-600" /> {monthLabel(sel.year, sel.month)}
+            </h3>
+            {/* ختم الحالة داخل التقرير: مسودة قبل حفظ النسخة، معتمد بعد الحفظ */}
+            <DocApprovalMark approved={!!saved} isAr={isAr} date={savedDate} by={saved?.prepared_by_name} />
+          </div>
 
           <div className="grid grid-cols-2 sm:grid-cols-5 gap-3 mb-4">
             <Stat icon={Users2} label={t.total} value={sel.rows.length} tone="violet" />
