@@ -92,6 +92,15 @@ export function buildPrintWrapper(node, { org, title, subtitle, landscape, filte
 
   const clone = node.cloneNode(true);
   clone.style.width = "100%";
+  // بعض حاويات الطباعة (الميزانية مثلاً) مُثبَّتة خارج الشاشة بـ position: fixed — ولو بقيت
+  // مثبّتة داخل غلاف الطباعة لخرجت نسختها عن إطار الالتقاط تماماً وظهرت الورقة فاضية بلا محتوى.
+  // لذا تُعاد النسخة إلى التدفق الطبيعي داخل الغلاف قبل الالتقاط.
+  clone.style.position = "static";
+  clone.style.top = "auto";
+  clone.style.bottom = "auto";
+  clone.style.right = "auto";
+  clone.style.left = "auto";
+  clone.style.zIndex = "auto";
   if (filterInclude) {
     clone.querySelectorAll('tr[data-include="false"]').forEach((el) => el.remove());
   }
