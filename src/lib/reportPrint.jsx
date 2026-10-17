@@ -121,7 +121,7 @@ export async function printReport(node, opts = {}) {
     org, title, subtitle, stamp, landscape, draft,
     filterInclude, filterMethod,
     empRef = null, docType = "report",
-    fileName, noArchive = false,
+    fileName, noArchive = false, open = true,
   } = opts;
 
   const { wrapper, useLandscape } = buildPrintWrapper(node, { org, title, subtitle, landscape, filterInclude, filterMethod });
@@ -137,9 +137,12 @@ export async function printReport(node, opts = {}) {
       docRef = await archiveBlobToVault(blob, { fileName: fname, empRef, docType });
     }
 
-    const url = URL.createObjectURL(blob);
-    window.open(url, "_blank");
-    setTimeout(() => URL.revokeObjectURL(url), 60000);
+    // open=false: أرشفة صامتة بلا فتح نافذة الطباعة — تُستخدم عند حفظ نسخة المستند
+    if (open) {
+      const url = URL.createObjectURL(blob);
+      window.open(url, "_blank");
+      setTimeout(() => URL.revokeObjectURL(url), 60000);
+    }
   } finally {
     wrapper.remove();
   }
