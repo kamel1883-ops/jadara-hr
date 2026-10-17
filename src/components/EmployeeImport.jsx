@@ -49,7 +49,10 @@ export default function EmployeeImport({ open, onClose, onSaved }) {
     issuesTitle: "أخطاء مكتشفة في الملف",
     issuesHint: "الترقيم يبدأ من أول موظف في الملف (وليس رقم صف الإكسل) — افتح الملف وصحّح الموظف المذكور برقمه.",
     validList: "الموظفون الصالحون",
-    entitledHint: "الإجمالي المستحق: يُحسب في النظام من تاريخ المباشرة حتى تاريخ رفع الملف (اليوم) بمعدل 21 أو 30 يوماً بالسنة، و30 إلزامياً بعد 5 سنوات، ثم يُقارن برقم الإكسل. يُقبل الملف إذا كان الفرق 3 أيام أو أقل لكل موظف؛ وما تجاوز ذلك يُرفض الملف كاملاً. الرصيد المستخدم يُعتمد كما هو من الملف.",
+    entitledHint: "إجمالي المستحق في الإكسل للمطابقة فقط: لا يُضاف إلى الرصيد ولا يُحتسب معه، بل يُعاد توليده تلقائياً من تاريخ المباشرة حتى اليوم بمعدل 21 أو 30 يوماً بالسنة (و30 إلزامياً بعد 5 سنوات). يُقبل الملف إذا كان فرق المطابقة 3 أيام أو أقل لكل موظف، وما تجاوز ذلك يُرفض الملف كاملاً. عمود «رصيد الإجازات المستخدم» هو ما يُنقل فعلياً إلى ملف الموظف، والمتبقي = المستحق المحسوب − المستخدم.",
+    usedLabel: "المستخدم",
+    remainingLabel: "المتبقي",
+    computedLabel: "المستحق المحسوب",
     matchOk: (excel, sys) => `مطابق (الإكسل ${excel} · النظام ${sys})`,
     matchDiff: (diff) => `غير مطابق — الفرق ${diff} يوم`,
     rejectedTitle: "الملف غير مقبول — إجمالي رصيد الإجازات المستحق",
@@ -79,7 +82,10 @@ export default function EmployeeImport({ open, onClose, onSaved }) {
     issuesTitle: "Issues found in the file",
     issuesHint: "Numbering starts from the first employee in the file (not the Excel row number).",
     validList: "Valid employees",
-    entitledHint: "Total entitlement is computed in the system from the hire date up to the file upload date (today) at 21 or 30 days/year, 30 mandatory after 5 years, then compared with the Excel figure. The file is accepted when the difference is 3 days or fewer per employee; anything beyond rejects the whole file. The used balance is adopted as-is from the file.",
+    entitledHint: "The Excel total entitlement is for comparison only: it is never added to or counted with the balance; the total is regenerated automatically from the hire date up to today at 21 or 30 days/year (30 mandatory after 5 years). The file is accepted when the comparison difference is 3 days or fewer per employee; anything beyond rejects the whole file. The 'Used Leave Balance' column is what is actually transferred to the employee file, and the remaining = computed entitlement − used.",
+    usedLabel: "Used",
+    remainingLabel: "Remaining",
+    computedLabel: "Computed entitlement",
     matchOk: (excel, sys) => `Matched (Excel ${excel} · system ${sys})`,
     matchDiff: (diff) => `Mismatch — difference ${diff} days`,
     rejectedTitle: "File not accepted — total accrued leave balance",
@@ -268,16 +274,29 @@ export default function EmployeeImport({ open, onClose, onSaved }) {
                     <p className="text-[11px] leading-relaxed text-muted-foreground">{t.entitledHint}</p>
                     <div className="max-h-44 overflow-y-auto divide-y divide-border">
                       {preview.preview.map((e, i) => (
-                        <div key={i} className="py-1.5 flex items-center justify-between text-xs gap-2">
-                          <span className="font-medium">
-                            {e.full_name} <span className="text-muted-foreground">({e.employee_number})</span>
-                            {e.entitled_match != null && (
-                              <span className={e.entitled_match ? "ms-2 text-emerald-600" : "ms-2 text-rose-600"}>
-                                · {e.entitled_match ? t.matchOk(e.entitled_excel, e.entitled_system) : t.matchDiff(e.entitled_diff)}
-                              </span>
-                            )}
-                          </span>
-                          <span className="text-muted-foreground text-left">{e.department} · {e.branch_name}</span>
+                        <div key={i} className="py-1.5 text-xs">
+                          <div className="flex items-center justify-between gap-2">
+                            <span className="font-medium">
+                              {e.full_name} <span className="text-muted-foreground">({e.employee_number})</span>
+                              {e.entitled_match != null && (
+                                <span className={e.entitled_match ? "ms-2 text-emerald-600" : "ms-2 text-rose-600"}>
+                                  · {e.entitled_match ? t.matchOk(e.entitled_excel, e.entitled_system) : t.matchDiff(e.entitled_diff)}
+                                </span>
+                              )}
+                            </span>
+                            <span className="text-muted-foreground text-left">{e.department} · {e.branch_name}</span>
+                          </div>
+                          <div className="mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-[11px] text-muted-foreground">
+                            <span className="rounded-md bg-violet-50 border border-violet-200 px-1.5 py-0.5 text-violet-700 font-medium">
+                              {t.usedLabel}: {e.used ?? 0}
+                            </span>
+                            <span className="rounded-md bg-muted border border-border px-1.5 py-0.5">
+                              {t.computedLabel}: {e.entitled_system ?? 0}
+                            </span>
+                            <span className="rounded-md bg-emerald-50 border border-emerald-200 px-1.5 py-0.5 text-emerald-700 font-medium">
+                              {t.remainingLabel}: {e.remaining ?? 0}
+                            </span>
+                          </div>
                         </div>
                       ))}
                     </div>

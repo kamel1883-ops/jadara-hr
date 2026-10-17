@@ -295,6 +295,8 @@ export default async function (req) {
         entitled_match: entitledMatch,
         entitled_diff: entitledDiff,
         entitled_rate: rate,
+        used: Number(r.prior_used_leave) || 0,
+        remaining: r.leave_balance,
       });
     }
 
