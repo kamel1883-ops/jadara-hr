@@ -106,14 +106,23 @@ export function entitledLeaveDays(employee, org, asOf = new Date()) {
   return computeLeaveEntitlement(employee?.hire_date, org, asOf, employee?.annual_leave_entitlement);
 }
 
-// «الرصيد المستخدم الكلي» = الرصيد الافتتاحي (prior_used_leave — لقطة ثابتة لما قبل النظام)
+// الرصيد الافتتاحي المستخدم (لقطة ثابتة لما قبل النظام): يُحتسب فقط لمن رُفع ملفه عبر
+// ملف إكسل مع رصيد افتتاحي (opening_balance_source = "excel"). الموظف المضاف داخل النظام
+// بلا رصيد افتتاحي إطلاقاً — حتى لو بقيت على ملفه قيمة قديمة، لا تدخل الحسبة ولا تُخصم من مستحقه.
+export function openingUsedDays(employee) {
+  if (String(employee?.opening_balance_source || "") !== "excel") return 0;
+  const prior = Number(employee?.prior_used_leave) || 0;
+  return prior > 0 ? prior : 0;
+}
+
+// «الرصيد المستخدم الكلي» = الرصيد الافتتاحي (من ملف الإكسل فقط)
 // + مجموع الإجازات السنوية المعتمدة داخل النظام (sumUsedDays). عنصران منفصلان لا يتكرران.
 // إن حُدِّد المستخدم يدوياً في الملف (leave_used_manual) يُعتمد هو حصراً.
 // المعادلة المعتمدة: المتبقي = المستحق التراكمي − المستخدم الكلي.
 export function usedLeaveTotal(employee, leaves) {
   const manual = Number(employee?.leave_used_manual);
   if (employee?.leave_used_manual != null && Number.isFinite(manual)) return Math.round(manual * 10) / 10;
-  const prior = Number(employee?.prior_used_leave) || 0;
+  const prior = openingUsedDays(employee);
   return Math.round((prior + sumUsedDays(leaves)) * 10) / 10;
 }
 

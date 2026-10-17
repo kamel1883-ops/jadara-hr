@@ -243,6 +243,9 @@ export default async function (req) {
       // الرصيد الافتتاحي يُؤخذ من صفّ هذا الموظف وحده في الملف ولا يُعمَّم على غيره،
       // وإذا لم تُملأ الأعمدة الثلاثة يكون 0 (لا رصيد افتتاحي).
       r.prior_used_leave = r.leave_used || r.prior_used_leave || 0;
+      // مصدر الرصيد الافتتاحي: "excel" فقط للموظفين المرفوعين من ملف — وهو وحده ما تُحتسب
+      // له أيام ما قبل النظام. من يُضاف داخل النظام يبقى "manual" ولا رصيد افتتاحي له.
+      r.opening_balance_source = Number(r.prior_used_leave) > 0 ? 'excel' : 'manual';
       const empChoice = r.annual_leave_entitlement === 30 ? 30 : 21;
       const ent = (r.leave_total_entitled && r.leave_total_entitled > 0)
         ? r.leave_total_entitled
