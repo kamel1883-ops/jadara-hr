@@ -182,6 +182,9 @@ export default function EmployeeForm({ open, onClose, onSaved, employee, unified
     e.preventDefault(); setSaving(true);
     try {
       const payload = { ...form, base_salary: Number(form.base_salary) || 0, housing_allowance: Number(form.housing_allowance) || 0, transport_allowance: Number(form.transport_allowance) || 0, other_allowances: Number(form.other_allowances) || 0, ticket_value: Number(form.ticket_value) || 0, prior_used_leave: Number(form.prior_used_leave) || 0, leave_entitled_manual: form.leave_entitled_manual == null || form.leave_entitled_manual === "" ? null : Number(form.leave_entitled_manual) || 0, leave_used_manual: form.leave_used_manual == null || form.leave_used_manual === "" ? null : Number(form.leave_used_manual) || 0 };
+      // الكاش المحسوب (leave_balance) ملك الإصلاح والاعتماد — لا يُكتب من نموذج التعديل
+      // حتى لا يعيد حفظ قيم قديمة ما تم إصلاحه بعد فتح النموذج.
+      delete payload.leave_balance;
       // ربط دائم بالرقم الموحّد للمنشأة — يبقى الموظف مربوطاً بالعميل حتى لو حُذف الحساب
       if (!employee && unifiedNumber && !payload.unified_number) payload.unified_number = String(unifiedNumber).trim();
       // === عزل البيانات الحساسة في الخزنة السعودية ===
@@ -201,7 +204,14 @@ export default function EmployeeForm({ open, onClose, onSaved, employee, unified
         <DialogHeader><DialogTitle>{employee ? t.edit : t.add}</DialogTitle></DialogHeader>
         {employee?.id && (
           <div className="mb-3 max-h-64 overflow-y-auto p-3 rounded-xl bg-slate-50/60 border border-border">
-            <EmployeeLeaveLoanSummary employee={employee} />
+            <EmployeeLeaveLoanSummary
+              employee={{ ...employee, ...form }}
+              onRepaired={(patch) => {
+                // 1) القيم الجديدة تدخل النموذج حتى يحفظها 2) تحديث قائمة الأب ليبقى ملف الموظف متوافقاً
+                setForm((f) => ({ ...f, ...patch }));
+                onSaved?.();
+              }}
+            />
           </div>
         )}
         <form onSubmit={submit} className="space-y-4">

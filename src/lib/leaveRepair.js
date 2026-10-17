@@ -46,7 +46,8 @@ export async function repairEmployeeLeave(emp, org, { resetPrior = false, regene
       try { await generateLeaveSettlement(l, fixedEmp, org, rows); docs++; } catch (e) { /* يُتخطى */ }
     }
   }
-  return { entitled, used, remaining, docs, kept };
+  // patch = القيم الجديدة التي يجب أن تسري على النموذج المفتوح أيضاً حتى لا يُكتب القديم فوقها عند الحفظ
+  return { entitled, used, remaining, docs, kept, patch: { prior_used_leave: prior, leave_balance: remaining } };
 }
 
 /**

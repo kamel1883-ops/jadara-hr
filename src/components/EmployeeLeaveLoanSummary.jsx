@@ -11,7 +11,7 @@ import { StoredDocButton } from "@/components/VaultDocLink";
 import { useI18n } from "@/lib/i18n";
 import { leaveDocumentErrorText } from "@/lib/saveLeaveDocument";
 
-export default function EmployeeLeaveLoanSummary({ employee }) {
+export default function EmployeeLeaveLoanSummary({ employee, onRepaired }) {
   const { lang } = useI18n();
   const isAr = lang === "ar";
   const t = isAr ? {
@@ -42,6 +42,8 @@ export default function EmployeeLeaveLoanSummary({ employee }) {
   const [loans, setLoans] = useState([]);
   const [org, setOrg] = useState(null);
   const [busy, setBusy] = useState(null);
+  // بعد الإصلاح: القيم الجديدة تُطبَّق على العرض فوراً (وتُمرَّر للنموذج الأب عبر onRepaired)
+  const [fix, setFix] = useState(null);
 
   const load = async () => {
     if (!employee?.id) return;
@@ -59,34 +61,43 @@ export default function EmployeeLeaveLoanSummary({ employee }) {
   useEffect(() => {
     setLeaves([]);
     setLoans([]);
+    setFix(null);
     if (employee?.id) load();
   }, [employee?.id]);
 
+  // القيم بعد الإصلاح (إن وُجد) تحل محل قيم الموظف المرسلة — حتى لا يعود الخلل القديم في العرض
+  const emp = fix ? { ...employee, ...fix } : employee;
   // رصيد الإجازات يعتمد اختيار المنشأة لكل موظف (21 أو 30) من ملف الموظف،
   // ويُلزم بـ30 بعد إكمال 5 سنوات خدمة. الخزنة أعلاه تتبع هذا الاختيار دائماً.
-  const annualDays = getEmployeeAnnualDays(employee, org);
+  const annualDays = getEmployeeAnnualDays(emp, org);
   const generous30 = annualDays === 30;
-  const entitlement = entitledLeaveDays(employee, org);
+  const entitlement = entitledLeaveDays(emp, org);
   // المستخدم الكلي = الرصيد الافتتاحي (prior_used_leave، ثابت) + المعتمد داخل النظام (sumUsedDays).
-  const used = usedLeaveTotal(employee, leaves);
+  const used = usedLeaveTotal(emp, leaves);
   const remaining = Math.round((entitlement - used) * 100) / 100;
   // تفصيل «المستخدم» ليكون واضحاً أنه ليس أياماً أُخذت داخل النظام فقط
-  const priorUsed = Number(employee?.prior_used_leave) || 0;
+  const priorUsed = Number(emp?.prior_used_leave) || 0;
   const systemUsed = Math.round(sumUsedDays(leaves) * 10) / 10;
 
   const doneLeaves = leaves.filter((l) => l.status === "completed" || l.status === "paid");
 
   const regenLeave = async (l) => {
     setBusy("l" + l.id);
-    try { await generateLeaveSettlement(l, employee, org, leaves); await load(); }
+    try { await generateLeaveSettlement(l, emp, org, leaves); await load(); }
     catch (error) { alert(leaveDocumentErrorText(error, isAr)); }
     finally { setBusy(null); }
   };
-  // إصلاح سريع لرصيد هذا الموظف: يعيد الحساب من مصدر الحقيقة ويحدّث الكاش — بلا تصفير للافتتاحي
+  // إصلاح سريع لرصيد هذا الموظف: يعيد الحساب من مصدر الحقيقة ويحدّث الكاش —
+  // ثم ينشر القيم الجديدة على النموذج الأبو (onRepaired) حتى لا تُكتب القديمة فوقها عند «حفظ».
   const fixBalance = async () => {
     setBusy("fix");
-    try { await repairEmployeeLeave(employee, org, { regenerateDocs: false }); await load(); }
-    finally { setBusy(null); }
+    try {
+      const res = await repairEmployeeLeave(employee, org, { regenerateDocs: false });
+      const patch = res?.patch || {};
+      setFix(patch);
+      onRepaired?.(patch);
+      await load();
+    } finally { setBusy(null); }
   };
   const genLoan = async (l) => {
     setBusy("loan" + l.id);

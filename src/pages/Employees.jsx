@@ -142,6 +142,9 @@ export default function Employees() {
     if (seq !== loadSeq.current) return;
     const rows = reverted.length ? data.map((e) => reverted.includes(e.id) ? { ...e, status: "active" } : e) : data;
     setEmployees(rows);
+    // تحديث أي نافذة مفتوحة لتشاهد القيم المحدّثة بعد أي إصلاح/إعادة تحميل (بنفس المعرّف)
+    setEditTarget((cur) => (cur && rows.find((x) => x.id === cur.id)) || cur);
+    setProfileEmp((cur) => (cur && rows.find((x) => x.id === cur.id)) || cur);
     setOrg(orgs[0] || null);
     setLoading(false);
     // الهوية وتاريخ الميلاد والجوال في الخزنة السعودية. طلب واحد للقائمة كلها، للعرض فقط.
