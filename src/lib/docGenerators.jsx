@@ -4,7 +4,7 @@ import { renderToPdfBlob } from "@/lib/pdfDocs";
 import { archiveBlobToVault } from "@/lib/vaultDocuments";
 import saveLeaveDocument from "@/lib/saveLeaveDocument";
 import { enrichEmployee } from "@/lib/vaultSensitive";
-import { computeLeaveEntitlement, usedLeaveTotal } from "@/lib/leaveBalance";
+import { entitledLeaveDays, usedLeaveTotal } from "@/lib/leaveBalance";
 import LeaveClearanceDoc from "@/components/docs/LeaveClearanceDoc";
 import LoanStatementDoc from "@/components/docs/LoanStatementDoc";
 import BusinessTripApprovalDoc from "@/components/docs/BusinessTripApprovalDoc";
@@ -17,7 +17,7 @@ async function employeeForDoc(emp) {
 // مخالصة تصفية إجازة — تُولّد PDF، تُرفع، وتُخزّن على الطلب + تُرجع الرابط
 export async function generateLeaveSettlement(leave, emp, org, allLeavesForEmp) {
   const asOf = leave?.start_date ? new Date(leave.start_date) : new Date();
-  const entitled = computeLeaveEntitlement(emp?.hire_date, org, asOf);
+  const entitled = entitledLeaveDays(emp, org, asOf);
   const granted = Number(leave?.balance_deducted) || 0;
   // المستخدم الكلي قبل هذا الطلب = الرصيد الافتتاحي (prior_used_leave) + المعتمد داخل النظام عدا هذا الطلب.
   // مهم: تُحصر القائمة على إجازات هذا الموظف فقط — القائمة الممرّرة قد تكون لكل الموظفين.
@@ -26,8 +26,9 @@ export async function generateLeaveSettlement(leave, emp, org, allLeavesForEmp) 
     emp,
     (allLeavesForEmp || []).filter((l) => l.id !== leave?.id && l.employee_id === empId)
   );
-  const bBefore = Math.max(0, Math.round((entitled - usedBefore) * 10) / 10);
-  const bAfter = Math.max(0, Math.round((bBefore - granted) * 10) / 10);
+  // القيم الصريحة بلا تصفير: صفر يُكتب صفر، ومتجاوز الاستحقاق يظهر بالسالب في المخالصة.
+  const bBefore = Math.round((entitled - usedBefore) * 10) / 10;
+  const bAfter = Math.round((bBefore - granted) * 10) / 10;
   const mw = (Number(emp?.base_salary) || 0) + (Number(emp?.housing_allowance) || 0) + (Number(emp?.transport_allowance) || 0) + (Number(emp?.other_allowances) || 0);
   const dailyWage = mw / 30;
   const daysCash = (leave?.leave_type === "annual" || leave?.is_full_clearance) ? Math.round(granted * dailyWage * 100) / 100 : 0;

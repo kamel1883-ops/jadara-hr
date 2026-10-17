@@ -33,6 +33,9 @@ const empty = {
   health_insurance_expiry: "",
   bank_account: "", ticket_entitlement: "yearly", ticket_last_used_year: null, ticket_value: "",
   annual_leave_entitlement: 21,
+  prior_used_leave: 0,
+  leave_entitled_manual: null,
+  leave_used_manual: null,
   unified_number: "",
   job_description: "",
   permissions: "",
@@ -54,6 +57,11 @@ export default function EmployeeForm({ open, onClose, onSaved, employee, unified
     passNo: "رقم الجواز", passExp: "انتهاء الجواز", medExp: "انتهاء التأمين الطبي",
     ticket: "استحقاق التذاكر", ticketValue: "قيمة التذكرة (ريال — مفتوحة)", yearly: "سنوي", biennial: "كل سنتين", none: "بدون", bank: "الحساب البنكي",
     annualLeaveEnt: "رصيد الإجازات السنوي", d21: "21 يوم", d30: "30 يوم",
+    priorUsed: "الرصيد الافتتاحي (أيام مستخدمة قبل النظام — لهذا الموظف فقط)",
+    priorUsedHint: "يُخصم من رصيد هذا الموظف وحده ولا يُعمَّم على أي موظف آخر. اتركه 0 إذا لم يكن له رصيد سابق.",
+    manualEnt: "إجمالي المستحق (يدوي — اختياري)", manualUsed: "إجمالي المستخدم (يدوي — اختياري)",
+    manualAuto: "اتركه فارغاً للحساب التلقائي",
+    manualRem: "المتبقي (يُحسب تلقائياً من الفرق)", manualRemAuto: "يُحسب تلقائياً: المستحق − المستخدم (يدوياً أو تلقائياً)",
     leaveLockNote: "أكمل الموظف 5 سنوات خدمة، فاستحقّ 30 يوماً سنوياً إلزامياً — لا يمكن اختيار 21 يوماً.",
     leaveChoiceNote: "أقل من 5 سنوات خدمة — الشركة حرّة في اختيار 21 أو 30 يوماً لكل موظف حسب التقدير (ميزة تعويضية لمسؤول أو تنفيذي مثلاً).",
     roleLevel: "المستوى الوظيفي", directManager: "المدير المباشر", noManager: "بدون (قمة الهيكل)",
@@ -79,6 +87,11 @@ export default function EmployeeForm({ open, onClose, onSaved, employee, unified
     passNo: "Passport number", passExp: "Passport expiry", medExp: "Insurance expiry",
     ticket: "Ticket entitlement", ticketValue: "Ticket value (SAR — open)", yearly: "Yearly", biennial: "Biennial", none: "None", bank: "Bank account",
     annualLeaveEnt: "Annual leave entitlement", d21: "21 days", d30: "30 days",
+    priorUsed: "Opening balance (days used before the system — this employee only)",
+    priorUsedHint: "Applies to this employee only and is never generalized to others. Leave 0 if none.",
+    manualEnt: "Total accrued (manual — optional)", manualUsed: "Total used (manual — optional)",
+    manualAuto: "Leave empty for automatic calculation",
+    manualRem: "Remaining (auto-computed from the difference)", manualRemAuto: "Auto: accrued − used (manual or automatic)",
     leaveLockNote: "Employee completed 5 years of service — 30 days is now mandatory; 21 days cannot be selected.",
     leaveChoiceNote: "Under 5 years of service — company is free to choose 21 or 30 days per employee (e.g. as a perk for a manager or executive).",
     roleLevel: "Role level", directManager: "Direct manager", noManager: "None (org top)",
@@ -168,7 +181,7 @@ export default function EmployeeForm({ open, onClose, onSaved, employee, unified
   const submit = async (e) => {
     e.preventDefault(); setSaving(true);
     try {
-      const payload = { ...form, base_salary: Number(form.base_salary) || 0, housing_allowance: Number(form.housing_allowance) || 0, transport_allowance: Number(form.transport_allowance) || 0, other_allowances: Number(form.other_allowances) || 0, ticket_value: Number(form.ticket_value) || 0 };
+      const payload = { ...form, base_salary: Number(form.base_salary) || 0, housing_allowance: Number(form.housing_allowance) || 0, transport_allowance: Number(form.transport_allowance) || 0, other_allowances: Number(form.other_allowances) || 0, ticket_value: Number(form.ticket_value) || 0, prior_used_leave: Number(form.prior_used_leave) || 0, leave_entitled_manual: form.leave_entitled_manual == null || form.leave_entitled_manual === "" ? null : Number(form.leave_entitled_manual) || 0, leave_used_manual: form.leave_used_manual == null || form.leave_used_manual === "" ? null : Number(form.leave_used_manual) || 0 };
       // ربط دائم بالرقم الموحّد للمنشأة — يبقى الموظف مربوطاً بالعميل حتى لو حُذف الحساب
       if (!employee && unifiedNumber && !payload.unified_number) payload.unified_number = String(unifiedNumber).trim();
       // === عزل البيانات الحساسة في الخزنة السعودية ===
@@ -244,6 +257,23 @@ export default function EmployeeForm({ open, onClose, onSaved, employee, unified
               ) : (
                 <p className="text-xs text-violet-600 mt-1.5 leading-relaxed">{t.leaveChoiceNote}</p>
               )}
+            </Field>
+            <Field label={t.priorUsed}>
+              <Input type="number" min="0" value={form.prior_used_leave ?? 0} onChange={(e) => set("prior_used_leave", e.target.value)} />
+              <p className="text-xs text-muted-foreground mt-1.5 leading-relaxed">{t.priorUsedHint}</p>
+            </Field>
+            <Field label={t.manualEnt}>
+              <Input type="number" min="0" value={form.leave_entitled_manual ?? ""} onChange={(e) => set("leave_entitled_manual", e.target.value === "" ? null : Number(e.target.value) || 0)} placeholder={t.manualAuto} />
+            </Field>
+            <Field label={t.manualUsed}>
+              <Input type="number" min="0" value={form.leave_used_manual ?? ""} onChange={(e) => set("leave_used_manual", e.target.value === "" ? null : Number(e.target.value) || 0)} placeholder={t.manualAuto} />
+            </Field>
+            <Field label={t.manualRem}>
+              <div className="h-9 flex items-center text-sm font-bold">
+                {form.leave_entitled_manual != null && form.leave_used_manual != null
+                  ? `${Math.round((Number(form.leave_entitled_manual) - Number(form.leave_used_manual)) * 10) / 10} ${isAr ? "يوم" : "d"}`
+                  : <span className="text-muted-foreground font-normal text-xs">{t.manualRemAuto}</span>}
+              </div>
             </Field>
             <Field label={t.contractStart}><Input type="date" lang={isAr ? "ar" : "en"} value={form.contract_start_date} onChange={(e) => set("contract_start_date", e.target.value)} /></Field>
             <Field label={t.contractEnd}><Input type="date" lang={isAr ? "ar" : "en"} value={form.contract_end_date} onChange={(e) => set("contract_end_date", e.target.value)} /></Field>

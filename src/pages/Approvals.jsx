@@ -14,7 +14,7 @@ import { ClipboardCheck, Check, X, Loader2, Search, Download, RefreshCw, Plane }
 import { cn } from "@/lib/utils";
 import { leaveTypeLabel, formatCurrency, todayISO } from "@/lib/hr";
 import { badge, leaveTicketAmount, needsFinance } from "@/lib/approvals";
-import { computeLeaveEntitlement, usedLeaveTotal } from "@/lib/leaveBalance";
+import { entitledLeaveDays, usedLeaveTotal } from "@/lib/leaveBalance";
 import { useI18n } from "@/lib/i18n";
 import { generateLeaveSettlement, generateLoanStatement, generateBusinessTripApproval } from "@/lib/docGenerators";
 import PullToRefresh from "@/components/PullToRefresh";
@@ -243,8 +243,10 @@ export default function Approvals() {
   const hrApprove = async (type, r) => {
     if (type === "leaves") {
       const emp = empOf(r.employee_id);
-      const balance = Number(emp?.leave_balance) || 0;
-      const deduct = Math.min(r.days_count, balance);
+      // الإجازة السنوية (أو التصفية الكاملة) وحدها تخصم من الرصيد —
+      // المرضية وبدون الراتب والاضطرارية والاستئذان لا تُخصم من رصيد الإجازات السنوية إطلاقاً.
+      const consume = r.leave_type === "annual" || r.is_full_clearance;
+      const deduct = consume ? Math.max(0, Number(r.days_count) || 0) : 0;
       const fin = needsFinance(r, emp, org);
       const ticket = fin ? leaveTicketAmount(emp, org) : 0;
       // جميع أنواع الإجازات تنتقل لبانتظار المالية — لا تكتمل إلا بعد اعتماد معتمد المالية.
@@ -257,7 +259,11 @@ export default function Approvals() {
       setLeaves((prev) => prev.map((x) => (x.id === r.id ? { ...x, ...patchL } : x)));
       await base44.entities.LeaveRequest.update(r.id, patchL);
       if (emp) {
-        await base44.entities.Employee.update(emp.id, { leave_balance: Math.max(0, balance - deduct), status: "on_leave" });
+        // الكاش يُحدَّث من مصدر الحقيقة المحسوب (المستحق − المستخدم السنوي)، لا من رصيد مخزّن قديم.
+        const entitled = entitledLeaveDays(emp, org);
+        const otherUsed = usedLeaveTotal(emp, (leaves || []).filter((l) => l.id !== r.id && l.employee_id === r.employee_id));
+        const newBalance = consume ? Math.round((entitled - otherUsed - deduct) * 10) / 10 : (Number(emp.leave_balance) || 0);
+        await base44.entities.Employee.update(emp.id, { leave_balance: newBalance, status: "on_leave" });
       }
       if (!fin) { try { await generateLeaveSettlement(r, empOf(r.employee_id), org, leaves); } catch (e) {} }
       // تنبيه المالية بوجود إجازة بانتظار الصرف
@@ -283,15 +289,19 @@ export default function Approvals() {
       // مصدر واحد للحقيقة: الإجمالي المستحق تراكمياً + المستخدم من طلبات الإجازة السنوية
       // المعتمدة الأخرى — مطابق لما يعرضه ملف الموظف والمخالصة (بلا تضاعف عبر prior_used_leave).
       const asOf = r.start_date ? new Date(r.start_date) : new Date();
-      const entitled = computeLeaveEntitlement(emp?.hire_date, org, asOf);
+      const entitled = entitledLeaveDays(emp, org, asOf);
       // المستخدم الكلي (غير مشمول هذا الطلب) = الرصيد الافتتاحي + المعتمد داخل النظام.
       const otherUsed = usedLeaveTotal(emp, (leaves || []).filter((l) => l.id !== r.id && l.employee_id === r.employee_id));
-      const before = Math.max(0, Math.round((entitled - otherUsed) * 10) / 10);
+      // المتبقي يظهر بقيمته الصريحة (سالبة إن تجاوز الموظف مستحقه) — لا يُصفَّر عند التجاوز.
+      const before = Math.round((entitled - otherUsed) * 10) / 10;
       // الموارد البشرية قد تعتمد جزءاً من الأيام المطلوبة فقط — ما يُخصم من الرصيد هو ما اعتمدته.
       const requested = Math.max(0, Number(r.days_count) || 0);
       const gr = Number(grantedDays);
       const granted = Math.max(0, Math.min(Number.isFinite(gr) && gr > 0 ? gr : requested, requested));
-      const after = Math.max(0, Math.round((before - granted) * 10) / 10);
+      // ما يُخصم فعلاً من الرصيد هو الإجازة السنوية (أو التصفية الكاملة) فقط —
+      // المرضية وبدون الراتب والاضطرارية تُعتمد أيامها ولا تُخصم من الرصيد.
+      const deductDays = (r.leave_type === "annual" || r.is_full_clearance) ? granted : 0;
+      const after = Math.round((before - deductDays) * 10) / 10;
       const mw = (Number(emp?.base_salary) || 0) + (Number(emp?.housing_allowance) || 0) + (Number(emp?.transport_allowance) || 0) + (Number(emp?.other_allowances) || 0);
       const dailyWage = mw / 30;
       const ticket = r.is_full_clearance ? leaveTicketAmount(emp, org) : 0;
@@ -302,7 +312,7 @@ export default function Approvals() {
       const patch = {
         hr_status: "settled", hr_id: me?.id, hr_name: me?.full_name, hr_date: todayISO(),
         hr_note: note, hr_document_url: url,
-        balance_before: before, balance_after: after, balance_deducted: granted,
+        balance_before: before, balance_after: after, balance_deducted: deductDays,
         ticket_amount: ticket,
         deduction_amount: ded, deduction_note: deductionNote,
         addition_amount: add, addition_note: additionNote,
@@ -324,7 +334,7 @@ export default function Approvals() {
       // المستخدم الكلي (غير مشمول هذا الطلب) = الرصيد الافتتاحي + المعتمد داخل النظام.
       const otherUsed = usedLeaveTotal(emp, (leaves || []).filter((l) => l.id !== r.id && l.employee_id === r.employee_id));
       const totalUsed = otherUsed + granted;
-      const entitled = computeLeaveEntitlement(emp?.hire_date, org);
+      const entitled = entitledLeaveDays(emp, org);
       // جميع الإجازات تنتقل لبانتظار المالية بعد اعتماد الموارد البشرية — لا تكتمل إلا باعتماد المالية.
       const patchFin = { hr_status: "approved", status: "awaiting_finance", finance_status: "pending" };
       setLeaves((prev) => prev.map((x) => (x.id === r.id ? { ...x, ...patchFin } : x)));
@@ -333,7 +343,8 @@ export default function Approvals() {
       try { await base44.functions.invoke("notifyApprover", { type: "leave", employeeId: r.employee_id, employeeName: r.employee_name, status: "awaiting_finance" }); } catch (e) {}
       if (emp) {
         await base44.entities.Employee.update(emp.id, {
-          leave_balance: Math.max(0, Math.round((entitled - totalUsed) * 10) / 10),
+          // القيمة الصريحة (سالبة عند تجاوز الاستحقاق) — لا تُصفَّر حتى لا تختفي المديونية
+          leave_balance: Math.round((entitled - totalUsed) * 10) / 10,
           status: "on_leave",
         });
       }

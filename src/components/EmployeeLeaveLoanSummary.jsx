@@ -1,7 +1,8 @@
 import React, { useState, useEffect } from "react";
 import { base44 } from "@/api/base44Client";
-import { computeLeaveEntitlement, usedLeaveTotal, sumUsedDays, getOrgOnce, getEmployeeAnnualDays } from "@/lib/leaveBalance";
+import { entitledLeaveDays, usedLeaveTotal, sumUsedDays, getOrgOnce, getEmployeeAnnualDays } from "@/lib/leaveBalance";
 import { generateLeaveSettlement, generateLoanStatement } from "@/lib/docGenerators";
+import { repairEmployeeLeave } from "@/lib/leaveRepair";
 import { formatCurrency, leaveTypeLabel } from "@/lib/hr";
 import { badge } from "@/lib/approvals";
 import { Download, FileText, Loader2, RefreshCw, CalendarDays, Wallet } from "lucide-react";
@@ -15,6 +16,7 @@ export default function EmployeeLeaveLoanSummary({ employee }) {
   const isAr = lang === "ar";
   const t = isAr ? {
     leaveTitle: "رصيد الإجازات (محسوب تلقائياً من تاريخ المباشرة)",
+    fixBtn: "إصلاح الرصيد", fixHint: "يعيد حساب المستحق والمستخدم (السنوية فقط) ويحدّث ملف الموظف — الرصيد الافتتاحي لا يتغير",
     entitled: "المستحق", used: "المستخدم", remaining: "المتبقي", day: "يوم",
     systemNote: (g) => g ? "30 يوماً/سنة عن كامل المدة (سياسة المنشأة) · تراكم يومي فعلي من تاريخ المباشرة" : "21 يوماً/سنة لأول 5 سنوات + 30 يوماً/سنة بعدها · تراكم يومي فعلي من تاريخ المباشرة",
     settlementsTitle: "سجل التصفيات", noSettlements: "لا توجد تصفيات بعد",
@@ -25,6 +27,7 @@ export default function EmployeeLeaveLoanSummary({ employee }) {
     paid: (v) => `تم سداد ${v}`, rem: (v) => `متبقي ${v}`, closed: "مغلقة", statement: "الكشف",
   } : {
     leaveTitle: "Leave balance (auto-calculated from hire date)",
+    fixBtn: "Fix balance", fixHint: "Recomputes accrued and used (annual only) and updates the employee record — opening balance unchanged",
     entitled: "Accrued", used: "Used", remaining: "Remaining", day: "days",
     systemNote: (g) => g ? "30 days/yr for full tenure (org policy) · accrued daily from hire date" : "21 days/yr first 5 years + 30 days/yr after · accrued daily from hire date",
     settlementsTitle: "Settlements log", noSettlements: "No settlements yet",
@@ -63,7 +66,7 @@ export default function EmployeeLeaveLoanSummary({ employee }) {
   // ويُلزم بـ30 بعد إكمال 5 سنوات خدمة. الخزنة أعلاه تتبع هذا الاختيار دائماً.
   const annualDays = getEmployeeAnnualDays(employee, org);
   const generous30 = annualDays === 30;
-  const entitlement = computeLeaveEntitlement(employee?.hire_date, org, undefined, employee?.annual_leave_entitlement);
+  const entitlement = entitledLeaveDays(employee, org);
   // المستخدم الكلي = الرصيد الافتتاحي (prior_used_leave، ثابت) + المعتمد داخل النظام (sumUsedDays).
   const used = usedLeaveTotal(employee, leaves);
   const remaining = Math.round((entitlement - used) * 100) / 100;
@@ -79,6 +82,12 @@ export default function EmployeeLeaveLoanSummary({ employee }) {
     catch (error) { alert(leaveDocumentErrorText(error, isAr)); }
     finally { setBusy(null); }
   };
+  // إصلاح سريع لرصيد هذا الموظف: يعيد الحساب من مصدر الحقيقة ويحدّث الكاش — بلا تصفير للافتتاحي
+  const fixBalance = async () => {
+    setBusy("fix");
+    try { await repairEmployeeLeave(employee, org, { regenerateDocs: false }); await load(); }
+    finally { setBusy(null); }
+  };
   const genLoan = async (l) => {
     setBusy("loan" + l.id);
     try { await generateLoanStatement(l, employee, org); await load(); }
@@ -89,8 +98,14 @@ export default function EmployeeLeaveLoanSummary({ employee }) {
     <div className="space-y-4">
       {/* رصيد الإجازات */}
       <div className="rounded-xl border border-border bg-white p-3">
-        <div className="flex items-center gap-2 mb-2 text-sm font-semibold">
-          <CalendarDays size={16} className="text-violet-600" /> {t.leaveTitle}
+        <div className="flex items-center justify-between gap-2 mb-2">
+          <div className="flex items-center gap-2 text-sm font-semibold">
+            <CalendarDays size={16} className="text-violet-600" /> {t.leaveTitle}
+          </div>
+          <button type="button" onClick={fixBalance} disabled={busy === "fix"} title={t.fixHint}
+            className="inline-flex items-center gap-1 text-[11px] px-2 py-1 rounded-md bg-slate-50 text-slate-600 hover:bg-slate-100 disabled:opacity-50">
+            {busy === "fix" ? <Loader2 size={12} className="animate-spin" /> : <RefreshCw size={12} />} {t.fixBtn}
+          </button>
         </div>
         <div className="grid grid-cols-3 gap-2 text-center">
           <Stat label={t.entitled} value={`${entitlement} ${t.day}`} tone="slate" />

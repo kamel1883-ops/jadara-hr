@@ -11,7 +11,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Calculator, AlertTriangle, Printer, Save, User, FileText, CalendarDays, Plane, Loader2, Check, Send, X, Scale, ExternalLink } from "lucide-react";
 import { computeSettlement, reasonMeta, terminationReasons, todayISO, isSaudiNationalId } from "@/lib/eos";
-import { computeLeaveEntitlement, usedLeaveTotal } from "@/lib/leaveBalance";
+import { entitledLeaveDays, usedLeaveTotal } from "@/lib/leaveBalance";
 import { formatCurrency } from "@/lib/hr";
 import { useI18n } from "@/lib/i18n";
 import { StoredDocButton } from "@/components/VaultDocLink";
@@ -145,7 +145,7 @@ export default function EndOfService() {
   const liveBalance = emp ? (() => {
     const asOf = lwd ? new Date(lwd) : new Date();
     // رصيد الإجازات يتبع اختيار المنشأة من ملف الموظف (21/30) ويُلزم بـ30 بعد 5 سنوات.
-    const ent = computeLeaveEntitlement(emp.hire_date, org, asOf, emp.annual_leave_entitlement);
+    const ent = entitledLeaveDays(emp, org, asOf);
     // المستخدم الكلي = الرصيد الافتتاحي (prior_used_leave) + المعتمد داخل النظام.
     const used = usedLeaveTotal(emp, empLeaves);
     return { ent, used, remaining: Math.max(0, Math.round((ent - used) * 100) / 100) };
@@ -155,7 +155,7 @@ export default function EndOfService() {
     if (!emp) return;
     // رصيد الإجازات المتبقي = المستحق (حسب اختيار المنشأة 21/30 من ملف الموظف) − المستخدم الكلي
     const asOf = lwd ? new Date(lwd) : new Date();
-    const ent = computeLeaveEntitlement(emp.hire_date, org, asOf, emp.annual_leave_entitlement);
+    const ent = entitledLeaveDays(emp, org, asOf);
     const used = usedLeaveTotal(emp, empLeaves);
     const remaining = Math.max(0, Math.round((ent - used) * 100) / 100);
     const set = computeSettlement({ employee: emp, org, lastWorkingDate: lwd, reason, ticketAmount, leaveBalance: remaining });

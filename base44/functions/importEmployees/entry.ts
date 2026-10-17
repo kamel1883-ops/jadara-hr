@@ -240,12 +240,15 @@ export default async function (req) {
       const br = await resolveBranch(r.branch_name);
       if (br) { r.branch_id = br.id; r.branch_name = br.name; }
       else r.branch_name = r.branch_name || '';
+      // الرصيد الافتتاحي يُؤخذ من صفّ هذا الموظف وحده في الملف ولا يُعمَّم على غيره،
+      // وإذا لم تُملأ الأعمدة الثلاثة يكون 0 (لا رصيد افتتاحي).
       r.prior_used_leave = r.leave_used || r.prior_used_leave || 0;
       const empChoice = r.annual_leave_entitlement === 30 ? 30 : 21;
       const ent = (r.leave_total_entitled && r.leave_total_entitled > 0)
         ? r.leave_total_entitled
         : computeEntitlement(r.hire_date, empChoice);
-      r.leave_balance = Math.max(0, Math.round((ent - r.prior_used_leave) * 10) / 10);
+      // القيمة الصريحة (قد تكون سالبة عند تجاوز الاستحقاق) — لا تُصفَّر
+      r.leave_balance = Math.round((ent - r.prior_used_leave) * 10) / 10;
       r.unified_number = myUnified;
       toCreate.push(r);
       validPreview.push({

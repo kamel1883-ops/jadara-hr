@@ -98,17 +98,28 @@ export function sumUsedDays(leaves) {
     .reduce((s, l) => s + (Number(l.balance_deducted) || Number(l.days_count) || 0), 0);
 }
 
+// الإجمالي المستحق: يدوي إن حُدِّد صراحة في ملف الموظف (leave_entitled_manual)،
+// وإلا التلقائي من تاريخ المباشرة وسياسة المنشأة (21/30).
+export function entitledLeaveDays(employee, org, asOf = new Date()) {
+  const manual = Number(employee?.leave_entitled_manual);
+  if (employee?.leave_entitled_manual != null && Number.isFinite(manual)) return Math.round(manual * 10) / 10;
+  return computeLeaveEntitlement(employee?.hire_date, org, asOf, employee?.annual_leave_entitlement);
+}
+
 // «الرصيد المستخدم الكلي» = الرصيد الافتتاحي (prior_used_leave — لقطة ثابتة لما قبل النظام)
 // + مجموع الإجازات السنوية المعتمدة داخل النظام (sumUsedDays). عنصران منفصلان لا يتكرران.
+// إن حُدِّد المستخدم يدوياً في الملف (leave_used_manual) يُعتمد هو حصراً.
 // المعادلة المعتمدة: المتبقي = المستحق التراكمي − المستخدم الكلي.
 export function usedLeaveTotal(employee, leaves) {
+  const manual = Number(employee?.leave_used_manual);
+  if (employee?.leave_used_manual != null && Number.isFinite(manual)) return Math.round(manual * 10) / 10;
   const prior = Number(employee?.prior_used_leave) || 0;
   return Math.round((prior + sumUsedDays(leaves)) * 10) / 10;
 }
 
 // الرصيد المتبقي = المستحق التراكمي − المستخدم الكلي (قد يكون سالباً عند تقديم إجازة).
 export function remainingLeave(employee, leaves, org, asOf) {
-  const entitled = computeLeaveEntitlement(employee?.hire_date, org, asOf, employee?.annual_leave_entitlement);
+  const entitled = entitledLeaveDays(employee, org, asOf);
   const used = usedLeaveTotal(employee, leaves);
   return Math.round((entitled - used) * 10) / 10;
 }

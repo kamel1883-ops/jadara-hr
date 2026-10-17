@@ -55,7 +55,9 @@ export default function LeaveClearanceDoc({ employee, leave, org, balanceBefore,
           </tr>
           <tr style={{ borderBottom: "2px solid #0b1120" }}>
             <td style={{ padding: "9px 6px", color: "#667085", fontWeight: 700 }}>رصيد الإجازات المتبقي بعد التصفية</td>
-            <td style={{ padding: "9px 6px", fontWeight: 800, fontSize: 15, color: "#0b1120" }}>{balanceAfter ?? 0} يوم</td>
+            <td style={{ padding: "9px 6px", fontWeight: 800, fontSize: 15, color: (Number(balanceAfter) || 0) < 0 ? "#b42318" : "#0b1120" }}>
+              {(Number(balanceAfter) || 0)} يوم{(Number(balanceAfter) || 0) < 0 ? " — الموظف متجاوز لمستحقه (مدين)" : ""}
+            </td>
           </tr>
         </tbody>
       </table>

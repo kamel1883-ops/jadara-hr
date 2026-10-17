@@ -6,7 +6,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { cn } from "@/lib/utils";
 import { formatCurrency, statusEmployeeLabel, leaveTypeLabel, ticketEntitlementLabel, contractTypeLabel } from "@/lib/hr";
-import { computeLeaveEntitlement, usedLeaveTotal, getEmployeeAnnualDays } from "@/lib/leaveBalance";
+import { entitledLeaveDays, usedLeaveTotal, getEmployeeAnnualDays } from "@/lib/leaveBalance";
 import { reasonMeta, computeSettlement } from "@/lib/eos";
 import { badge } from "@/lib/approvals";
 import EmployeePaidDocuments from "@/components/EmployeePaidDocuments";
@@ -84,7 +84,7 @@ export default function EmployeeProfileDialog({ open, onClose, employee, org, on
   }, [open, employee?.id]);
 
   const annualDays = getEmployeeAnnualDays(employee, org);
-  const entitled = employee ? computeLeaveEntitlement(employee.hire_date, org, undefined, employee.annual_leave_entitlement) : 0;
+  const entitled = employee ? entitledLeaveDays(employee, org) : 0;
   const used = usedLeaveTotal(employee, leaves);
   const remaining = Math.round((entitled - used) * 10) / 10;
   const eos = employee ? computeSettlement({
