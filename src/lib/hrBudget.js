@@ -23,7 +23,7 @@ import { gosiRates, eosSalaryBasis, computeYearsOfService, todayISO } from "@/li
 export const BUDGET_CATEGORIES = [
   {
     key: "salaries",
-    ar: "الرواتب والبدلات", en: "Salaries & Allowances",
+    ar: "الرواتب والبدلات", en: "Salaries & Allowances", short: "الرواتب والبدلات", short_en: "Salaries",
     items: [
       { key: "salaries_basic", ar: "الرواتب الأساسية + البدلات (من الموظفين النشطين)", en: "Basic salaries + allowances (from active employees)", source: "auto" },
       { key: "salaries_overtime", ar: "العمل الإضافي (إدخال سنوي)", en: "Overtime (annual input)", source: "input" },
@@ -33,7 +33,7 @@ export const BUDGET_CATEGORIES = [
   },
   {
     key: "gosi",
-    ar: "التأمينات الاجتماعية", en: "Social Insurance (GOSI)",
+    ar: "التأمينات الاجتماعية", en: "Social Insurance (GOSI)", short: "التأمينات", short_en: "Insurance",
     items: [
       { key: "gosi_employer", ar: "حصة صاحب العمل — سعوديون (11.75% / 12.75% حسب تاريخ التسجيل)", en: "Employer share — Saudis (11.75% / 12.75% by registration date)", source: "auto" },
       { key: "gosi_expat", ar: "حصة صاحب العمل — مقيمون (2% مخاطر مهنية)", en: "Employer share — expats (2% occupational hazards)", source: "auto" },
@@ -42,7 +42,7 @@ export const BUDGET_CATEGORIES = [
   },
   {
     key: "medical",
-    ar: "التأمين الطبي", en: "Medical Insurance",
+    ar: "التأمين الطبي", en: "Medical Insurance", short: "التأمين الطبي", short_en: "Medical",
     items: [
       { key: "medical_employees", ar: "قسط التأمين الطبي للموظفين (سنوي × العمالة)", en: "Employee medical premium (annual × headcount)", source: "auto_plus_input" },
       { key: "medical_dependents", ar: "قسط التأمين الطبي للتابعين", en: "Dependents medical premium", source: "auto_plus_input" },
@@ -52,7 +52,7 @@ export const BUDGET_CATEGORIES = [
   },
   {
     key: "iqama",
-    ar: "الإقامة ورسوم الجوازات والرخص", en: "Iqama, Visas & Work Permits",
+    ar: "الإقامة ورسوم الجوازات والرخص", en: "Iqama, Visas & Work Permits", short: "الإقامة والجوازات", short_en: "Iqama & Visas",
     items: [
       { key: "iqama_renewal", ar: "تجديد إقامات المقيمين (650 ر.س سنوياً × المقيمون)", en: "Iqama renewals (SAR 650/yr × expats)", source: "auto" },
       { key: "iqama_permit", ar: "رخصة العمل/مكتب العمل (8,400 أو 9,600 ر.س سنوياً لكل مقيم حسب توازن النطاق)", en: "Work permit (SAR 8,400 or 9,600/yr per expat by Nitaqat balance)", source: "auto" },
@@ -62,7 +62,7 @@ export const BUDGET_CATEGORIES = [
   },
   {
     key: "housing",
-    ar: "السكن والمرافق", en: "Housing & Utilities",
+    ar: "السكن والمرافق", en: "Housing & Utilities", short: "السكن", short_en: "Housing",
     items: [
       { key: "housing_cash_annual", ar: "بدل السكن النقدي للموظفين (إجمالي سنوي — يُدفع خارج الرواتب بشيك/نقداً)", en: "Cash housing allowance paid to employees (annual total — paid outside payroll by check/cash)", source: "input" },
       { key: "housing_rent", ar: "إيجارات سكن إداري/مجمع سكني", en: "Administrative / staff housing rent", source: "input" },
@@ -73,7 +73,7 @@ export const BUDGET_CATEGORIES = [
   },
   {
     key: "transport",
-    ar: "النقل والسيارات", en: "Transport & Vehicles",
+    ar: "النقل والسيارات", en: "Transport & Vehicles", short: "النقل والسيارات", short_en: "Transport",
     items: [
       { key: "transport_fuel", ar: "وقود السيارات (عدد السيارات × متوسط شهري × 12)", en: "Vehicle fuel (cars × monthly avg × 12)", source: "auto_plus_input" },
       { key: "transport_maintenance", ar: "صيانة وقطع غيار (عدد السيارات × متوسط سنوي)", en: "Maintenance & parts (cars × annual avg)", source: "auto_plus_input" },
@@ -85,7 +85,7 @@ export const BUDGET_CATEGORIES = [
   },
   {
     key: "eos",
-    ar: "مخصص نهاية الخدمة والإجازات", en: "EOS & Leave Provisions",
+    ar: "مخصص نهاية الخدمة والإجازات", en: "EOS & Leave Provisions", short: "النهاية والإجازات", short_en: "EOS & Leave",
     items: [
       { key: "eos_provision", ar: "مخصص مكافأة نهاية الخدمة (مادة 84 — نصف شهر/سنة لأول 5 ثم شهر/سنة) — لهذا العام فقط", en: "EOS award provision (Art. 84 — half month/yr first 5, then full month/yr) — this year only", source: "auto" },
       { key: "eos_leave", ar: "مخصص الإجازات السنوية (تلقائي: 30 يوم لمن أكمل 5 سنوات، و21 أو 30 حسب سياسة الشركة لمن دونها)", en: "Annual leave provision (auto: 30 days after 5 years; 21 or 30 per company policy before)", source: "auto" },
@@ -94,7 +94,7 @@ export const BUDGET_CATEGORIES = [
   },
   {
     key: "recruitment",
-    ar: "التوظيف والاستقدام", en: "Recruitment & Mobilization",
+    ar: "التوظيف والاستقدام", en: "Recruitment & Mobilization", short: "التوظيف", short_en: "Recruitment",
     items: [
       { key: "recruit_visas", ar: "رسوم تأشيرات عمل واستقدام", en: "Work visa & mobilization fees", source: "input" },
       { key: "recruit_transfer", ar: "رسوم نقل كفالة/نقل خدمات عبر قوى", en: "Sponsorship / service transfer via Qiwa", source: "input" },
@@ -106,7 +106,7 @@ export const BUDGET_CATEGORIES = [
   },
   {
     key: "training",
-    ar: "التدريب والتطوير", en: "Training & Development",
+    ar: "التدريب والتطوير", en: "Training & Development", short: "التدريب", short_en: "Training",
     items: [
       { key: "training_external", ar: "تدريب خارجي ودورات معتمدة وشهادات مهنية", en: "External training, certified courses & professional certifications", source: "input" },
       { key: "training_internal", ar: "تدريب داخلي ومدربين ومنصات تعليم إلكتروني", en: "Internal training, trainers & e-learning platforms", source: "input" },
@@ -116,7 +116,7 @@ export const BUDGET_CATEGORIES = [
   },
   {
     key: "other",
-    ar: "بنود إضافية", en: "Other Items",
+    ar: "بنود إضافية", en: "Other Items", short: "بنود أخرى", short_en: "Other",
     items: [
       { key: "other_uniforms", ar: "زي موحد ومهمات عمل", en: "Uniforms & work gear", source: "input" },
       { key: "other_care", ar: "رعاية طبية تكميلية/تأمين حياة", en: "Supplementary medical / life insurance", source: "input" },
@@ -337,6 +337,8 @@ export function computeBudgetKpis(budget, { hires = 0, actualTotal = null } = {}
   const training = catOf("training");
   const transport = catOf("transport");
   const saudizationPct = headcount.total ? (headcount.saudis / headcount.total) * 100 : 0;
+  // مخصص الإجازات السنوية (بند محسوب تلقائياً) معروضاً كنسبة من إجمالي الرواتب — نفس مؤشر نهاية الخدمة
+  const leave = categories.find((c) => c.key === "eos")?.items?.find((i) => i.key === "eos_leave")?.amount || 0;
   return {
     costPerEmployee: headcount.total ? round2(grandTotal / headcount.total) : 0,
     salariesPct: round2((salaries / total) * 100),
@@ -344,6 +346,7 @@ export function computeBudgetKpis(budget, { hires = 0, actualTotal = null } = {}
     trainingPerEmployee: headcount.total ? round2(training / headcount.total) : 0,
     saudizationPct: round2(saudizationPct),
     eosPctOfSalaries: salaries > 0 ? round2((eos / salaries) * 100) : 0,
+    leavePctOfSalaries: salaries > 0 ? round2((leave / salaries) * 100) : 0,
     fleetPerVehicle: budget.vehicles > 0 ? round2(transport / budget.vehicles) : 0,
     deviation: actualTotal != null && grandTotal > 0 ? round2((actualTotal / grandTotal - 1) * 100) : null,
   };

@@ -8,7 +8,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Save, Loader2, Plus, Trash2, Calculator, PieChart as PieIcon, BarChart3, TrendingUp, Printer } from "lucide-react";
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
-  PieChart, Pie, Cell, Legend, Line, ComposedChart,
+  PieChart, Pie, Cell, Legend, Line, ComposedChart, LabelList,
 } from "recharts";
 import { computeHrBudget, computeBudgetKpis, monthlyActualsFromPayrolls, budgetMonthlyPlan, BUDGET_INPUT_DEFAULTS } from "@/lib/hrBudget";
 import { formatCurrency } from "@/lib/hr";
@@ -19,6 +19,50 @@ import { useToast } from "@/components/ui/use-toast";
 import { cn } from "@/lib/utils";
 
 const CHART_COLORS = ["#4f46e5", "#0891b2", "#059669", "#d97706", "#dc2626", "#7c3aed", "#db2777", "#0d9488", "#4338ca", "#b45309", "#be123c"];
+
+const RADIAN = Math.PI / 180;
+
+// تسمية خارج الدائرة: خط دليل (سهم) من حافة الشريحة إلى خارج الدائرة ثم نص "الاسم 9%".
+function pieOutsideLabel(fontSize, pad, total = 0) {
+  return (p) => {
+    let percent = Number(p.percent);
+    if (!Number.isFinite(percent)) percent = total > 0 ? (Number(p.value) || 0) / total : 0;
+    if (percent <= 0) return null;
+    const cx = Number(p.cx) || 0;
+    const cy = Number(p.cy) || 0;
+    const outerRadius = Number(p.outerRadius) || 0;
+    const ang = -(Number(p.midAngle) || 0) * RADIAN;
+    const cos = Math.cos(ang), sin = Math.sin(ang);
+    const side = cos >= 0 ? 1 : -1;
+    const ex = cx + (outerRadius + 3) * cos, ey = cy + (outerRadius + 3) * sin;
+    const bx = cx + (outerRadius + pad) * cos, by = cy + (outerRadius + pad) * sin;
+    const tx = bx + side * 8;
+    const name = p.payload?.name || p.name || "";
+    const label = `${name} ${(percent * 100).toFixed(0)}%`.trim();
+    return (
+      <g>
+        <line x1={ex} y1={ey} x2={bx} y2={by} stroke="#94a3b8" strokeWidth={1} />
+        <line x1={bx} y1={by} x2={tx} y2={by} stroke="#94a3b8" strokeWidth={1} />
+        <text x={tx + side * 3} y={by + fontSize * 0.35} textAnchor={side === 1 ? "start" : "end"} fontSize={fontSize} fontWeight={600} fill="#0f172a">{label}</text>
+      </g>
+    );
+  };
+}
+
+// دليل الألوان أسفل الأعمدة: مربّع ملوّن + اسم البند + نسبة العمود من الإجمالي.
+function BarsLegend({ data, colors, fontSize = 11 }) {
+  return (
+    <div style={{ display: "flex", flexWrap: "wrap", justifyContent: "center", gap: "4px 14px", fontSize, color: "#475569", marginTop: 8 }}>
+      {data.map((b, i) => (
+        <span key={b.name} style={{ display: "inline-flex", alignItems: "center", gap: 5 }}>
+          <span style={{ width: 10, height: 10, borderRadius: 3, background: colors[i % colors.length], display: "inline-block", flexShrink: 0 }} />
+          <span>{b.label}</span>
+          <span style={{ fontWeight: 700, color: "#0f172a" }}>{b.pct}%</span>
+        </span>
+      ))}
+    </div>
+  );
+}
 
 const MONTHS_AR = ["يناير", "فبراير", "مارس", "أبريل", "مايو", "يونيو", "يوليو", "أغسطس", "سبتمبر", "أكتوبر", "نوفمبر", "ديسمبر"];
 const MONTHS_EN = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
@@ -130,7 +174,7 @@ export default function HrBudget() {
     budgetTable: "بنود الميزانية السنوية", autoBadge: "تلقائي", inputBadge: "إدخال",
     total: "الإجمالي", contingency: (p) => `احتياطي طوارئ (${p}%)`, grandTotal: "إجمالي الميزانية السنوية",
     kpis: "مؤشرات الأداء", kpiCost: "تكلفة الموظف السنوية", kpiSalariesPct: "نسبة الرواتب من الميزانية",
-    kpiTraining: "التدريب لكل موظف", kpiSaudization: "نسبة السعودة", kpiEos: "مخصص نهاية الخدمة % من الرواتب",
+    kpiTraining: "التدريب لكل موظف", kpiSaudization: "نسبة السعودة",    kpiEos: "مخصص نهاية الخدمة % من الرواتب", kpiLeave: "مخصص الإجازات % من الرواتب",
     kpiFleet: "تكلفة السيارة سنوياً", kpiHc: "العمالة (سعوديون / مقيمون / تابعون)", kpiVehicles: "عدد السيارات",
     charts: "الرسوم البيانية", chartBars: "مبالغ البنود السنوية", chartPie: "نسبة كل بند من الإجمالي",
     vsActual: "الميزانية مقابل الفعلي (شهرياً)", vsHint: "الفعلي = كشوف الرواتب المصروفة + حصة صاحب العمل في التأمينات.",
@@ -146,7 +190,7 @@ export default function HrBudget() {
     budgetTable: "Annual budget lines", autoBadge: "Auto", inputBadge: "Input",
     total: "Total", contingency: (p) => `Contingency (${p}%)`, grandTotal: "Total annual budget",
     kpis: "KPIs", kpiCost: "Cost per employee", kpiSalariesPct: "Salaries % of budget",
-    kpiTraining: "Training per employee", kpiSaudization: "Saudization rate", kpiEos: "EOS provision % of salaries",
+    kpiTraining: "Training per employee", kpiSaudization: "Saudization rate",    kpiEos: "EOS provision % of salaries", kpiLeave: "Leave provision % of salaries",
     kpiFleet: "Cost per vehicle / year", kpiHc: "Workforce (Saudis / expats / dependents)", kpiVehicles: "Vehicles",
     charts: "Charts", chartBars: "Annual line amounts", chartPie: "Each line's share of total",
     vsActual: "Budget vs actual (monthly)", vsHint: "Actual = paid payroll sheets + employer GOSI share.",
@@ -218,8 +262,17 @@ export default function HrBudget() {
   const planMonthly = useMemo(() => budgetMonthlyPlan(budget.grandTotal), [budget.grandTotal]);
   const vsData = months.map((m, i) => ({ name: m, plan: planMonthly[i], actual: actualMonthly[i] }));
 
-  const barsData = budget.categories.map((c) => ({ name: c.ar, short: isAr ? c.ar : c.en, value: c.total }));
-  const pieData = budget.categories.filter((c) => c.total > 0).map((c) => ({ name: isAr ? c.ar : c.en, value: c.total }));
+  const barsTotal = budget.categories.reduce((s, c) => s + (Number(c.total) || 0), 0);
+  const catLabel = (c) => (isAr ? c.short : c.short_en) || (isAr ? c.ar : c.en);
+  const barsData = budget.categories.map((c) => ({
+    name: isAr ? c.ar : c.en,
+    short: isAr ? c.ar : c.en,
+    label: catLabel(c),
+    value: c.total,
+    pct: barsTotal ? Math.round((c.total / barsTotal) * 100) : 0,
+  }));
+  const pieData = budget.categories.filter((c) => c.total > 0).map((c) => ({ name: catLabel(c), value: c.total }));
+  const pieTotal = pieData.reduce((s, c) => s + (Number(c.value) || 0), 0);
 
   const setField = (key, v) => setInputs((s) => ({ ...s, [key]: v === "" ? 0 : Number(v) || 0 }));
 
@@ -279,6 +332,17 @@ export default function HrBudget() {
 
   const pctFmt = (v) => `${(v || 0).toFixed(1)}%`;
 
+  // نسبة كل عمود من إجمالي البنود، تُرسم أعلى العمود
+  const renderBarPct = (size) => (props) => {
+    const v = Number(props.value) || 0;
+    const pct = barsTotal ? Math.round((v / barsTotal) * 100) : 0;
+    const x = (Number(props.x) || 0) + (Number(props.width) || 0) / 2;
+    const y = Number(props.y) || 0;
+    return (
+      <text x={x} y={y - 7} textAnchor="middle" fontSize={size} fontWeight={700} fill="#0f172a">{pct}%</text>
+    );
+  };
+
   return (
     <div dir={isAr ? "rtl" : "ltr"}>
       <PageHeader
@@ -307,6 +371,7 @@ export default function HrBudget() {
         <KpiCard icon={<BarChart3 size={18} />} label={t.kpiTraining} value={formatCurrency(kpis.trainingPerEmployee)} />
         <KpiCard icon={<PieIcon size={18} />} label={t.kpiSaudization} value={pctFmt(kpis.saudizationPct)} />
         <KpiCard icon={<TrendingUp size={18} />} label={t.kpiEos} value={pctFmt(kpis.eosPctOfSalaries)} />
+        <KpiCard icon={<PieIcon size={18} />} label={t.kpiLeave} value={pctFmt(kpis.leavePctOfSalaries)} />
         <KpiCard icon={<BarChart3 size={18} />} label={t.kpiFleet} value={formatCurrency(kpis.fleetPerVehicle)} />
         <KpiCard icon={<TrendingUp size={18} />} label={t.kpiHc} value={`${budget.headcount.total} (${budget.headcount.saudis} / ${budget.headcount.expats} / ${budget.headcount.dependents})`} />
         <KpiCard icon={<BarChart3 size={18} />} label={t.kpiVehicles} value={String(budget.vehicles)} />
@@ -399,23 +464,25 @@ export default function HrBudget() {
           <div className="grid lg:grid-cols-2 gap-8">
             <div>
               <div className="text-sm font-semibold mb-2">{t.chartBars}</div>
-              <ResponsiveContainer width="100%" height={300}>
-                <BarChart data={barsData}>
+              <ResponsiveContainer width="100%" height={320}>
+                <BarChart data={barsData} barCategoryGap="25%" margin={{ top: 26, right: 8, left: 4, bottom: 4 }}>
                   <CartesianGrid strokeDasharray="3 3" />
-                  <XAxis dataKey="short" tick={{ fontSize: 11 }} interval={0} angle={-20} textAnchor="end" height={70} />
+                  <XAxis dataKey="short" tick={{ fontSize: 11 }} interval={0} angle={-20} textAnchor="end" height={74} />
                   <YAxis tick={{ fontSize: 11 }} />
                   <Tooltip formatter={(v) => formatCurrency(v)} />
                   <Bar dataKey="value" radius={[6, 6, 0, 0]}>
                     {barsData.map((_, i) => <Cell key={i} fill={CHART_COLORS[i % CHART_COLORS.length]} />)}
+                    <LabelList dataKey="value" content={renderBarPct(11)} />
                   </Bar>
                 </BarChart>
               </ResponsiveContainer>
+              <BarsLegend data={barsData} colors={CHART_COLORS} />
             </div>
             <div>
               <div className="text-sm font-semibold mb-2">{t.chartPie}</div>
-              <ResponsiveContainer width="100%" height={300}>
-                <PieChart>
-                  <Pie data={pieData} dataKey="value" nameKey="name" outerRadius={100} label={({ name, percent }) => `${name} ${(percent * 100).toFixed(0)}%`}>
+              <ResponsiveContainer width="100%" height={330}>
+                <PieChart margin={{ top: 30, right: 30, bottom: 20, left: 30 }}>
+                  <Pie data={pieData} dataKey="value" nameKey="name" outerRadius={78} labelLine={false} label={pieOutsideLabel(11, 15, pieTotal)}>
                     {pieData.map((_, i) => <Cell key={i} fill={CHART_COLORS[i % CHART_COLORS.length]} />)}
                   </Pie>
                   <Tooltip formatter={(v) => formatCurrency(v)} />
@@ -471,6 +538,7 @@ export default function HrBudget() {
             <tr>
               {[
                 [t.kpiEos, pctFmt(kpis.eosPctOfSalaries)],
+                [t.kpiLeave, pctFmt(kpis.leavePctOfSalaries)],
                 [t.kpiFleet, formatCurrency(kpis.fleetPerVehicle)],
                 [t.kpiHc, `${budget.headcount.total} (${budget.headcount.saudis} / ${budget.headcount.expats} / ${budget.headcount.dependents})`],
                 [t.kpiVehicles, String(budget.vehicles)],
@@ -526,22 +594,24 @@ export default function HrBudget() {
         <div style={{ display: "flex", gap: "16px", marginBottom: "10px" }}>
           <div style={{ flex: 1 }}>
             <div style={{ fontSize: "10px", fontWeight: 700, marginBottom: "4px" }}>{t.chartBars}</div>
-            <ResponsiveContainer width="100%" height={240}>
-              <BarChart data={barsData}>
+            <ResponsiveContainer width="100%" height={250}>
+              <BarChart data={barsData} barCategoryGap="25%" margin={{ top: 20, right: 4, left: 0, bottom: 0 }}>
                 <CartesianGrid strokeDasharray="3 3" />
                 <XAxis dataKey="short" tick={{ fontSize: 9 }} interval={0} angle={-25} textAnchor="end" height={64} />
                 <YAxis tick={{ fontSize: 9 }} />
                 <Bar dataKey="value" radius={[5, 5, 0, 0]}>
                   {barsData.map((_, i) => <Cell key={i} fill={CHART_COLORS[i % CHART_COLORS.length]} />)}
+                  <LabelList dataKey="value" content={renderBarPct(9)} />
                 </Bar>
               </BarChart>
             </ResponsiveContainer>
+            <BarsLegend data={barsData} colors={CHART_COLORS} fontSize={9} />
           </div>
           <div style={{ flex: 1 }}>
             <div style={{ fontSize: "10px", fontWeight: 700, marginBottom: "4px" }}>{t.chartPie}</div>
-            <ResponsiveContainer width="100%" height={240}>
-              <PieChart>
-                <Pie data={pieData} dataKey="value" nameKey="name" outerRadius={85} label={({ name, percent }) => `${name} ${(percent * 100).toFixed(0)}%`}>
+            <ResponsiveContainer width="100%" height={250}>
+              <PieChart margin={{ top: 26, right: 26, bottom: 12, left: 26 }}>
+                <Pie data={pieData} dataKey="value" nameKey="name" outerRadius={62} labelLine={false} label={pieOutsideLabel(9, 12, pieTotal)}>
                   {pieData.map((_, i) => <Cell key={i} fill={CHART_COLORS[i % CHART_COLORS.length]} />)}
                 </Pie>
                 <Legend wrapperStyle={{ fontSize: 9 }} />

@@ -49,6 +49,70 @@ function normalizeArabicParenthesis(root) {
   } catch (e) {}
 }
 
+// نسبة "الحبر" (الأجزاء الداكنة) في كل صف من نسخة مصغَّرة من الصورة،
+// لاختيار نقاط قطع الصفحات داخل الفراغات بين السطور بدل حدود ثابتة.
+function rowInkProfile(canvas) {
+  const W = 420;
+  const H = Math.max(2, Math.round((canvas.height / canvas.width) * W));
+  const sc = document.createElement("canvas");
+  sc.width = W;
+  sc.height = H;
+  const c = sc.getContext("2d", { willReadFrequently: true });
+  c.drawImage(canvas, 0, 0, W, H);
+  const { data } = c.getImageData(0, 0, W, H);
+  const ink = new Float32Array(H);
+  for (let r = 0; r < H; r++) {
+    let n = 0;
+    const base = r * W * 4;
+    for (let x = 0; x < W; x++) {
+      const i = base + x * 4;
+      if ((data[i] * 299 + data[i + 1] * 587 + data[i + 2] * 114) / 1000 < 245) n++;
+    }
+    ink[r] = n / W;
+  }
+  return { ink, rows: H };
+}
+
+// يقسّم الصورة إلى شرائح بارتفاع صفحة A4 كحدّ أقصى، ويؤجّل حدّ كل صفحة قليلاً حتى يقع
+// داخل فراغ واضح بين السطور (ضمن نافذة 16% من ارتفاع الصفحة)، فتبقى آخر كلمة/سطر كاملة
+// على صفحته بدل قصّه نصف قصّ، وتنتهي كل صفحة بمساحة بيضاء بدل محتوى لاصق بالحافة.
+function sliceIntoPages(canvas, pageW, pageH) {
+  const totalH = canvas.height;
+  const pagePx = Math.round((canvas.width * pageH) / pageW);
+  const { ink, rows } = rowInkProfile(canvas);
+  const per = totalH / rows;              // بيكسل أصلي لكل صف مصغّر
+  const tol = Math.round(pagePx * 0.16);  // نافذة البحث قبل حدّ الصفحة
+  const QUIET = 0.02;                     // أقل من 2% حبراً في الصف = فراغ
+  const NEIGHBOR = 0.35;                  // جارّا الصف لا يكونان داخل سطر طويل
+
+  const slices = [];
+  let start = 0;
+  let guard = 0;
+  while (totalH - start > pagePx && guard++ < 5000) {
+    const ideal = start + pagePx;
+    const rMax = Math.min(rows - 1, Math.floor(ideal / per));
+    const rMin = Math.max(0, Math.floor((ideal - tol) / per));
+    let anchor = -1;
+    let minR = -1, minV = 1;
+    for (let r = rMax; r >= rMin; r--) {
+      const v = ink[r];
+      if (v < minV) { minV = v; minR = r; }
+      if (v < QUIET && Math.max(r > 0 ? ink[r - 1] : 0, r + 1 < rows ? ink[r + 1] : 0) < NEIGHBOR) {
+        anchor = r;
+        break;
+      }
+    }
+    let cut = -1;
+    if (anchor >= 0) cut = Math.round((anchor + 1) * per);
+    else if (minR >= 0 && minV < 0.12) cut = Math.round((minR + 1) * per);
+    if (!(cut > start && cut <= ideal)) cut = ideal;
+    slices.push([start, cut]);
+    start = cut;
+  }
+  slices.push([start, totalH]);
+  return slices;
+}
+
 // يحوّل عنصر DOM إلى Blob PDF (A4، عربي RTL عبر html2canvas)
 // options.stamp = true يضع ختم "تم الدفع / PAID" كبير على كل صفحة
 // options.landscape = true يجعل الصفحة أفقية (A4 landscape) للجداول العريضة ككشوف الرواتب
@@ -67,23 +131,28 @@ export async function elementToPdfBlob(node, options = {}) {
       }
     });
   } catch (e) {}
-  const canvas = await html2canvas(node, { scale: 2, useCORS: true, backgroundColor: "#ffffff" });
-  const img = canvas.toDataURL("image/jpeg", 0.95);
   const landscape = !!options.landscape;
-  const pdf = new jsPDF(landscape ? "l" : "p", "mm", "a4");
   const pageW = landscape ? 297 : 210, pageH = landscape ? 210 : 297;
-  const imgH = (canvas.height * pageW) / canvas.width;
-  let heightLeft = imgH;
-  let position = 0;
-  pdf.addImage(img, "JPEG", 0, position, pageW, imgH);
-  if (options.stamp) drawPaidStamp(pdf, pageW, pageH);
-  heightLeft -= pageH;
-  while (heightLeft > 0) {
-    position -= pageH;
-    pdf.addPage();
-    pdf.addImage(img, "JPEG", 0, position, pageW, imgH);
+  const canvas = await html2canvas(node, { scale: 2, useCORS: true, backgroundColor: "#ffffff" });
+
+  // تقسيم واعٍ لحدود الصفحات (يمنع قصّ سطر نصيّ على حدّ الصفحة) — وكل صفحة تُطبع
+  // أعلى مساحتها ثم تبقى مساحة بيضاء أسفلها، فلا يبقى بند أو كلمة مكسورين عند نهاية الصفحة.
+  const slices = sliceIntoPages(canvas, pageW, pageH);
+  const pdf = new jsPDF(landscape ? "l" : "p", "mm", "a4");
+  const pagePx = Math.round((canvas.width * pageH) / pageW);
+  for (let i = 0; i < slices.length; i++) {
+    const [s, e] = slices[i];
+    const h = Math.min(pagePx, e - s);
+    const pageCanvas = document.createElement("canvas");
+    pageCanvas.width = canvas.width;
+    pageCanvas.height = pagePx;
+    const ctx = pageCanvas.getContext("2d");
+    ctx.fillStyle = "#ffffff";
+    ctx.fillRect(0, 0, pageCanvas.width, pageCanvas.height);
+    ctx.drawImage(canvas, 0, s, canvas.width, h, 0, 0, canvas.width, h);
+    if (i > 0) pdf.addPage();
+    pdf.addImage(pageCanvas.toDataURL("image/jpeg", 0.95), "JPEG", 0, 0, pageW, pageH);
     if (options.stamp) drawPaidStamp(pdf, pageW, pageH);
-    heightLeft -= pageH;
   }
   return pdf.output("blob");
 }
