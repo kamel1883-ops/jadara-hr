@@ -49,9 +49,9 @@ export default function EmployeeImport({ open, onClose, onSaved }) {
     issuesTitle: "أخطاء مكتشفة في الملف",
     issuesHint: "الترقيم يبدأ من أول موظف في الملف (وليس رقم صف الإكسل) — افتح الملف وصحّح الموظف المذكور برقمه.",
     validList: "الموظفون الصالحون",
-    entitledHint: "الإجمالي المستحق يُحسب في النظام من تاريخ المباشرة الفعلي (21 أو 30 يوماً بالسنة، و30 إلزامياً بعد 5 سنوات) — ورقم الإجمالي المستحق في الإكسل يُتحقّق منه فقط: إن طابق نُعتمده، وإن خالف نُعتمد حساب النظام. أما الرصيد المستخدم فيُعتمد كما هو من الملف.",
-    matchOk: "المستحق مطابق للإكسل",
-    matchDiff: (sys) => `المستحق غير مطابق للإكسل — اعتُمد ${sys} يوم`,
+    entitledHint: "الإجمالي المستحق: يُطابَق رقم الإكسل بمنحنى الاستحقاق من تاريخ المباشرة الفعلي (21 أو 30 يوماً بالسنة، و30 إلزامياً بعد 5 سنوات) لمعرفة تاريخ بدء السحب الذي يوافقه، ثم تبدأ الزيادات بالكسور والأيام من ذلك التاريخ. وإذا تجاوز الرقم مدة خدمته (غير مطابق) نعتمد حساب النظام من تاريخ المباشرة. أما الرصيد المستخدم فيُعتمد كما هو من الملف.",
+    matchOk: (d) => `المستحق مطابق للإكسل — السحب من ${d}`,
+    matchDiff: (sys) => `المستحق غير مطابق (يتجاوز مدة الخدمة) — اعتُمد ${sys} يوم`,
     confirmQ: "هل ترغب بإضافة هؤلاء الموظفين إلى المنشأة؟ سيتم تثبيتهم في قائمة الموظفين النشطين.",
     confirmBtn: "إضافة الموظفين إلى المنشأة",
     adding: "جارٍ الإضافة…",
@@ -75,9 +75,9 @@ export default function EmployeeImport({ open, onClose, onSaved }) {
     issuesTitle: "Issues found in the file",
     issuesHint: "Numbering starts from the first employee in the file (not the Excel row number).",
     validList: "Valid employees",
-    entitledHint: "Total entitlement is calculated by the system from the actual hire date (21 or 30 days/year, 30 mandatory after 5 years) — the Excel entitlement figure is only cross-checked: adopted when it matches, system calculation adopted when it differs. The used balance is adopted as-is from the file.",
-    matchOk: "Entitlement matches Excel",
-    matchDiff: (sys) => `Entitlement differs from Excel — adopted ${sys} days`,
+    entitledHint: "Total entitlement: the Excel figure is matched against the accrual curve from the actual hire date (21 or 30 days/year, 30 mandatory after 5 years) to find the pull date it corresponds to, and increments then accrue from that date. If the figure exceeds the employee's service period (mismatch), the system calculation from the hire date is adopted. The used balance is adopted as-is from the file.",
+    matchOk: (d) => `Entitlement matches Excel — accrual from ${d}`,
+    matchDiff: (sys) => `Entitlement mismatch (exceeds service period) — adopted ${sys} days`,
     confirmQ: "Do you want to add these employees to the organization? They will be confirmed in the active employees list.",
     confirmBtn: "Add employees to organization",
     adding: "Adding…",
@@ -265,7 +265,7 @@ export default function EmployeeImport({ open, onClose, onSaved }) {
                             {e.full_name} <span className="text-muted-foreground">({e.employee_number})</span>
                             {e.entitled_match != null && (
                               <span className={e.entitled_match ? "ms-2 text-emerald-600" : "ms-2 text-amber-600"}>
-                                · {e.entitled_match ? t.matchOk : t.matchDiff(e.entitled_system)}
+                                · {e.entitled_match ? t.matchOk(e.entitled_from_date) : t.matchDiff(e.entitled_system)}
                               </span>
                             )}
                           </span>

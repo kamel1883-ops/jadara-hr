@@ -254,11 +254,26 @@ export default async function (req) {
       const empChoice = rawAnn === 30 ? 30 : (rawAnn === 21 ? 21 : annualDays);
       r.annual_leave_entitlement = empChoice;
       // الإجمالي المستحق: يُحسب في النظام من تاريخ المباشرة الفعلي (21 أو 30 يوماً بالسنة،
-      // و30 إلزامياً بعد 5 سنوات خدمة). الرقم المكتوب في الإكسل يُستخدم للتحقق فقط:
-      // إن طابق المعتمد نعتمده، وإن خالف (قد يكون محسوباً بطريقة خاطئة) نعتمد حساب النظام.
+      // و30 إلزامياً بعد 5 سنوات خدمة).
       const sysEntitled = computeEntitlement(r.hire_date, empChoice);
+      // تاريخ بدء السحب: رقم الإجمالي المستحق في الإكسل يُطابَق بمنحنى الاستحقاق نفسه
+      // (بالكسور والأيام من تاريخ المباشرة) لمعرفة التاريخ الذي يوافقه — ومنه يبدأ الزحف
+      // بالزيادات. إن كان الرقم يتجاوز ما يمكن استحقاقه خلال مدة خدمته فهو غير مطابق
+      // (محسوب بطريقة خاطئة) ونعتمد حينها حساب نظام العمل من تاريخ المباشرة.
+      const rate = yearsOfServiceHire(r.hire_date) >= 5 ? 30 : empChoice;
       const excelEntitled = num(r.leave_total_entitled);
-      const entitledMatch = excelEntitled > 0 ? (Math.abs(excelEntitled - sysEntitled) <= 1) : null;
+      const hireMs = r.hire_date ? new Date(r.hire_date).getTime() : NaN;
+      const svcDays = isNaN(hireMs) ? 0 : Math.max(0, Math.floor((Date.now() - hireMs) / 86400000));
+      let pullDate = null;
+      let entitledMatch = null;
+      if (excelEntitled > 0 && svcDays > 0) {
+        const pullDays = Math.round((excelEntitled / rate) * 365);
+        entitledMatch = pullDays <= svcDays + 1;
+        if (entitledMatch) {
+          const d = new Date(hireMs + pullDays * 86400000);
+          pullDate = `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+        }
+      }
       // القيمة الصريحة (قد تكون سالبة عند تجاوز الاستحقاق) — لا تُصفَّر
       r.leave_balance = Math.round((sysEntitled - r.prior_used_leave) * 10) / 10;
       r.unified_number = myUnified;
@@ -272,6 +287,7 @@ export default async function (req) {
         entitled_excel: excelEntitled || null,
         entitled_system: sysEntitled,
         entitled_match: entitledMatch,
+        entitled_from_date: pullDate,
       });
     }
 
