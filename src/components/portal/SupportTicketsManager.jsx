@@ -81,8 +81,14 @@ export default function SupportTicketsManager({ session, isAr = true }) {
           <Input value={q} onChange={(e) => setQ(e.target.value)} placeholder={isAr ? "بحث: رقم، اسم، بريد…" : "Search: number, name, email…"} className="pr-9" />
         </div>
         <div className="w-40">
-          <MobileSelect value={statusFilter} onValueChange={setStatusFilter} placeholder={isAr ? "كل الحالات" : "All statuses"}>
-            <MobileSelectItem value="">{isAr ? "كل الحالات" : "All"}</MobileSelectItem>
+          <MobileSelect
+            value={statusFilter || "all"}
+            onValueChange={(v) => setStatusFilter(v === "all" ? "" : v)}
+            placeholder={isAr ? "كل الحالات" : "All statuses"}
+          >
+            {/* قيمة محايدة «all» بدل النص الفارغ: قائمة الاختيار في واجهة الحاسوب
+                (Radix Select) ترفض القيمة الفارغة وتُسقط الصفحة بالشاشة البيضاء. */}
+            <MobileSelectItem value="all">{isAr ? "كل الحالات" : "All"}</MobileSelectItem>
             <MobileSelectItem value="open">{isAr ? "مفتوحة" : "Open"}</MobileSelectItem>
             <MobileSelectItem value="pending_info">{isAr ? "بانتظار معلومات" : "Pending info"}</MobileSelectItem>
             <MobileSelectItem value="resolved">{isAr ? "تم الحل" : "Resolved"}</MobileSelectItem>
