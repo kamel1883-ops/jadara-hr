@@ -5,11 +5,12 @@ import { Label } from "@/components/ui/label";
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter,
 } from "@/components/ui/dialog";
-import { Loader2, Check, CalendarPlus, CalendarClock, Printer, X, Pause, Ban, Play, RotateCcw, BadgeCheck, Crown, FlaskConical, Download, Mail, FileSignature, FileText, Link2, Users } from "lucide-react";
+import {   Loader2, Check, CalendarPlus, CalendarClock, Printer, X, Pause, Ban, Play, RotateCcw, BadgeCheck, Crown, FlaskConical, Download, Mail, FileSignature, FileText, Link2, Users, Trash2 } from "lucide-react";
 import { base44 } from "@/api/base44Client";
 import { cn } from "@/lib/utils";
 import ConfirmSubscriptionDialog from "./ConfirmSubscriptionDialog";
 import RenewYearDialog from "./RenewYearDialog";
+import DeleteTenantDialog from "./DeleteTenantDialog";
 import { renderToPdfBlob } from "@/lib/pdfDocs";
 import QuoteDoc from "@/components/docs/QuoteDoc";
 import { StoredDocButton } from "@/components/VaultDocLink";
@@ -206,6 +207,7 @@ export function ClientInfoDialog({ open, onClose, tenant, isAr, t, onAction, bus
   const [newEmail, setNewEmail] = useState("");
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [renewOpen, setRenewOpen] = useState(false);
+  const [delOpen, setDelOpen] = useState(false);
   const [quoteBusy, setQuoteBusy] = useState(false);
   const [orphans, setOrphans] = useState(null);
   const [picked, setPicked] = useState({});
@@ -476,9 +478,15 @@ export function ClientInfoDialog({ open, onClose, tenant, isAr, t, onAction, bus
             </div>
           )}
           {status === "cancelled" && (
-            <Button size="sm" variant="outline" onClick={() => onAction(tenant.id, "owner_restore")} disabled={busy} className="gap-1.5 text-emerald-600 border-emerald-200 hover:bg-emerald-50">
-              {busy ? <Loader2 size={14} className="animate-spin" /> : <RotateCcw size={14} />} {isAr ? "استرجاع العميل" : "Restore client"}
-            </Button>
+            <div className="flex flex-wrap gap-2">
+              <Button size="sm" variant="outline" onClick={() => onAction(tenant.id, "owner_restore")} disabled={busy} className="gap-1.5 text-emerald-600 border-emerald-200 hover:bg-emerald-50">
+                {busy ? <Loader2 size={14} className="animate-spin" /> : <RotateCcw size={14} />} {isAr ? "استرجاع العميل" : "Restore client"}
+              </Button>
+              {/* الحذف النهائي: يُحرّر رقم المنشأة الموحّد لتشترك مجدداً بنفس البيانات */}
+              <Button size="sm" variant="outline" onClick={() => setDelOpen(true)} disabled={busy} className="gap-1.5 text-rose-600 border-rose-200 hover:bg-rose-50">
+                <Trash2 size={14} /> {isAr ? "حذف نهائي" : "Permanent delete"}
+              </Button>
+            </div>
           )}
         </div>
         )}
@@ -498,6 +506,14 @@ export function ClientInfoDialog({ open, onClose, tenant, isAr, t, onAction, bus
         isAr={isAr}
         session={session}
         onSaved={() => { if (onRefresh) onRefresh(); }}
+      />
+      <DeleteTenantDialog
+        open={delOpen}
+        onClose={() => setDelOpen(false)}
+        tenant={tenant}
+        isAr={isAr}
+        session={session}
+        onDeleted={async () => { if (onRefresh) await onRefresh(); onClose(); }}
       />
     </div>
   );

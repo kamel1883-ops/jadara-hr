@@ -576,6 +576,33 @@ export default async function (req) {
       return Response.json({ ok: true });
     }
 
+    // حذف نهائي للمنشأة الملغاة — يُحرّر الرقم الموحّد والبريد والجوال ليتمكن العميل
+    // من الاشتراك مجدداً بنفس البيانات (فيُسجَّل له سجل جديد بتاريخ تسجيل جديد ومنه يبدأ التخزين).
+    // مشروط: منشأة ملغاة فقط، وبلا بيانات مخزّنة في جداره (لا موظفون ولا اشتراكات مدفوعة).
+    if (action === "owner_delete_tenant") {
+      if (!isOwner) return Response.json({ ok: false, error: "forbidden" }, { status: 403 });
+      const tenant_id = String(body.tenant_id || "");
+      if (!tenant_id) return Response.json({ ok: false, error: "missing" }, { status: 400 });
+      const t: any = await base44.asServiceRole.entities.Tenant.get(tenant_id).catch(() => null);
+      if (!t) return Response.json({ ok: false, error: "not_found" }, { status: 404 });
+      // الحذف يأتي بعد الإلغاء فقط: في مرحلة الإلغاء يختار المالك «استرجاع» أو «حذف نهائي».
+      if (t.status !== "cancelled") return Response.json({ ok: false, error: "not_cancelled" }, { status: 400 });
+      const un = String(t.unified_number || "").trim();
+      // حماية البيانات المخزّنة: لا يُحذف أي عميل له موظفون أو اشتراكات مدفوعة داخل جداره.
+      const [emps, paidSubs] = await Promise.all([
+        un ? base44.asServiceRole.entities.Employee.filter({ unified_number: un }, "-created_date", 5) : Promise.resolve([] as any[]),
+        base44.asServiceRole.entities.Subscription.filter({ tenant_id, status: "paid" }, "-created_date", 5),
+      ]);
+      if ((emps || []).length || (paidSubs || []).length) {
+        return Response.json({ ok: false, error: "has_data" }, { status: 400 });
+      }
+      // حذف سجلات المنشأة غير المدفوعة وإشعاراتها، ثم سجل المنشأة نفسه لتحرير الرقم الموحّد.
+      try { await base44.asServiceRole.entities.Subscription.deleteMany({ tenant_id }); } catch {}
+      if (un) { try { await base44.asServiceRole.entities.Notification.deleteMany({ unified_number: un }); } catch {} }
+      await base44.asServiceRole.entities.Tenant.delete(tenant_id);
+      return Response.json({ ok: true, deleted: true });
+    }
+
     // تغيير بريد المنشأة — عند فقدان البريد الأصلي. يدعو بريداً جديداً كمسؤول،
     // يربط المنشأة به، ويُعيد تفعيل الحساب. كل البيانات تبقى عبر الرقم الموحد.
     if (action === "owner_change_email") {

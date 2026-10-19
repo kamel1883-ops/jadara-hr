@@ -9,11 +9,12 @@ import {
   Crown, Building2, FlaskConical, FileText, BadgeCheck, Pause,
   Wallet, AlertTriangle, RefreshCw, MessageCircle, Search, Users,
   Check, Sparkles, Ban, Eye, Bell, Download, FileSignature,
-  UploadCloud, Stamp, Handshake, Percent,
+  UploadCloud, Stamp, Handshake, Percent, Trash2,
 } from "lucide-react";
 import { ClientInfoDialog, waLink, daysLeft, isOwnerTenant } from "./ClientActionDialogs";
 import { StoredDocButton } from "@/components/VaultDocLink";
 import RegenerateAllDocumentsDialog from "./RegenerateAllDocumentsDialog";
+import DeleteTenantDialog from "./DeleteTenantDialog";
 
 export default function ClientsManager({ session }) {
   const { lang } = useI18n();
@@ -42,6 +43,8 @@ export default function ClientsManager({ session }) {
     regenAll: "إعادة توليد عقود العملاء", regenHint: "لإصلاح الختم ونموذج العقد في كل العقود والفواتير السابقة",
     uploadClientContract: "رفع عقد العميل", clientContractHint: "رفع نسخة العقد الموقّعة والمختومة من العميل",
     clientContractView: "عقد العميل", clientContractUploaded: "تم حفظ عقد العميل المختوم",
+    deletePermanent: "حذف نهائي",
+    deleteHint: "حذف المنشأة الملغاة نهائياً وتحرير رقمها الموحّد ليمكنها الاشتراك مجدداً بنفس البيانات",
   } : {
     title: "Clients & Contracts",
     welcome: "Follow up trials & quote requests, receive transfers via WhatsApp, confirm contracts and activate subscriptions.",
@@ -66,6 +69,8 @@ export default function ClientsManager({ session }) {
     regenAll: "Regenerate client contracts", regenHint: "Fix the stamp & shortened contract across all past contracts and invoices",
     uploadClientContract: "Upload client contract", clientContractHint: "Upload the client's signed & sealed contract copy",
     clientContractView: "Client contract", clientContractUploaded: "Client sealed contract saved",
+    deletePermanent: "Permanent delete",
+    deleteHint: "Permanently delete this cancelled client and free its unified number so it can re-subscribe with the same details",
   };
 
   const [data, setData] = useState(null);
@@ -76,6 +81,7 @@ export default function ClientsManager({ session }) {
   const [busyId, setBusyId] = useState(null);
   const [toast, setToast] = useState("");
   const [info, setInfo] = useState(null);
+  const [del, setDel] = useState(null);
   const [regenOpen, setRegenOpen] = useState(false);
   const fileRef = useRef(null);
   const [uploadTarget, setUploadTarget] = useState(null);
@@ -400,6 +406,13 @@ export default function ClientsManager({ session }) {
                                 <Ban size={14} /> {t.rejectAdmin}
                               </Button>
                             )}
+                            {/* الحذف النهائي: يظهر بعد مرحلة الإلغاء فقط — إلى جانب الاسترجاع */}
+                            {!owner && x.status === "cancelled" && (
+                              <Button size="sm" variant="outline" onClick={() => setDel(x)} disabled={busyId === x.id}
+                                className="gap-1.5 h-8 text-rose-600 border-rose-200 hover:bg-rose-50" title={t.deleteHint}>
+                                <Trash2 size={14} /> {t.deletePermanent}
+                              </Button>
+                            )}
                             <Button size="sm" variant="outline" onClick={() => setInfo(x)} className="gap-1.5 h-8">
                               <Eye size={14} /> {t.view}
                             </Button>
@@ -436,6 +449,15 @@ export default function ClientsManager({ session }) {
         session={session}
         isAr={isAr}
         onDone={loadAll}
+      />
+
+      <DeleteTenantDialog
+        open={!!del}
+        onClose={() => setDel(null)}
+        tenant={del}
+        isAr={isAr}
+        session={session}
+        onDeleted={loadAll}
       />
 
       <input ref={fileRef} type="file" accept="image/*,application/pdf" className="hidden" onChange={onClientContractChosen} />
