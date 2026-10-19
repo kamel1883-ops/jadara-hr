@@ -633,28 +633,49 @@ export default async function (req) {
       const oldUserId = String(t.admin_user_id || "");
       const currentEmail = String(t.admin_email || t.contact_email || "").trim().toLowerCase();
       if (currentEmail === new_email && oldUserId) return Response.json({ ok: true, same: true });
-      // ابحث أولاً عن حساب موجود بهذا البريد (قد أُنشئ من طلب عرض سعر أو دعوة سابقة) —
+      // ابحث أولاً عن حساب موجود بهذا البريد (قد أُنشئ من طلب عرض سعر أو اشتراك سابق) —
       // اعتماده بدل دعوة جديدة؛ فالدعوة تفشل بالخطأ 500 عندما يكون البريد مسجّلاً مسبقاً.
+      // ملاحظة مهمة: فلترة User بالبريد لا تُعتمد على كل تطبيقات Base44 (ترجع فارغة)،
+      // فنسقط للقائمة الكاملة ونطابق بالذاكرة — نفس نهج قائمة المالك الذي يعمل فعلياً.
+      const matchEmail = (rows: any[]) =>
+        (rows || []).find((u: any) => String(u?.email || "").trim().toLowerCase() === new_email) || null;
       const findUserByEmail = async () => {
         try {
-          const rows = await base44.asServiceRole.entities.User.filter({ email: new_email }, undefined, 20);
-          return (rows || []).find((u: any) => String(u.email || "").toLowerCase() === new_email) || null;
+          const hit = matchEmail(await base44.asServiceRole.entities.User.filter({ email: new_email }, undefined, 20));
+          if (hit) return hit;
+        } catch {}
+        try {
+          return matchEmail(await base44.asServiceRole.entities.User.list(undefined, 500));
         } catch { return null; }
       };
       let newUser = await findUserByEmail();
       if (!newUser) {
-        // لم يُوجد حساب — ادعُ البريد كمسؤول منشأة (قد يفشل لأن الحساب أُنشئ للتو: أعد البحث بعدها)
+        // لم يُوجد حساب — ادعُ البريد كمسؤول منشأة. الإنشاء قد يستغرق لحظة حتى يظهر
+        // في القائمة، فننتظر قليلاً ثم نعيد البحث قبل الحكم بالفشل.
         try { await base44.asServiceRole.users.inviteUser(new_email, "admin"); } catch {}
+        await new Promise((r) => setTimeout(r, 1500));
         newUser = await findUserByEmail();
       }
       // أخطاء العمل تُرد بـ 200 + ok:false حتى يقرأ الواجهة كود السبب واسم المنشأة
       // صاحبة البريد/الرقم (رفض non-2xx يُبلَّغ من الـ SDK برسالة عامة تُخفي السبب).
       if (!newUser) return Response.json({ ok: false, error: "invite_failed" });
       const newUserId = String(newUser.id || "");
-      // حراسة: لا يُخطف بريد يخص مسؤول منشأة أخرى فعّالة (تجربة/اشتراك) — يُمنع ويُبلَّغ باسمها.
+      // حراسة: بريد يخص مسؤول منشأة أخرى **فعّالة** يُمنع ويُبلَّغ باسمها.
+      // المنشآت الميتة لا تمنع: تجربة/عرض سعر منتهٍ لم تشترك، أو منشأة ملغاة/موقوفة —
+      // بريدها يُعتبر حرّاً ويُعتمد للمنشأة الجديدة (هدف الإصلاح: ألا يُحجب البريد بسبب أثر قديم).
+      const isLiveTenant = (x: any) => {
+        const st = String(x?.status || "");
+        if (st === "active") return true; // اشتراك مدفوع فعّال
+        if (st === "trial") {
+          const end = x?.trial_end ? new Date(x.trial_end) : null;
+          // تجربة بلا تاريخ انتهاء أو لم تنتهِ بعد = فعّالة؛ منتهية = ميتة
+          return !end || isNaN(end.getTime()) || end.getTime() >= Date.now();
+        }
+        return false; // quote/expired/cancelled → ميتة
+      };
       const otherAdmins = await base44.asServiceRole.entities.Tenant.filter({ admin_user_id: newUserId }, undefined, 20);
       const conflict = (otherAdmins || []).find(
-        (x: any) => String(x.id) !== tenant_id && ["trial", "active"].includes(String(x.status || ""))
+        (x: any) => String(x.id) !== tenant_id && isLiveTenant(x)
       );
       if (conflict)
         return Response.json({ ok: false, error: "email_admin_of_other_tenant", tenant_name: conflict.name || "" });

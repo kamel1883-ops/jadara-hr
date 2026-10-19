@@ -265,9 +265,9 @@ export function ClientInfoDialog({ open, onClose, tenant, isAr, t, onAction, bus
       const code = String(e?.message || e || "");
       const map = {
         email_admin_of_other_tenant: isAr
-          ? `هذا البريد مسؤول لمنشأة أخرى نشطة${e?.tenant_name ? ` (${e.tenant_name})` : ""} — لا يمكن ربطه بهذه المنشأة. غيّر بريداً آخر أو ألغِ ارتباط المنشأة الأخرى أولاً.`
-          : "This email administers another active tenant — pick a different email.",
-        invite_failed: isAr ? "تعذّر إنشاء حساب بهذا البريد — تأكد من صحة البريد وحاول مرة أخرى." : "Could not create an account for this email — verify it and retry.",
+          ? `هذا البريد مسؤول لمنشأة أخرى فعّالة${e?.tenant_name ? ` (${e.tenant_name})` : ""} — إما اشتراك مدفوع أو تجربة لم تنتهِ بعد. غيّر بريداً آخر أو أعد تفعيل المنشأة الأخرى لاحقاً.`
+          : "This email administers another live tenant — pick a different email.",
+        invite_failed: isAr ? "تعذّر إنشاء حساب بهذا البريد — تأكد من صحة البريد وحاول مرة أخرى، وإن تكرر الأمر أبلغني للتحقيق." : "Could not create an account for this email — verify it and retry.",
         invalid_unified: isAr ? "الرقم الموحد غير صالح — يجب أن يبدأ بـ 7 وطوله 8–12 خانة." : "Invalid unified number.",
         unified_used_by_other: isAr
           ? `الرقم الموحد مسجّل لمنشأة أخرى${e?.tenant_name ? ` (${e.tenant_name})` : ""} — لا يمكن اختطافه.`
@@ -443,7 +443,7 @@ export function ClientInfoDialog({ open, onClose, tenant, isAr, t, onAction, bus
           {/* تغيير بريد المنشأة — عند فقدان البريد الأصلي — يبقى الحساب وكل البيانات عبر الرقم الموحد */}
           <div className="space-y-2 rounded-xl border border-blue-200 bg-blue-50/50 p-3">
             <div className="text-sm font-medium flex items-center gap-1.5"><Mail size={15} className="text-blue-600" /> {isAr ? "تغيير بريد المنشأة (عند فقدان البريد)" : "Change tenant email (lost email)"}</div>
-            <div className="text-xs text-muted-foreground leading-relaxed">{isAr ? "يربط المنشأة بحساب موجود بنفس البريد (من عرض سعر أو تجربة سابقة) أو يدعو بريداً جديداً كمسؤول، ويعتمده لتسجيل الدخول. كل البيانات تبقى محفوظة عبر الرقم الموحد." : "Links the tenant to an existing account with the same email (from a prior quote/trial) or invites a new admin. All data stays via the unified number."}</div>
+            <div className="text-xs text-muted-foreground leading-relaxed">{isAr ? "يربط المنشأة بحساب موجود بنفس البريد (من عرض سعر أو اشتراك سابق — حتى لو انتهت التجربة ولم تشترك المنشأة فالبريد يُقبل) أو يدعو بريداً جديداً كمسؤول، ويعتمده لتسجيل الدخول. يُمنع فقط البريد الخاص بمنشأة أخرى فعّالة (اشتراك أو تجربة لم تنتهِ). كل البيانات تبقى محفوظة عبر الرقم الموحد." : "Links the tenant to an existing account with the same email (from a prior quote or subscription — even if the trial ended without subscribing, the email is accepted) or invites a new admin. Only emails administering another live tenant are blocked. All data stays via the unified number."}</div>
             <div className="flex flex-wrap items-end gap-2">
               <div className="space-y-1 flex-1 min-w-[180px]">
                 <Label className="text-xs text-muted-foreground">{isAr ? "البريد الجديد" : "New email"}</Label>
