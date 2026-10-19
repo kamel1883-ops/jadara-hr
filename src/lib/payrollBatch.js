@@ -55,6 +55,8 @@ export function groupByBatch(payrolls, methodOf) {
       drafts: rows.filter((r) => r.status === "draft"),
       approved: rows.filter((r) => r.status === "approved"),
       paid: rows.filter((r) => r.status === "paid"),
+      paidCount: rows.filter((r) => r.status === "paid").length,
+      paidTotal: sumOf(rows.filter((r) => r.status === "paid")),
     };
   });
 }

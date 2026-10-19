@@ -267,29 +267,41 @@ export default function Payroll() {
     catch (e) { load(); }
   };
 
+  // اعتماد مسير الدفعة المفتوحة فقط — لا يضم موظفي أي دفعة أو مسير سابق
   const approveAll = async () => {
+    const scope = openBatch === null ? [] : payrolls.filter((p) => batchOf(p) === openBatch);
+    const drafts = scope.filter((p) => p.status === "draft" && p.include_in_payroll !== false);
+    if (drafts.length === 0) return;
     setBatching(true);
-    const updates = payrolls.filter((p) => p.status === "draft" && p.include_in_payroll !== false).map((p) => ({ id: p.id, status: "approved", prepared_by_name: "مسؤول الموارد البشرية", prepared_by_id: "" }));
-    if (updates.length) alert(isAr ? `سيتم اعتماد رواتب ${updates.length} موظف مشمول فقط` : `Only ${updates.length} included employees will be approved`);
-    if (updates.length) await base44.entities.Payroll.bulkUpdate(updates);
-    setBatching(false); load();
-  };
-  const payAll = async () => {
-    setBatching(true);
-    const target = payrolls.filter((p) => p.status === "approved" && p.include_in_payroll !== false);
-    const updates = target.map((p) => ({ id: p.id, status: "paid", paid_date: todayISO() }));
-    if (updates.length) await base44.entities.Payroll.bulkUpdate(updates);
-    const updated = payrolls.map((p) => (target.find((tg) => tg.id === p.id) ? { ...p, status: "paid", paid_date: todayISO() } : p));
-    setPayrolls(updated);
+    // مسير هذه الدفعة سبق اعتماده أو صرفه: تُسيَّر الصفوف المتبقية كمسير (دفعة) جديد مستقل،
+    // ولا تُدمج فيه بأي حال — تبقى سجلات المسير السابق كما هي بعدد موظفيها وإجماليها.
+    const alreadySettled = scope.some((p) => p.status !== "draft");
+    const targetBatch = alreadySettled ? nextBatchNumber(payrolls) : openBatch;
+    await base44.entities.Payroll.bulkUpdate(drafts.map((p) => ({
+      id: p.id, batch: targetBatch, status: "approved", prepared_by_name: "مسؤول الموارد البشرية", prepared_by_id: "",
+    })));
     setBatching(false);
+    if (alreadySettled) {
+      alert(isAr
+        ? `تم اعتماد ${drafts.length} موظف في مسير مستقل — ${batchTitle(targetBatch, true)}.\nلم يُضافوا إلى المسير السابق، وبقي كل مسير بعدد موظفيه وإجماليه كما تم تسييره.`
+        : `${drafts.length} employees approved as a separate payroll run.`);
+    }
     load();
   };
-
-  // إعادة فتح الكشف للتعديل وإعادة الاعتماد (من مدفوع ← معتمد)
-  const reopen = async () => {
+  // صرف (تحويل) مسير دفعة بعينها — كل دفعة تُصرف وتُقفل على حِدة بملفاتها
+  const payBatch = async (batchNo) => {
+    const target = payrolls.filter((p) => batchOf(p) === batchNo && p.include_in_payroll !== false && p.status === "approved");
+    if (target.length === 0) return;
     setBatching(true);
-    const updates = payrolls.filter((p) => p.status === "paid").map((p) => ({ id: p.id, status: "approved", paid_date: null }));
-    if (updates.length) await base44.entities.Payroll.bulkUpdate(updates);
+    await base44.entities.Payroll.bulkUpdate(target.map((p) => ({ id: p.id, status: "paid", paid_date: todayISO() })));
+    setBatching(false); load();
+  };
+  // إعادة فتح مسير هذه الدفعة للتعديل وإعادة الاعتماد (من مصروف ← معتمد)
+  const reopenBatch = async (batchNo) => {
+    const target = payrolls.filter((p) => batchOf(p) === batchNo && p.status === "paid");
+    if (target.length === 0) return;
+    setBatching(true);
+    await base44.entities.Payroll.bulkUpdate(target.map((p) => ({ id: p.id, status: "approved", paid_date: null })));
     setBatching(false); load();
   };
 
@@ -566,6 +578,8 @@ export default function Payroll() {
           onPrintCash={(b) => exportPdf({ method: "cash", batch: b })}
           onSendMudad={(b) => sendToMudad(b)}
           onCashExcel={(b) => exportCashPayroll(b)}
+          onPay={(b) => payBatch(b)}
+          onReopen={(b) => reopenBatch(b)}
         />
       )}
 
