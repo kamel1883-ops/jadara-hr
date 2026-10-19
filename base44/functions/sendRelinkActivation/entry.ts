@@ -15,7 +15,7 @@ export default async function(req) {
     if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(new_email)) {
       return Response.json({ error: "Invalid email" }, { status: 400 });
     }
-    if (!/^7\d{7,11}$/.test(unified_number)) {
+    if (!/^7\d{9}$/.test(unified_number)) {
       return Response.json({ error: "Invalid unified number" }, { status: 400 });
     }
 

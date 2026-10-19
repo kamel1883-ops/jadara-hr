@@ -23,7 +23,7 @@ export default async function (req) {
     const answers = body.answers;
     const comment = String(body.comment || '').slice(0, 1000);
 
-    if (!surveyId || !email || !unified || !/^7\d{7,11}$/.test(unified)) {
+    if (!surveyId || !email || !unified || !/^7\d{9}$/.test(unified)) {
       return Response.json({ ok: false });
     }
     if (!Array.isArray(answers) || answers.length === 0) return Response.json({ ok: false });

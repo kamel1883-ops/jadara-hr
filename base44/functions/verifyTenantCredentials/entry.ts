@@ -26,7 +26,7 @@ export default async function (req) {
     const email = String(body.email || '').trim().toLowerCase();
     const unified = String(body.unified_number || '').trim();
 
-    if (!email || !unified || !/^7\d{7,11}$/.test(unified)) {
+    if (!email || !unified || !/^7\d{9}$/.test(unified)) {
       return Response.json({ valid: false });
     }
 

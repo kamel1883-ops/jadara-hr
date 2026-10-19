@@ -49,7 +49,7 @@ export default function CustomerSurveyTake() {
     const em = email.trim().toLowerCase();
     const u = unified.replace(/\D/g, "");
     if (!em) { setError("أدخل البريد الإلكتروني"); return; }
-    if (!/^7\d{7,11}$/.test(u)) { setError("أدخل الرقم الوطني الموحد للمنشآت (10 خانات تبدأ بـ7)"); return; }
+    if (!/^7\d{9}$/.test(u)) { setError("أدخل الرقم الوطني الموحد للمنشآت (10 خانات تبدأ بـ7)"); return; }
     if (!captchaToken) { setError("أكّد أنك لست روبوت"); return; }
     const qs = survey.questions || [];
     if (qs.length === 0) { setError("الاستبيان فارغ"); return; }
@@ -177,7 +177,7 @@ export default function CustomerSurveyTake() {
               </div>
               <div className="space-y-1.5">
                 <Label className="text-xs text-muted-foreground">الرقم الوطني الموحد للمنشآت (١٠ خانات تبدأ بـ٧)</Label>
-                <Input inputMode="numeric" value={unified} onChange={e => setUnified(e.target.value.replace(/\D/g, ""))} className="h-11" dir="ltr" placeholder="7XXXXXXXXX" />
+                <Input inputMode="numeric" value={unified} onChange={e => setUnified(e.target.value.replace(/\D/g, "").slice(0, 10))} className="h-11" dir="ltr" placeholder="7XXXXXXXXX" />
               </div>
             </div>
 

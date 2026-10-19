@@ -216,7 +216,7 @@ export default function Quote() {
     const name = form.name.trim();
     const email = form.contact_email.trim();
     const unified = form.unified_number.trim();
-    if (!name || !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email) || !/^7\d{7,11}$/.test(unified) || !Number(form.employee_count) || Number(form.employee_count) <= 0) { setErr(t.errForm); return; }
+    if (!name || !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email) || !/^7\d{9}$/.test(unified) || !Number(form.employee_count) || Number(form.employee_count) <= 0) { setErr(t.errForm); return; }
     const phoneDigits = (form.contact_phone || "").replace(/\D/g, "");
     if (phoneDigits.length < 10) { setErr(t.errPhone); return; }
     if (!captcha) { setErr(t.errCaptcha); return; }
@@ -342,7 +342,7 @@ export default function Quote() {
               <Field label={t.industry} value={form.industry} onChange={(v) => set("industry", v)} />
               <Field label={t.city} value={form.city} onChange={(v) => set("city", v)} />
               <Field label={t.contact} value={form.contact_name} onChange={(v) => set("contact_name", v)} />
-              <Field label={t.unified} value={form.unified_number} onChange={(v) => set("unified_number", v.replace(/\D/g, ""))} required />
+              <Field label={t.unified} value={form.unified_number} onChange={(v) => set("unified_number", v.replace(/\D/g, "").slice(0, 10))} required />
               <Field label={t.phone} value={form.contact_phone} onChange={(v) => set("contact_phone", v)} required />
             </div>
             <Field label={t.email} value={form.contact_email} onChange={(v) => set("contact_email", v)} type="email" required />

@@ -67,7 +67,7 @@ export default function CompanyLogin() {
     e.preventDefault();
     setError("");
     const u = unified.replace(/\D/g, "");
-    if (!/^7\d{7,11}$/.test(u)) { setError(t.errUnified); return; }
+    if (!/^7\d{9}$/.test(u)) { setError(t.errUnified); return; }
     const em = email.trim().toLowerCase();
     if (!captchaToken) { setError(isAr ? "أكّد أنك لست روبوت" : "Please verify you're human"); return; }
     setLoading(true);
@@ -119,7 +119,7 @@ export default function CompanyLogin() {
           <div className="relative">
             <Hash className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" aria-hidden="true" />
             <Input id="company-unified" inputMode="numeric" autoComplete="off" placeholder="7XXXXXXXX"
-              value={unified} onChange={(e) => setUnified(e.target.value.replace(/\D/g, ""))}
+              value={unified} onChange={(e) => setUnified(e.target.value.replace(/\D/g, "").slice(0, 10))}
               className="pl-10 h-12" dir="ltr" required />
           </div>
         </div>

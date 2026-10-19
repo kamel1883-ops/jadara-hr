@@ -26,7 +26,7 @@ export default async function (req) {
       return Response.json({ ok: false, error: 'auth_required' }, { status: 401 });
 
     const email = String(me.email).trim().toLowerCase();
-    if (!unified || !/^7\d{7,11}$/.test(unified))
+    if (!unified || !/^7\d{9}$/.test(unified))
       return Response.json({ ok: false, error: 'invalid_unified' }, { status: 400 });
 
     // ضمان عدم فقدان عميل من بوابة المالك: إن لم يوجد سجل Tenant بهذا البريد
