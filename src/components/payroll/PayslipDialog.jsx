@@ -33,7 +33,7 @@ export default function PayslipDialog({ open, onClose, org, month, year }) {
     loading: "جارٍ التحميل...", empty: "لا توجد رواتب مطابقة — جرّب شهراً أو بحثاً آخر.",
     thEmp: "الموظف", thNat: "الهوية/الإقامة", thMonth: "الشهر", thBatch: "الدفعة", thMethod: "الاستلام", thNet: "الصافي", thStatus: "الحالة", thPrint: "بيسليب",
     print: "طباعة بيسليب", exporting: "جارٍ التجهيز...", mudad: "مدد", cash: "كاش",
-    slipTitle: "كشف راتب (بيسليب)",
+    slipTitle: "كشف راتب",
     closed: "إغلاق", count: (n) => `${n} كشف`,
   } : {
     title: "Employee salary slips",

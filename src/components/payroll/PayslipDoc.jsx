@@ -1,10 +1,9 @@
 import React from "react";
-import StampSeal from "@/components/docs/StampSeal";
 import { formatCurrency } from "@/lib/hr";
 import { genDateBoth } from "@/lib/printDate";
 
 /**
- * بيسليب (كشف راتب) لموظف محدد في شهر محدد — يُصدَّر كمستند رسمي قابل للطباعة
+ * كشف راتب لموظف محدد في شهر محدد — يُصدَّر كمستند رسمي قابل للطباعة
  * (يُطبع داخل غلاف الطباعة الموحّد: شعار المنشأة واسمها يميناً، وشعار جداره يساراً).
  * يحمل إقراراً بأن المستند معتمد إلكترونياً ولا يحتاج إلى توقيع.
  */
@@ -95,12 +94,9 @@ export default function PayslipDoc({ record, employee, org, isAr = true, batchTi
         {t.approvedText(org?.name)}
       </div>
 
-      <div className="flex items-center justify-between gap-4 mt-4">
-        <div className="text-[11px] text-slate-500 leading-relaxed" style={{ maxWidth: 360 }}>
-          {t.printDate}: {genDateBoth(L)}
-          <div className="mt-1">{t.footer(r.paid_date || "")}</div>
-        </div>
-        <StampSeal size={110} />
+      <div className="text-[11px] text-slate-500 leading-relaxed mt-4" style={{ maxWidth: 460 }}>
+        {t.printDate}: {genDateBoth(L)}
+        <div className="mt-1">{t.footer(r.paid_date || "")}</div>
       </div>
     </div>
   );
