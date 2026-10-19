@@ -225,7 +225,8 @@ export function ClientInfoDialog({ open, onClose, tenant, isAr, t, onAction, bus
     const d = res?.data || res;
     if (!d?.ok) {
       const err = new Error(d?.error || "fail");
-      Object.assign(err, { tenant_name: String(d?.tenant_name || "") }); // تفاصيل الرفض (اسم المنشأة صاحبة البريد/الرقم)
+      // تفاصيل الرفض: اسم المنشأة صاحبة البريد/الرقم + سبب فشل الدعوة من الخادم
+      Object.assign(err, { tenant_name: String(d?.tenant_name || ""), detail: String(d?.detail || "") });
       throw err;
     }
     return d;
@@ -267,7 +268,8 @@ export function ClientInfoDialog({ open, onClose, tenant, isAr, t, onAction, bus
         email_admin_of_other_tenant: isAr
           ? `هذا البريد مسؤول لمنشأة أخرى فعّالة${e?.tenant_name ? ` (${e.tenant_name})` : ""} — إما اشتراك مدفوع أو تجربة لم تنتهِ بعد. غيّر بريداً آخر أو أعد تفعيل المنشأة الأخرى لاحقاً.`
           : "This email administers another live tenant — pick a different email.",
-        invite_failed: isAr ? "تعذّر إنشاء حساب بهذا البريد — تأكد من صحة البريد وحاول مرة أخرى، وإن تكرر الأمر أبلغني للتحقيق." : "Could not create an account for this email — verify it and retry.",
+        invite_failed: (isAr ? "تعذّر إنشاء حساب بهذا البريد — تأكد من صحة البريد وحاول مرة أخرى." : "Could not create an account for this email — verify it and retry.")
+          + (e?.detail ? (isAr ? ` سبب الرفض من النظام: ${e.detail}` : ` Server reason: ${e.detail}`) : ""),
         invalid_unified: isAr ? "الرقم الموحد غير صالح — يجب أن يبدأ بـ 7 وطوله 8–12 خانة." : "Invalid unified number.",
         unified_used_by_other: isAr
           ? `الرقم الموحد مسجّل لمنشأة أخرى${e?.tenant_name ? ` (${e.tenant_name})` : ""} — لا يمكن اختطافه.`

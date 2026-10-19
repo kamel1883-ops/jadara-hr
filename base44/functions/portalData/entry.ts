@@ -639,26 +639,39 @@ export default async function (req) {
       // فنسقط للقائمة الكاملة ونطابق بالذاكرة — نفس نهج قائمة المالك الذي يعمل فعلياً.
       const matchEmail = (rows: any[]) =>
         (rows || []).find((u: any) => String(u?.email || "").trim().toLowerCase() === new_email) || null;
+      // مسح شامل مع تنقيل: حد الطلب الواحد 5000 مستخدم — والتطبيقات القديمة
+      // تتجاوز 500 بسهولة، فسقف 500 كان يُخفي الحسابات القديمة ويفشل الإصلاح.
+      const listAllUsers = async () => {
+        const all: any[] = [];
+        for (let skip = 0; skip < 20000; skip += 5000) {
+          const rows = await base44.asServiceRole.entities.User.list(undefined, 5000, skip);
+          if (!rows?.length) break;
+          all.push(...rows);
+          if (rows.length < 5000) break;
+        }
+        return all;
+      };
       const findUserByEmail = async () => {
         try {
           const hit = matchEmail(await base44.asServiceRole.entities.User.filter({ email: new_email }, undefined, 20));
           if (hit) return hit;
         } catch {}
-        try {
-          return matchEmail(await base44.asServiceRole.entities.User.list(undefined, 500));
-        } catch { return null; }
+        try { return matchEmail(await listAllUsers()); } catch { return null; }
       };
       let newUser = await findUserByEmail();
+      let inviteErr = "";
       if (!newUser) {
         // لم يُوجد حساب — ادعُ البريد كمسؤول منشأة. الإنشاء قد يستغرق لحظة حتى يظهر
-        // في القائمة، فننتظر قليلاً ثم نعيد البحث قبل الحكم بالفشل.
-        try { await base44.asServiceRole.users.inviteUser(new_email, "admin"); } catch {}
+        // في القائمة، فننتظر قليلاً ثم نعيد البحث. سبب فشل الدعوة يُحفظ ويُرد للواجهة
+        // بدل ابتلاعه — حتى لا يختفي السبب الحقيقي وراء رسالة عامة.
+        try { await base44.asServiceRole.users.inviteUser(new_email, "admin"); }
+        catch (e: any) { inviteErr = String(e?.message || e || "invite_error"); }
         await new Promise((r) => setTimeout(r, 1500));
         newUser = await findUserByEmail();
       }
       // أخطاء العمل تُرد بـ 200 + ok:false حتى يقرأ الواجهة كود السبب واسم المنشأة
       // صاحبة البريد/الرقم (رفض non-2xx يُبلَّغ من الـ SDK برسالة عامة تُخفي السبب).
-      if (!newUser) return Response.json({ ok: false, error: "invite_failed" });
+      if (!newUser) return Response.json({ ok: false, error: "invite_failed", detail: inviteErr || "user_not_found" });
       const newUserId = String(newUser.id || "");
       // حراسة: بريد يخص مسؤول منشأة أخرى **فعّالة** يُمنع ويُبلَّغ باسمها.
       // المنشآت الميتة لا تمنع: تجربة/عرض سعر منتهٍ لم تشترك، أو منشأة ملغاة/موقوفة —
