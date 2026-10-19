@@ -35,7 +35,7 @@ const HEADERS = [
   "توقيع الاستلام",
 ];
 
-export async function downloadCashPayrollExcel({ payrolls = [], employees = [], month, year, monthName }) {
+export async function downloadCashPayrollExcel({ payrolls = [], employees = [], month, year, monthName, batch = null }) {
   const included = payrolls.filter((p) => p.include_in_payroll !== false);
   if (included.length === 0) return 0;
 
@@ -143,7 +143,7 @@ export async function downloadCashPayrollExcel({ payrolls = [], employees = [], 
   const a = document.createElement("a");
   a.href = url;
   const mm = String(month).padStart(2, "0");
-  a.download = `Cash_Payroll_${year}-${mm}.xlsx`;
+  a.download = `Cash_Payroll_${year}-${mm}${batch ? `_Batch${batch}` : ""}.xlsx`;
   a.click();
   setTimeout(() => URL.revokeObjectURL(url), 5000);
   return count;

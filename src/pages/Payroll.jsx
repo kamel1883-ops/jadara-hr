@@ -401,7 +401,7 @@ export default function Payroll() {
     setBatching(true);
     try {
       const mudadOnly = payrolls.filter((p) => p.include_in_payroll !== false && methodOf(p) === "mudad" && (!batchNo || batchOf(p) === batchNo));
-      const n = await downloadMudadExcel({ payrolls: mudadOnly, employees, org, month, year });
+      const n = await downloadMudadExcel({ payrolls: mudadOnly, employees, org, month, year, batch: batchNo || null });
       if (n === 0) { alert(t.mudadEmpty); return; }
       window.open("https://mudad.com.sa/home/payroll/regular/bulk", "_blank", "noopener,noreferrer");
       alert(isAr
@@ -419,7 +419,7 @@ export default function Payroll() {
     setBatching(true);
     try {
       const cashOnly = payrolls.filter((p) => p.include_in_payroll !== false && methodOf(p) === "cash" && (!batchNo || batchOf(p) === batchNo));
-      const n = await downloadCashPayrollExcel({ payrolls: cashOnly, employees, month, year, monthName: t.months[month - 1] });
+      const n = await downloadCashPayrollExcel({ payrolls: cashOnly, employees, month, year, monthName: t.months[month - 1], batch: batchNo || null });
       if (n === 0) { alert(t.cashEmpty); return; }
       alert(isAr ? `تم توليد كشف رواتب الكاش (${n} موظف)${batchNo && batches.length > 1 ? ` — ${batchTitle(batchNo, isAr)}` : ""}.` : `Cash payroll sheet generated (${n} employees).`);
     } catch (e) {

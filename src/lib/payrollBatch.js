@@ -59,9 +59,12 @@ export function groupByBatch(payrolls, methodOf) {
   });
 }
 
-/** رقم الدفعة المفتوحة (التي تحتوي مسودات) — أو null إن كان الشهر مكتملاً ومعتمداً بالكامل. */
+/**
+ * رقم الدفعة المفتوحة (التي فيها مسودات مشمولة بالصرف) — أو null إن كان الشهر مكتملاً.
+ * الصفوف المستثناة (غير المشمولة بالصرف) لا تُبقي الشهر مفتوحاً: هي مرشحة لدفعة جديدة.
+ */
 export function openBatchNumber(payrolls) {
-  const drafts = (payrolls || []).filter((p) => p.status === "draft");
+  const drafts = (payrolls || []).filter((p) => p.status === "draft" && p.include_in_payroll !== false);
   if (drafts.length === 0) return null;
   return Math.max(...drafts.map(batchOf));
 }

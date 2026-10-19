@@ -89,7 +89,7 @@ async function fetchMudadLogoBase64() {
   return btoa(binary);
 }
 
-export async function downloadMudadExcel({ payrolls = [], employees = [], org = null, month, year }) {
+export async function downloadMudadExcel({ payrolls = [], employees = [], org = null, month, year, batch = null }) {
   const included = payrolls.filter((p) => p.include_in_payroll !== false);
   const rows = included.filter((p) => p.status === "approved" || p.status === "paid");
   if (rows.length === 0) return 0;
@@ -270,7 +270,7 @@ export async function downloadMudadExcel({ payrolls = [], employees = [], org = 
   const a = document.createElement("a");
   a.href = url;
   const mm = String(month).padStart(2, "0");
-  a.download = `Mudad_Payroll_${org?.unified_number || org?.name || "EST"}_${year}-${mm}.xlsx`;
+  a.download = `Mudad_Payroll_${org?.unified_number || org?.name || "EST"}_${year}-${mm}${batch ? `_Batch${batch}` : ""}.xlsx`;
   a.click();
   setTimeout(() => URL.revokeObjectURL(url), 5000);
   return count;
