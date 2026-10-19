@@ -7,16 +7,20 @@ import { formatCurrency } from "@/lib/hr";
 //  - الأعمدة الثابتة دائماً تظهر: الموظف، الهوية، الأساسي، السكن، المواصلات، الإجمالي، الصافي.
 //  - الأعمدة الديناميكية تظهر فقط إذا كان أحد الموظفين لديه قيمة غير صفرية:
 //    بدلات أخرى، حوافز، عمل إضافي، غياب (أيام)، غياب (ساعات)، خصومات أخرى، سلفة.
-export default function PayrollPrintSheet({ payrolls = [], employees = [], workDaysInMonth = 0, workHoursPerDay = 0, isAr = true }) {
+export default function PayrollPrintSheet({ payrolls = [], employees = [], workDaysInMonth = 0, workHoursPerDay = 0, hoursPerDayById = {}, isAr = true }) {
   const empMap = {};
   for (const e of employees) empMap[e.id] = e;
   const nameOf = (p) => empMap[p.employee_id]?.full_name || p.employee_name || "—";
   const natOf = (p) => p.national_id || empMap[p.employee_id]?.national_id || "—";
 
   const dailyWage = (g) => (workDaysInMonth ? Number(g) / workDaysInMonth : 0);
-  const hourlyWage = (dw) => (workHoursPerDay > 0 ? dw / workHoursPerDay : 0);
+  const hourlyWage = (dw, hpd) => (hpd > 0 ? dw / hpd : 0);
   const dayValue = (g, d) => Number(((d || 0) * dailyWage(g)).toFixed(2));
-  const hourValue = (g, h) => Number(((h || 0) * hourlyWage(dailyWage(g))).toFixed(2));
+  // ساعات اليوم المعتمدة للموظف (دوام فرعه إن كان له دوام خاص) وإلا ساعات المنشأة
+  const hourValue = (g, h, empId) => {
+    const hpd = Number(hoursPerDayById[empId] || workHoursPerDay) || 0;
+    return Number(((h || 0) * hourlyWage(dailyWage(g), hpd)).toFixed(2));
+  };
 
   const hasOther = payrolls.some((p) => Number(p.other_allowances) > 0);
   const hasBonus = payrolls.some((p) => Number(p.bonus) > 0);
@@ -96,7 +100,7 @@ export default function PayrollPrintSheet({ payrolls = [], employees = [], workD
                 {hasAbsentHours && (
                   <td className={td}>
                     <div style={{ fontWeight: 600 }}>{Number(p.absent_hours) || 0}</div>
-                    {(() => { const v = hourValue(g, p.absent_hours); return v ? <div style={{ color: "#dc2626", fontSize: 11 }}>−{formatCurrency(v)}</div> : null; })()}
+                    {(() => { const v = hourValue(g, p.absent_hours, p.employee_id); return v ? <div style={{ color: "#dc2626", fontSize: 11 }}>−{formatCurrency(v)}</div> : null; })()}
                   </td>
                 )}
                 {hasDed && <td className={td} style={{ color: "#dc2626" }}>{formatCurrency(p.deductions)}</td>}

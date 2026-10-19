@@ -9,8 +9,13 @@ import { Image as ImageIcon, Plus, Trash2, Star, Loader2, Building2, MapPin, Upl
 import { base44 } from "@/api/base44Client";
 import { Image } from "@/components/ui/image";
 import { useI18n } from "@/lib/i18n";
+import { cn } from "@/lib/utils";
+import { branchHoursLabel } from "@/lib/branchHours";
 
-const emptyForm = { name: "", city: "", address: "", phone: "", is_main: false, logo_url: "", lat: "", lng: "", radius: 50 };
+const emptyForm = {
+  name: "", city: "", address: "", phone: "", is_main: false, logo_url: "", lat: "", lng: "", radius: 50,
+  custom_hours: false, work_start_time: "", work_end_time: "", work_hours_per_day: "", late_grace_minutes: 15,
+};
 
 export default function BranchManager({ open, onClose, onSaved }) {
   const { lang } = useI18n();
@@ -27,6 +32,12 @@ export default function BranchManager({ open, onClose, onSaved }) {
     delMainErr: "لا يمكن حذف الفرع الرئيسي. عيّن فرعاً رئيسياً آخر أولاً.",
     noGeo: "نطاق البصمة غير محدد — سيعتمد على المقر الرئيسي.",
     geoBadge: (r) => `نطاق ${r} م`,
+    hoursQ: "هل هذا الفرع لديه ساعات عمل مختلفة تُعتمد في الرواتب؟",
+    yes: "نعم", no: "لا",
+    hoursYes: "يُعتمد الدوام المضبوط أدناه على موظفي هذا الفرع في البصمة واحتساب التأخير والغياب في الرواتب.",
+    hoursNo: "يُعتمد على موظفي هذا الفرع دوام المنشأة العام المضبوط في الإعدادات.",
+    start: "بداية الدوام", end: "نهاية الدوام", hoursPerDay: "ساعات العمل اليومية", grace: "سماح التأخير (دقيقة)",
+    hoursBadge: (s) => `دوام الفرع ${s}`,
   } : {
     title: "Branches", desc: "Set each branch's logo, location (lat/lng) and fingerprint radius. Employees clock in from their own branch's geofence; if none is set, the main workplace is used as fallback.",
     add: "Add branch", edit: "Edit", name: "Branch name *", city: "City", address: "Address", phone: "Phone",
@@ -38,6 +49,12 @@ export default function BranchManager({ open, onClose, onSaved }) {
     delMainErr: "Cannot delete the main branch. Set another branch as main first.",
     noGeo: "No geofence set — falls back to the main workplace.",
     geoBadge: (r) => `${r} m radius`,
+    hoursQ: "Does this branch have different working hours adopted in payroll?",
+    yes: "Yes", no: "No",
+    hoursYes: "The hours below are adopted for this branch's employees in clocking, lateness and payroll absence.",
+    hoursNo: "This branch's employees follow the organization's general working hours from settings.",
+    start: "Shift start", end: "Shift end", hoursPerDay: "Daily working hours", grace: "Late grace (minutes)",
+    hoursBadge: (s) => `Branch hours ${s}`,
   };
 
   const [branches, setBranches] = useState([]);
@@ -64,6 +81,11 @@ export default function BranchManager({ open, onClose, onSaved }) {
       is_main: !!b.is_main, logo_url: b.logo_url || "",
       lat: b.lat != null && b.lat !== "" ? b.lat : "", lng: b.lng != null && b.lng !== "" ? b.lng : "",
       radius: b.radius != null && b.radius !== "" ? b.radius : 50,
+      custom_hours: !!b.custom_hours,
+      work_start_time: b.work_start_time || "",
+      work_end_time: b.work_end_time || "",
+      work_hours_per_day: b.work_hours_per_day != null && b.work_hours_per_day !== "" ? b.work_hours_per_day : "",
+      late_grace_minutes: b.late_grace_minutes != null && b.late_grace_minutes !== "" ? b.late_grace_minutes : 15,
       id: b.id,
     });
     setErr("");
@@ -111,6 +133,11 @@ export default function BranchManager({ open, onClose, onSaved }) {
         lat: form.lat === "" ? null : Number(form.lat),
         lng: form.lng === "" ? null : Number(form.lng),
         radius: Number(form.radius) || 50,
+        custom_hours: !!form.custom_hours,
+        work_start_time: form.work_start_time || "",
+        work_end_time: form.work_end_time || "",
+        work_hours_per_day: Number(form.work_hours_per_day) || 0,
+        late_grace_minutes: Number(form.late_grace_minutes) || 0,
       };
       if (form.is_main) {
         await base44.entities.Branch.updateMany({ is_main: true }, { $set: { is_main: false } });
@@ -208,6 +235,43 @@ export default function BranchManager({ open, onClose, onSaved }) {
               </div>
             </div>
 
+            {/* ساعات العمل: قرار مسؤول الموارد البشرية لكل فرع على حِدة */}
+            <div className="rounded-xl border border-border bg-muted/40 p-3 space-y-3">
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <div className="max-w-md">
+                  <div className="text-sm font-medium">{t.hoursQ}</div>
+                  <p className="text-xs text-muted-foreground mt-0.5">{form.custom_hours ? t.hoursYes : t.hoursNo}</p>
+                </div>
+                <div className="flex items-center gap-1 rounded-lg border border-border bg-white p-1 shrink-0">
+                  <button type="button" onClick={() => set("custom_hours", true)}
+                    className={cn("px-4 py-1.5 rounded-md text-sm font-medium transition-colors", form.custom_hours ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:bg-slate-50")}>{t.yes}</button>
+                  <button type="button" onClick={() => set("custom_hours", false)}
+                    className={cn("px-4 py-1.5 rounded-md text-sm font-medium transition-colors", !form.custom_hours ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:bg-slate-50")}>{t.no}</button>
+                </div>
+              </div>
+
+              {form.custom_hours && (
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                  <div className="space-y-1.5">
+                    <Label className="text-xs text-muted-foreground">{t.start}</Label>
+                    <Input type="time" value={form.work_start_time} onChange={(e) => set("work_start_time", e.target.value)} dir="ltr" />
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label className="text-xs text-muted-foreground">{t.end}</Label>
+                    <Input type="time" value={form.work_end_time} onChange={(e) => set("work_end_time", e.target.value)} dir="ltr" />
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label className="text-xs text-muted-foreground">{t.hoursPerDay}</Label>
+                    <Input type="number" min={0} step="0.5" value={form.work_hours_per_day} onChange={(e) => set("work_hours_per_day", e.target.value)} dir="ltr" />
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label className="text-xs text-muted-foreground">{t.grace}</Label>
+                    <Input type="number" min={0} value={form.late_grace_minutes} onChange={(e) => set("late_grace_minutes", e.target.value)} dir="ltr" />
+                  </div>
+                </div>
+              )}
+            </div>
+
             <div className="flex flex-wrap items-center gap-2">
               <Button type="button" variant="outline" size="sm" className="gap-2" onClick={useMyLocation} disabled={geoBusy}>
                 {geoBusy ? <Loader2 size={14} className="animate-spin" /> : <Crosshair size={14} />} {t.geo}
@@ -247,6 +311,9 @@ export default function BranchManager({ open, onClose, onSaved }) {
                         <MapPin size={11} className={hasGeo ? "text-emerald-500" : "text-slate-300"} />
                         {hasGeo ? t.geoBadge(Number(b.radius) || 50) : t.noGeo}
                       </div>
+                      {branchHoursLabel(b) && (
+                        <div className="text-[11px] text-violet-600 font-medium mt-0.5">{t.hoursBadge(branchHoursLabel(b))}</div>
+                      )}
                     </div>
                   </div>
                   <div className="flex items-center gap-1 shrink-0">

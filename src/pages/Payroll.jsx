@@ -20,6 +20,10 @@ import { downloadMudadExcel } from "@/lib/mudadExcel";
 import { downloadCashPayrollExcel } from "@/lib/cashPayrollExcel";
 import PayrollPrintSheet from "@/components/reports/PayrollPrintSheet";
 import { enrichEmployeesBatch } from "@/lib/vaultSensitive";
+import { hoursForEmployee } from "@/lib/branchHours";
+import { groupByBatch, openBatchNumber, nextBatchNumber, batchTitle, batchOf } from "@/lib/payrollBatch";
+import PayrollBatchesStrip from "@/components/payroll/PayrollBatchesStrip";
+import PayslipDialog from "@/components/payroll/PayslipDialog";
 
 // === مساعدات احتساب الرواتب — مشتركة مع بوابة الموظف (المُفوّض بصلاحية الرواتب) ===
 import {
@@ -53,6 +57,14 @@ export default function Payroll() {
     lockedHint: "لإدخال رواتب شهر جديد انتقل إلى شهر رواتب آخر",
     lockedShort: "مقفل — عرض وطباعة فقط",
     lockedWarn: "رواتب هذا الشهر تم توليدها واعتمادها بالفعل — لا يمكن إعادة التوليد أو التعديل. انتقل إلى شهر رواتب آخر.",
+    batchNew: "تسيير دفعة جديدة للمستثنين",
+    batchNewHint: (n) => `${n} موظف لم تُعتمد أو تُصرف رواتبهم هذا الشهر — يمكنك تسيير دفعة جديدة لهم بنفس مميزات المسير المعتاد (طباعة، ملف مدد، كشف كاش، إرسال إلى مدد).`,
+    batchNewWarn: "رواتب هذا الشهر معتمدة ومكمّلة — استخدم «تسيير دفعة جديدة للمستثنين» لإصدار مسير آخر لمن لم تُصرف رواتبهم فقط.",
+    noPending: "جميع رواتب هذا الشهر معتمدة ومصروفة — لا يوجد موظفون مستثنون لتسيير دفعة جديدة.",
+    batchNewDone: (n, b) => `تم إنشاء الدفعة ${b} لـ ${n} موظف مستثنى — راجع الكشف ثم اضغط «اعتماد كشف الشهر».`,
+    batchesTitle: "مسيرات الشهر (الدفعات)",
+    thBatch: "الدفعة",
+    slips: "كشوف رواتب الموظفين (بيسليب)",
   } : {
     title: "Payroll", subtitle: "Process monthly payroll sheets",
     gen: "Generate month sheet", gening: "Generating...",
@@ -75,11 +87,21 @@ export default function Payroll() {
     lockedHint: "To enter a new payroll month, move to another salary month",
     lockedShort: "Locked — view & print only",
     lockedWarn: "This month's payroll has already been generated and approved — it cannot be regenerated or edited. Move to another salary month.",
+    batchNew: "Run a new batch for excluded employees",
+    batchNewHint: (n) => `${n} employee(s) have no approved or paid salary this month — run a new batch for them with the full regular features (printing, Mudad file, cash sheet, send to Mudad).`,
+    batchNewWarn: "This month's payroll is complete — use “Run a new batch for excluded employees” to issue another run only for those not yet paid.",
+    noPending: "All salaries for this month are approved and paid — no excluded employees to run a new batch for.",
+    batchNewDone: (n, b) => `Batch ${b} created for ${n} excluded employee(s) — review the sheet then approve it.`,
+    batchesTitle: "Month payroll runs (batches)",
+    thBatch: "Batch",
+    slips: "Employee salary slips",
   };
 
   const [payrolls, setPayrolls] = useState([]);
   const [employees, setEmployees] = useState([]);
   const [org, setOrg] = useState(null);
+  const [branches, setBranches] = useState([]);
+  const [slipOpen, setSlipOpen] = useState(false);
   const [month, setMonth] = useState(new Date().getMonth() + 1);
   const [year, setYear] = useState(new Date().getFullYear());
   const [loading, setLoading] = useState(true);
@@ -97,16 +119,18 @@ export default function Payroll() {
   const load = async () => {
     setLoading(true);
     try {
-      const [data, emps, orgs] = await Promise.all([
+      const [data, emps, orgs, brs] = await Promise.all([
         base44.entities.Payroll.filter({ month, year }, "-created_date", 500),
         base44.entities.Employee.filter({ status: "active" }, "-created_date", 500),
         listCurrentOrg(),
+        base44.entities.Branch.list("-created_date", 500).catch(() => []),
       ]);
       const list = Array.isArray(data) ? data : [];
       const active = Array.isArray(emps) ? emps : [];
       setPayrolls(list);
       setEmployees(active);
       setOrg(orgs?.[0] || null);
+      setBranches(Array.isArray(brs) ? brs : []);
       // استكمال تلقائي للكشف: أي موظف على رأس العمل (يدوي/إكسل/توظيف) غير موجود يُضاف،
       // وتُحدَّث صفوف المسودة بأرقام ملفه وطريقة صرفه الحالية — بلا خطوة يدوية.
       // شهر اعتُمد كشفه = مقفل: لا يُضاف إليه موظفون جدد ولا تُعاد كتابة صفوفه المعتمدة
@@ -117,7 +141,7 @@ export default function Payroll() {
         if (needsSync) {
           syncingRef.current = true;
           try {
-            const { created, updates } = await buildSheet({ month, year, org: orgs?.[0] || null, activeEmps: active, payrolls: list });
+            const { created, updates } = await buildSheet({ month, year, org: orgs?.[0] || null, activeEmps: active, payrolls: list, batch: openBatchNumber(list) || nextBatchNumber(list) });
             if (created.length > 0 || updates.length > 0) {
               if (created.length > 0) await base44.entities.Payroll.bulkCreate(created);
               if (updates.length > 0) await base44.entities.Payroll.bulkUpdate(updates);
@@ -136,15 +160,15 @@ export default function Payroll() {
   useEffect(() => { load(); }, [month, year]);
 
   const generate = async () => {
-    // شهر معتمد = مقفل: لا إعادة توليد لنفس الشهر
-    if (locked) return lockedNote();
+    // الشهر المكتمل: الدفعة التالية تُنشأ من زر «تسيير دفعة جديدة للمستثنين»
+    if (monthClosed) return alert(t.batchNewWarn);
     setGenerating(true);
     // جلب الموظفين الفعليين النشطين لحظة التوليد (يستبني من ترك العمل تلقائياً، ويضم المنضمين الجدد)
     const activeEmps = await base44.entities.Employee.filter({ status: "active" }, "-created_date", 500);
     setEmployees(await enrichEmps(activeEmps));
     // البناء موحّد: نفس منطق الاستكمال التلقائي — كل موظف على رأس العمل يدخل الكشف،
     // وتُحدَّث المسودات بأرقام ملفه وطريقة صرفه الحالية (مدد/كاش).
-    const { created, updates } = await buildSheet({ month, year, org, activeEmps, payrolls });
+    const { created, updates } = await buildSheet({ month, year, org, activeEmps, payrolls, batch: openBatch || nextBatchNumber(payrolls) });
     if (created.length > 0) await base44.entities.Payroll.bulkCreate(created);
     if (updates.length > 0) await base44.entities.Payroll.bulkUpdate(updates);
     setGenerating(false);
@@ -153,8 +177,8 @@ export default function Payroll() {
 
   // إعادة مزامنة القيم المالية لكل سجلات الكشف من ملفات الموظفين الحالية (مع إعادة احتساب الصافي بحسب الحضور)
   const syncFromEmployees = async () => {
-    // شهر معتمد = مقفل: لا تُعاد كتابة قيمه المالية
-    if (locked) return lockedNote();
+    // الشهر المكتمل: لا تُعاد كتابة قيمه المالية
+    if (monthClosed) return alert(t.batchNewWarn);
     setGenerating(true);
     try {
       const activeEmps = await base44.entities.Employee.filter({ status: "active" }, "-created_date", 500);
@@ -162,11 +186,12 @@ export default function Payroll() {
       const empById = {};
       for (const e of activeEmps) empById[e.id] = e;
       const workDaysInMonth = computeWorkDaysInMonth(year, month, computeWorkDaysSet(org?.work_days));
-      const workHoursPerDay = Number(org?.work_hours_per_day) || 0;
       const updates = [];
       for (const p of payrolls) {
         const emp = empById[p.employee_id];
         if (!emp) continue;
+        if (p.status !== "draft") continue; // المعتمد/المصروف لقطة محفوظة لا تُعدّل
+        const workHoursPerDay = hoursPerDayOf(p.employee_id);
         const base = Number(emp.base_salary) || 0;
         const housing = Number(emp.housing_allowance) || 0;
         const transport = Number(emp.transport_allowance) || 0;
@@ -193,14 +218,19 @@ export default function Payroll() {
 
   const orgWorkDaysInMonth = () => computeWorkDaysInMonth(year, month, computeWorkDaysSet(org?.work_days));
   const orgWorkHoursPerDay = () => Number(org?.work_hours_per_day) || 0;
+  // ساعات العمل اليومية المعتمدة للموظف: دوام فرعه إن كان الفرع له دوام خاص، وإلا دوام المنشأة
+  const hoursPerDayOf = (empId) => {
+    const h = hoursForEmployee(org, employees.find((e) => e.id === empId), branches);
+    return h.work_hours_per_day > 0 ? h.work_hours_per_day : orgWorkHoursPerDay();
+  };
 
   const updateField = async (id, field, value) => {
     const rec = payrolls.find((p) => p.id === id);
     const updated = { ...rec, [field]: Number(value) || 0 };
     updated.gross_salary = (updated.base_salary || 0) + (updated.housing_allowance || 0) + (updated.transport_allowance || 0) + (updated.other_allowances || 0);
     const wdh = orgWorkDaysInMonth();
-    updated.absent_deduction = computeAbsentDeduction(updated.gross_salary, updated.absent_days, updated.absent_hours, wdh, orgWorkHoursPerDay());
-    updated.net_salary = computeNetFromAttendance(updated.gross_salary, updated.absent_days, updated.absent_hours, wdh, orgWorkHoursPerDay(), updated.bonus, updated.overtime_amount, updated.deductions, updated.loan_installment);
+    updated.absent_deduction = computeAbsentDeduction(updated.gross_salary, updated.absent_days, updated.absent_hours, wdh, hoursPerDayOf(id));
+    updated.net_salary = computeNetFromAttendance(updated.gross_salary, updated.absent_days, updated.absent_hours, wdh, hoursPerDayOf(id), updated.bonus, updated.overtime_amount, updated.deductions, updated.loan_installment);
     await base44.entities.Payroll.update(id, updated);
     setPayrolls((p) => p.map((x) => (x.id === id ? updated : x)));
   };
@@ -211,8 +241,8 @@ export default function Payroll() {
     const wdh = orgWorkDaysInMonth();
     const gross = Number(rec.gross_salary) || (Number(rec.base_salary) || 0);
     const updated = { ...rec, absent_days: abs };
-    updated.absent_deduction = computeAbsentDeduction(gross, abs, rec.absent_hours, wdh, orgWorkHoursPerDay());
-    updated.net_salary = computeNetFromAttendance(gross, abs, rec.absent_hours, wdh, orgWorkHoursPerDay(), rec.bonus, rec.overtime_amount, rec.deductions, rec.loan_installment);
+    updated.absent_deduction = computeAbsentDeduction(gross, abs, rec.absent_hours, wdh, hoursPerDayOf(id));
+    updated.net_salary = computeNetFromAttendance(gross, abs, rec.absent_hours, wdh, hoursPerDayOf(id), rec.bonus, rec.overtime_amount, rec.deductions, rec.loan_installment);
     await base44.entities.Payroll.update(id, updated);
     setPayrolls((p) => p.map((x) => (x.id === id ? updated : x)));
   };
@@ -223,8 +253,8 @@ export default function Payroll() {
     const wdh = orgWorkDaysInMonth();
     const gross = Number(rec.gross_salary) || (Number(rec.base_salary) || 0);
     const updated = { ...rec, absent_hours: hrs };
-    updated.absent_deduction = computeAbsentDeduction(gross, rec.absent_days, hrs, wdh, orgWorkHoursPerDay());
-    updated.net_salary = computeNetFromAttendance(gross, rec.absent_days, hrs, wdh, orgWorkHoursPerDay(), rec.bonus, rec.overtime_amount, rec.deductions, rec.loan_installment);
+    updated.absent_deduction = computeAbsentDeduction(gross, rec.absent_days, hrs, wdh, hoursPerDayOf(id));
+    updated.net_salary = computeNetFromAttendance(gross, rec.absent_days, hrs, wdh, hoursPerDayOf(id), rec.bonus, rec.overtime_amount, rec.deductions, rec.loan_installment);
     await base44.entities.Payroll.update(id, updated);
     setPayrolls((p) => p.map((x) => (x.id === id ? updated : x)));
   };
@@ -273,7 +303,8 @@ export default function Payroll() {
     const root = createRoot(container);
     try {
       const method = opts.method;
-      const scoped = payrolls.filter((p) => p.include_in_payroll !== false && methodOf(p) === method);
+      const batchNo = Number(opts.batch) || null;
+      const scoped = payrolls.filter((p) => p.include_in_payroll !== false && methodOf(p) === method && (!batchNo || batchOf(p) === batchNo));
       if (scoped.length === 0) return;
       const scopeTotal = scoped.reduce((s, p) => s + (Number(p.net_salary) || 0), 0);
       const monthName = t.months[month - 1];
@@ -283,6 +314,12 @@ export default function Payroll() {
       const titlePrefix = opts.draft
         ? (isAr ? `مسودة ${methodLabel}` : `Draft ${methodLabel}`)
         : (isAr ? `${methodLabel} معتمدة` : `Approved ${methodLabel}`);
+      // تمييز الدفعة في العنوان والمستند عند تسيير الشهر على أكثر من دفعة
+      const batchSuffix = batchNo && batches.length > 1
+        ? (isAr ? ` — ${batchTitle(batchNo, isAr)}` : ` — ${batchTitle(batchNo, isAr)}`)
+        : "";
+      const hoursById = {};
+      for (const row of scoped) hoursById[row.employee_id] = hoursPerDayOf(row.employee_id);
       flushSync(() => {
         root.render(
           <PayrollPrintSheet
@@ -290,6 +327,7 @@ export default function Payroll() {
             employees={employees}
             workDaysInMonth={orgWorkDaysInMonth()}
             workHoursPerDay={orgWorkHoursPerDay()}
+            hoursPerDayById={hoursById}
             isAr={isAr}
           />
         );
@@ -298,7 +336,7 @@ export default function Payroll() {
       if (!tableNode) return;
       await printReport(tableNode, {
         org,
-        title: `${titlePrefix} — ${monthName} ${year}`,
+        title: `${titlePrefix}${batchSuffix} — ${monthName} ${year}`,
         subtitle: isAr
           ? `الإجمالي: ${formatCurrency(scopeTotal)} — ${scoped.length} موظف`
           : `Total: ${formatCurrency(scopeTotal)} — ${scoped.length} employees`,
@@ -340,12 +378,20 @@ export default function Payroll() {
   const totalCash = cashPayrolls.reduce((s, p) => s + (Number(p.net_salary) || 0), 0);
   const anyApprovedMudad = mudadPayrolls.some((p) => p.status === "approved");
   const anyApprovedCash = cashPayrolls.some((p) => p.status === "approved");
-  // === قفل الشهر: بمجرد اعتماد كشف الشهر يصبح للعرض والطباعة فقط (بلا تعديل أو إعادة توليد) ===
-  const locked = includedCount > 0 && !anyDraft;
-  const lockedNote = () => alert(t.lockedWarn);
+  // === الدفعات: كل دفعة (مسير) مستقلة — المعتمد/المصروف لا يُعدّل ويُعرض للاطلاع والطباعة فقط ===
+  const batches = groupByBatch(payrolls, methodOf);
+  const openBatch = openBatchNumber(payrolls);
+  const closedBatches = batches.filter((b) => b.batch !== openBatch);
+  const isRowLocked = (p) => p.status !== "draft";
+  const monthClosed = payrolls.length > 0 && openBatch === null;
+  const openRows = openBatch === null ? [] : payrolls.filter((p) => batchOf(p) === openBatch && p.include_in_payroll !== false);
+  const openMudad = openRows.filter((p) => methodOf(p) === "mudad");
+  const openCash = openRows.filter((p) => methodOf(p) === "cash");
+  // الموظفون على رأس العمل الذين لم تُعتمد/تُصرف رواتبهم هذا الشهر → مرشحو الدفعة الجديدة
+  const unpaidActive = employees.filter((e) => !payrolls.some((p) => p.employee_id === e.id && p.status !== "draft"));
 
   // تحويل المسير إلى مدد: يولّد ملف مسير الرواتب (xlsx) المطابق لنموذج مدد ويفتح بوابة الرفع
-  const sendToMudad = async () => {
+  const sendToMudad = async (batchNo) => {
     if (!anyApprovedMudad) {
       alert(isAr
         ? "اعتمد رواتب مدد أولاً قبل التحويل إلى مدد."
@@ -354,12 +400,12 @@ export default function Payroll() {
     }
     setBatching(true);
     try {
-      const mudadOnly = payrolls.filter((p) => p.include_in_payroll !== false && methodOf(p) === "mudad");
+      const mudadOnly = payrolls.filter((p) => p.include_in_payroll !== false && methodOf(p) === "mudad" && (!batchNo || batchOf(p) === batchNo));
       const n = await downloadMudadExcel({ payrolls: mudadOnly, employees, org, month, year });
       if (n === 0) { alert(t.mudadEmpty); return; }
       window.open("https://mudad.com.sa/home/payroll/regular/bulk", "_blank", "noopener,noreferrer");
       alert(isAr
-        ? `تم توليد ملف مسير الرواتب لمدد (${n} موظف) بصيغة xlsx محمية.\n\nالخطوات:\n1) سجّل الدخول في بوابة «مدد» التي فُتحت في تبويب جديد.\n2) من قائمة «إدارة الرواتب ← الرواتب الشهرية» اضغط «رفع ملف الرواتب» واسحب الملف.\n3) اضغط «رفع» ثم اعتمد المسير — ثم يحوّل البنك المرتبط الرواتب إلى حسابات الموظفين.`
+        ? `تم توليد ملف مسير الرواتب لمدد (${n} موظف)${batchNo && batches.length > 1 ? ` — ${batchTitle(batchNo, isAr)}` : ""} بصيغة xlsx محمية.\n\nالخطوات:\n1) سجّل الدخول في بوابة «مدد» التي فُتحت في تبويب جديد.\n2) من قائمة «إدارة الرواتب ← الرواتب الشهرية» اضغط «رفع ملف الرواتب» واسحب الملف.\n3) اضغط «رفع» ثم اعتمد المسير — ثم يحوّل البنك المرتبط الرواتب إلى حسابات الموظفين.`
         : `Mudad payroll file generated (${n} employees) as a protected xlsx.\n\nSteps:\n1) Sign in to the Mudad portal opened in the new tab.\n2) From "Payroll Management ► Monthly Salaries" choose "Upload Payroll File" and drop the file.\n3) Click "Upload" then approve the payroll — your linked bank will transfer salaries to employees.`);
     } catch (e) {
       alert(isAr ? "تعذّر توليد ملف مدد." : "Failed to generate the Mudad file.");
@@ -369,18 +415,40 @@ export default function Payroll() {
   };
 
   // تصدير كشف رواتب الكاش (xlsx) — يُطبع كمسودة حتى قبل الاعتماد، ويشمل كل رواتب الكاش المشمولة
-  const exportCashPayroll = async () => {
+  const exportCashPayroll = async (batchNo) => {
     setBatching(true);
     try {
-      const cashOnly = payrolls.filter((p) => p.include_in_payroll !== false && methodOf(p) === "cash");
+      const cashOnly = payrolls.filter((p) => p.include_in_payroll !== false && methodOf(p) === "cash" && (!batchNo || batchOf(p) === batchNo));
       const n = await downloadCashPayrollExcel({ payrolls: cashOnly, employees, month, year, monthName: t.months[month - 1] });
       if (n === 0) { alert(t.cashEmpty); return; }
-      alert(isAr ? `تم توليد كشف رواتب الكاش (${n} موظف).` : `Cash payroll sheet generated (${n} employees).`);
+      alert(isAr ? `تم توليد كشف رواتب الكاش (${n} موظف)${batchNo && batches.length > 1 ? ` — ${batchTitle(batchNo, isAr)}` : ""}.` : `Cash payroll sheet generated (${n} employees).`);
     } catch (e) {
       alert(isAr ? "تعذّر توليد كشف الكاش." : "Failed to generate the cash sheet.");
     } finally {
       setBatching(false);
     }
+  };
+
+  // === تسيير دفعة جديدة لنفس الشهر: للموظفين المستثنين فقط، بنفس مميزات المسير المعتاد ===
+  const startNewBatch = async () => {
+    if (unpaidActive.length === 0) return alert(t.noPending);
+    setBatching(true);
+    try {
+      const next = nextBatchNumber(payrolls);
+      const activeEmps = await base44.entities.Employee.filter({ status: "active" }, "-created_date", 500);
+      // الصفوف المستثناة (مسودة) تنتقل إلى الدفعة الجديدة كمشمولة بالصرف لتُصرف في مسير مستقل
+      const draftRows = payrolls.filter((p) => p.status === "draft");
+      if (draftRows.length > 0) {
+        await base44.entities.Payroll.bulkUpdate(draftRows.map((p) => ({ id: p.id, batch: next, include_in_payroll: true })));
+      }
+      // بناء/تحديث صفوف الدفعة الجديدة من ملفات الموظفين — بما فيهم من لا يوجد له صف في الشهر بعد
+      const sheetRows = payrolls.map((p) => (p.status === "draft" ? { ...p, batch: next, include_in_payroll: true } : p));
+      const { created, updates } = await buildSheet({ month, year, org, activeEmps, payrolls: sheetRows, batch: next });
+      if (created.length > 0) await base44.entities.Payroll.bulkCreate(created);
+      if (updates.length > 0) await base44.entities.Payroll.bulkUpdate(updates);
+      alert(t.batchNewDone(created.length + draftRows.length, next));
+      await load();
+    } finally { setBatching(false); }
   };
 
   return (
@@ -390,6 +458,9 @@ export default function Payroll() {
         subtitle={t.subtitle}
         action={
           <div className="flex items-center gap-2">
+            <Button variant="outline" className="gap-2" onClick={() => setSlipOpen(true)}>
+              <FileDown size={16} /> {t.slips}
+            </Button>
             <Button asChild variant="outline" className="gap-2">
               <Link to="/gosi"><Shield size={18} /> {t.gosi}</Link>
             </Button>
@@ -436,26 +507,23 @@ export default function Payroll() {
             <span className="text-muted-foreground">{t.monthStatus}</span>
             <span className={cn("px-3 py-1 rounded-full font-medium text-xs", payrollStatusLabel(monthStatus).cls)}>{payrollStatusLabel(monthStatus).label}</span>
             <span className="text-xs text-muted-foreground">{t.empCount(payrolls.length)}</span>
-            {locked && (
+            {monthClosed && (
               <span className="text-[11px] px-2 py-0.5 rounded-full bg-amber-50 text-amber-700 border border-amber-200 flex items-center gap-1">
                 <Lock size={12} /> {t.lockedShort}
               </span>
             )}
           </div>
           <div className="flex flex-wrap gap-2">
-            {anyDraft ? (
+            {openBatch !== null ? (
               <>
-                {mudadPayrolls.length > 0 && (<Button onClick={() => exportPdf({ draft: true, method: "mudad" })} disabled={exporting} variant="outline" className="gap-2 border-amber-300 text-amber-700 hover:bg-amber-50"><FileDown size={16} /> {exporting ? t.exporting : t.printMudadDraft}</Button>)}
-                {cashPayrolls.length > 0 && (<Button onClick={() => exportPdf({ draft: true, method: "cash" })} disabled={exporting} variant="outline" className="gap-2 border-amber-300 text-amber-700 hover:bg-amber-50"><FileDown size={16} /> {exporting ? t.exporting : t.printCashDraft}</Button>)}
+                {openMudad.length > 0 && (<Button onClick={() => exportPdf({ draft: true, method: "mudad", batch: openBatch })} disabled={exporting} variant="outline" className="gap-2 border-amber-300 text-amber-700 hover:bg-amber-50"><FileDown size={16} /> {exporting ? t.exporting : t.printMudadDraft}</Button>)}
+                {openCash.length > 0 && (<Button onClick={() => exportPdf({ draft: true, method: "cash", batch: openBatch })} disabled={exporting} variant="outline" className="gap-2 border-amber-300 text-amber-700 hover:bg-amber-50"><FileDown size={16} /> {exporting ? t.exporting : t.printCashDraft}</Button>)}
                 <Button onClick={approveAll} disabled={batching} className="gap-2 bg-emerald-600 hover:bg-emerald-700 text-white"><FileCheck size={16} /> {batching ? t.exporting : t.approve}</Button>
               </>
+            ) : unpaidActive.length > 0 ? (
+              <Button onClick={startNewBatch} disabled={batching} className="gap-2"><Sparkles size={16} /> {t.batchNew}</Button>
             ) : (
-              <>
-                {mudadPayrolls.length > 0 && (<Button onClick={sendToMudad} disabled={batching} className="gap-2 bg-[#0B2545] hover:bg-[#14315a] text-white"><Send size={16} /> {t.mudadSend}</Button>)}
-                {cashPayrolls.length > 0 && (<Button onClick={exportCashPayroll} disabled={batching} variant="outline" className="gap-2 border-emerald-400 text-emerald-700 hover:bg-emerald-50"><Banknote size={16} /> {t.cashExport}</Button>)}
-                {mudadPayrolls.length > 0 && (<Button onClick={() => exportPdf({ method: "mudad" })} disabled={exporting} variant="outline" className="gap-2"><FileDown size={16} /> {exporting ? t.exporting : t.printMudadFinal}</Button>)}
-                {cashPayrolls.length > 0 && (<Button onClick={() => exportPdf({ method: "cash" })} disabled={exporting} variant="outline" className="gap-2 border-emerald-300 text-emerald-700 hover:bg-emerald-50"><FileDown size={16} /> {exporting ? t.exporting : t.printCashFinal}</Button>)}
-              </>
+              <span className="text-xs text-muted-foreground">{t.noPending}</span>
             )}
           </div>
         </div>
@@ -486,11 +554,29 @@ export default function Payroll() {
             </div>
             )}
 
-      {payrolls.length > 0 && !loading && locked && (
-        <div className="bg-amber-50 border border-amber-200 text-amber-800 rounded-2xl px-4 py-3 mb-5 flex flex-wrap items-center gap-2 text-xs font-semibold">
+      {closedBatches.length > 0 && !loading && (
+        <PayrollBatchesStrip
+          batches={closedBatches}
+          isAr={isAr}
+          months={t.months}
+          month={month}
+          year={year}
+          busy={batching || exporting}
+          onPrintMudad={(b) => exportPdf({ method: "mudad", batch: b })}
+          onPrintCash={(b) => exportPdf({ method: "cash", batch: b })}
+          onSendMudad={(b) => sendToMudad(b)}
+          onCashExcel={(b) => exportCashPayroll(b)}
+        />
+      )}
+
+      {monthClosed && !loading && unpaidActive.length > 0 && (
+        <div className="bg-amber-50 border border-amber-200 text-amber-800 rounded-2xl px-4 py-3 mb-5 flex flex-wrap items-center gap-3 text-xs font-semibold">
           <Lock size={15} />
           <span>{t.lockedAll(includedCount)}</span>
-          <span className="font-normal text-amber-700/80">— {t.lockedHint}</span>
+          <span className="font-normal text-amber-700/80">{t.batchNewHint(unpaidActive.length)}</span>
+          <Button onClick={startNewBatch} disabled={batching} size="sm" className="gap-2 bg-amber-600 hover:bg-amber-700 text-white">
+            <Sparkles size={14} /> {t.batchNew}
+          </Button>
         </div>
       )}
 
@@ -523,6 +609,7 @@ export default function Payroll() {
                   <th className="text-right px-2 py-1.5 font-medium font-bold text-primary sticky left-0 bg-slate-50 z-10">{t.thNet}</th>
                   <th className="text-right px-2 py-1.5 font-medium">{t.thMethod}</th>
                   <th className="text-right px-2 py-1.5 font-medium">{t.thStatus}</th>
+                  <th className="text-right px-2 py-1.5 font-medium">{t.thBatch}</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-border">
@@ -531,7 +618,7 @@ export default function Payroll() {
                    return (
                    <tr key={p.id} data-include={included ? "true" : "false"} data-method={methodOf(p)} className={cn("hover:bg-slate-50", !included && "opacity-60")}>
                      <td className="px-2 py-1 text-center">
-                       {locked ? (
+                       {isRowLocked(p) ? (
                          <span
                            title={included ? (isAr ? "مشمول بالصرف" : "Included in pay") : (isAr ? "مستثنى من صرف هذا الشهر" : "Excluded from this month")}
                            className={cn("inline-flex items-center justify-center w-6 h-6 rounded-lg border-2",
@@ -551,33 +638,36 @@ export default function Payroll() {
                      <td className="px-3 py-1 font-medium sticky right-0 bg-white z-10 max-w-[180px] truncate">{employees.find((e) => e.id === p.employee_id)?.full_name || p.employee_name}</td>
                      <td className="px-2 py-1 tabular-nums text-[11px]">{p.national_id || (employees.find((e) => e.id === p.employee_id)?.national_id || "—")}</td>
                      <td className="px-2 py-1 tabular-nums">{formatCurrency(p.base_salary)}</td>
-                     <td className="px-2 py-1"><EditableCell readOnly={locked} value={p.housing_allowance} onCommit={(v) => updateField(p.id, "housing_allowance", v)} /></td>
-                     <td className="px-2 py-1"><EditableCell readOnly={locked} value={p.transport_allowance} onCommit={(v) => updateField(p.id, "transport_allowance", v)} /></td>
+                     <td className="px-2 py-1"><EditableCell readOnly={isRowLocked(p)} value={p.housing_allowance} onCommit={(v) => updateField(p.id, "housing_allowance", v)} /></td>
+                     <td className="px-2 py-1"><EditableCell readOnly={isRowLocked(p)} value={p.transport_allowance} onCommit={(v) => updateField(p.id, "transport_allowance", v)} /></td>
                      <td className="px-2 py-1 font-bold tabular-nums text-slate-800">{formatCurrency(p.gross_salary)}</td>
-                     <td className="px-2 py-1"><EditableCell readOnly={locked} value={p.bonus} onCommit={(v) => updateField(p.id, "bonus", v)} /></td>
-                     <td className="px-2 py-1"><EditableCell readOnly={locked} value={p.overtime_amount || 0} onCommit={(v) => updateField(p.id, "overtime_amount", v)} /></td>
+                     <td className="px-2 py-1"><EditableCell readOnly={isRowLocked(p)} value={p.bonus} onCommit={(v) => updateField(p.id, "bonus", v)} /></td>
+                     <td className="px-2 py-1"><EditableCell readOnly={isRowLocked(p)} value={p.overtime_amount || 0} onCommit={(v) => updateField(p.id, "overtime_amount", v)} /></td>
                      <td className="px-2 py-1">
                        <div className="flex flex-col gap-0.5">
-                         <EditableCell readOnly={locked} value={p.absent_days || 0} onCommit={(v) => overrideAbsentDays(p.id, v)} />
-                         {(() => { const v = computeAbsentDeduction(p.gross_salary, p.absent_days, 0, orgWorkDaysInMonth(), orgWorkHoursPerDay()); return v ? <span className="text-[10px] text-rose-600 tabular-nums">−{formatCurrency(v)}</span> : null; })()}
+                         <EditableCell readOnly={isRowLocked(p)} value={p.absent_days || 0} onCommit={(v) => overrideAbsentDays(p.id, v)} />
+                         {(() => { const v = computeAbsentDeduction(p.gross_salary, p.absent_days, 0, orgWorkDaysInMonth(), hoursPerDayOf(p.employee_id)); return v ? <span className="text-[10px] text-rose-600 tabular-nums">−{formatCurrency(v)}</span> : null; })()}
                        </div>
                      </td>
                      <td className="px-2 py-1">
                        <div className="flex flex-col gap-0.5">
-                         <EditableCell readOnly={locked} value={p.absent_hours || 0} onCommit={(v) => overrideAbsentHours(p.id, v)} />
-                         {(() => { const v = computeAbsentDeduction(p.gross_salary, 0, p.absent_hours, orgWorkDaysInMonth(), orgWorkHoursPerDay()); return v ? <span className="text-[10px] text-rose-600 tabular-nums">−{formatCurrency(v)}</span> : null; })()}
+                         <EditableCell readOnly={isRowLocked(p)} value={p.absent_hours || 0} onCommit={(v) => overrideAbsentHours(p.id, v)} />
+                         {(() => { const v = computeAbsentDeduction(p.gross_salary, 0, p.absent_hours, orgWorkDaysInMonth(), hoursPerDayOf(p.employee_id)); return v ? <span className="text-[10px] text-rose-600 tabular-nums">−{formatCurrency(v)}</span> : null; })()}
                        </div>
                      </td>
-                     <td className="px-2 py-1"><EditableCell readOnly={locked} value={p.deductions} onCommit={(v) => updateField(p.id, "deductions", v)} /></td>
-                     <td className="px-2 py-1"><EditableCell readOnly={locked} value={p.loan_installment || 0} onCommit={(v) => updateField(p.id, "loan_installment", v)} /></td>
+                     <td className="px-2 py-1"><EditableCell readOnly={isRowLocked(p)} value={p.deductions} onCommit={(v) => updateField(p.id, "deductions", v)} /></td>
+                     <td className="px-2 py-1"><EditableCell readOnly={isRowLocked(p)} value={p.loan_installment || 0} onCommit={(v) => updateField(p.id, "loan_installment", v)} /></td>
                      <td className="px-2 py-1 font-bold tabular-nums text-primary sticky left-0 bg-white z-10">{formatCurrency(p.net_salary)}</td>
                      <td className="px-2 py-1">
                        <span className={cn("text-[10px] px-2 py-0.5 rounded-full font-medium whitespace-nowrap", methodOf(p) === "mudad" ? "bg-[#0B2545]/10 text-[#0B2545]" : "bg-emerald-100 text-emerald-700")}>{methodOf(p) === "mudad" ? t.mudadBadge : t.cashBadge}</span>
                      </td>
                      <td className="px-2 py-1">
+                       <span className="text-[10px] px-2 py-0.5 rounded-full font-medium whitespace-nowrap bg-slate-100 text-slate-700">{batchTitle(batchOf(p), isAr)}</span>
+                     </td>
+                     <td className="px-2 py-1">
                        <span className={cn("text-[10px] px-2 py-0.5 rounded-full font-medium whitespace-nowrap", payrollStatusLabel(p.status).cls)}>{payrollStatusLabel(p.status).label}</span>
                      </td>
-                   </tr>
+                     </tr>
                    );
                  })}
               </tbody>
@@ -585,6 +675,8 @@ export default function Payroll() {
           </div>
         )}
       </div>
+
+      <PayslipDialog open={slipOpen} onClose={() => setSlipOpen(false)} org={org} month={month} year={year} />
     </div>
   );
 }
