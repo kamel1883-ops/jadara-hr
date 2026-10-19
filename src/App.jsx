@@ -88,6 +88,28 @@ const PerformanceSystemPage = lazy(() => import("@/pages/landings/PerformanceSys
 import { PortalLangProvider } from "@/lib/portalI18n";
 import SplashScreen from "@/components/SplashScreen";
 import OwnerDocsGuard from "@/components/OwnerDocsGuard";
+import { base44 } from "@/api/base44Client";
+
+// حساب منشأة لم يُعتمد مسؤولها بعد (دوره العام user) — لا يُرمى لبوابة الموظف
+// (الدخول فيها برقم إقامة لا بريد ورقم موحد): تُعرض رسالة انتظار اعتماد واضحة.
+const CompanyAdminPending = () => (
+  <div dir="rtl" className="min-h-screen flex items-center justify-center bg-slate-50 p-4">
+    <div className="max-w-md w-full bg-white rounded-2xl border border-border p-8 text-center space-y-4">
+      <div className="mx-auto h-14 w-14 rounded-2xl bg-amber-100 flex items-center justify-center text-2xl">🏢</div>
+      <h1 className="text-xl font-bold">حساب المنشأة بانتظار اعتماد المالك</h1>
+      <p className="text-sm text-muted-foreground leading-relaxed">
+        تم تسجيل الدخول بنجاح، لكن حساب هذه المنشأة لم يُعتمد بعد كمسؤول للمنشأة، فلا يُسمح له بدخول مساحة العمل (/app).
+        يعتمد المالك الدخول من بوابة المالك — بعدها أعد تسجيل الدخول مباشرة وستدخل مساحة العمل.
+      </p>
+      <div className="flex flex-col gap-2 pt-2">
+        <button onClick={() => base44.auth.logout("/")} className="h-11 rounded-xl bg-violet-600 hover:bg-violet-700 text-white text-sm font-medium">
+          تسجيل الخروج
+        </button>
+        <a href="/" className="text-xs text-muted-foreground hover:underline">العودة للرئيسية</a>
+      </div>
+    </div>
+  </div>
+);
 
 // الصفحات العامة فقط: التسويق والتعريف وبوابات الدخول والمستندات القانونية.
 // لا يظهر أي قسم داخلي أو مستند خاص بالمالك ضمن هذه القائمة.
@@ -174,7 +196,8 @@ const AuthenticatedApp = () => {
   // لا وصول لأي قسم داخلي دون جلسة تسجيل دخول حقيقية (إيميل + كلمة مرور مفعّلة)
   if (!isAuthenticated) { navigateToLogin(); return <SplashScreen />; }
 
-  if (isRestricted) return <Navigate to="/portal" replace />;
+  // حساب منشأة غير معتمد كمسؤول — رسالة انتظار واضحة بدل رميه لبوابة الموظف
+  if (isRestricted) return <CompanyAdminPending />;
 
   // Render the main app (authenticated)
   return (

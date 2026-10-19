@@ -774,11 +774,30 @@ export default async function (req) {
       const approve = body.approve !== false;
       if (!tenant_id) return Response.json({ ok: false, error: "missing" }, { status: 400 });
       const t = await base44.asServiceRole.entities.Tenant.get(tenant_id);
-      const uid = String(t?.admin_user_id || "");
+      let uid = String(t?.admin_user_id || "");
       if (approve) {
+        // إن فارغ admin_user_id: ابحث عن حساب بريد المسؤول الحالي (قد أُنشئ من عرض سعر/اشتراك
+        // سابق) واربطه بالمنشأة — حتى لا يبقى العميل محبوساً لغياب المعرّف.
+        const adminEmail = String(t?.admin_email || t?.contact_email || "").trim().toLowerCase();
+        if (!uid && adminEmail) {
+          const matches = (rows: any[]) =>
+            (rows || []).find((u: any) => String(u?.email || "").trim().toLowerCase() === adminEmail) || null;
+          let hit: any = null;
+          try { hit = matches(await base44.asServiceRole.entities.User.filter({ email: adminEmail }, undefined, 20)); } catch {}
+          if (!hit) {
+            try {
+              for (let skip = 0; skip < 20000 && !hit; skip += 5000) {
+                const rows = await base44.asServiceRole.entities.User.list(undefined, 5000, skip);
+                hit = matches(rows);
+                if (!rows?.length || rows.length < 5000) break;
+              }
+            } catch {}
+          }
+          if (hit) uid = String(hit.id || "");
+        }
         if (!uid) return Response.json({ ok: false, error: "no_pending" }, { status: 400 });
         await base44.asServiceRole.entities.User.update(uid, { role: "admin" });
-        await base44.asServiceRole.entities.Tenant.update(tenant_id, { admin_status: "approved" });
+        await base44.asServiceRole.entities.Tenant.update(tenant_id, { admin_status: "approved", admin_user_id: uid });
       } else {
         await base44.asServiceRole.entities.Tenant.update(tenant_id, { admin_status: "rejected", admin_user_id: "", admin_email: "" });
       }

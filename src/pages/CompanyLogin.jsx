@@ -78,7 +78,16 @@ export default function CompanyLogin() {
         turnstileToken: captchaToken,
       });
       if (!res?.data?.valid) { setError(t.errCreds); return; }
-      await base44.auth.loginViaEmailPassword(em, password);
+      const lu = await base44.auth.loginViaEmailPassword(em, password);
+      // حساب المنشأة يجب أن يكون مُعتمد كمسؤول (role admin) ليدخل مساحة العمل.
+      // غير المعتمد لا يُحوَّل لـ /app (سيُرفض) ولا لبوابة الموظف (دخولها برقم إقامة):
+      // تُعرض رسالة اعتماد واضحة وتبقى الصفحة.
+      if (String(lu?.user?.role || "") !== "admin") {
+        setError(isAr
+          ? "تم التحقق من بيانات المنشأة، لكن حساب هذا البريد لم يُعتمد بعد كمسؤول — يعتمد الدخول من المالك من بوابة المالك، ثم أعد تسجيل الدخول وستدخل مباشرة."
+          : "Company credentials verified, but this email's account is not yet approved as a company admin — the owner approves access from the owner portal; then sign in again.");
+        return;
+      }
       // بعد الدخول: ادخل التطبيق (وليس صفحة الهبوط العامة) ما لم يوجد returnTo صريح.
       window.location.href = returnTo && returnTo !== "/" ? returnTo : "/app";
     } catch (err) {

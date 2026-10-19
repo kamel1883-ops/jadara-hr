@@ -5,7 +5,7 @@ import { Label } from "@/components/ui/label";
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter,
 } from "@/components/ui/dialog";
-import {   Loader2, Check, CalendarPlus, CalendarClock, Printer, X, Pause, Ban, Play, RotateCcw, BadgeCheck, Crown, FlaskConical, Download, Mail, FileSignature, FileText, Link2, Users, Trash2 } from "lucide-react";
+import {   Loader2, Check, CalendarPlus, CalendarClock, Printer, X, Pause, Ban, Play, RotateCcw, BadgeCheck, Crown, FlaskConical, Download, Mail, FileSignature, FileText, Link2, Users, Trash2, ShieldCheck } from "lucide-react";
 import { base44 } from "@/api/base44Client";
 import { cn } from "@/lib/utils";
 import ConfirmSubscriptionDialog from "./ConfirmSubscriptionDialog";
@@ -212,6 +212,8 @@ export function ClientInfoDialog({ open, onClose, tenant, isAr, t, onAction, bus
   const [fixBusy, setFixBusy] = useState(false);
   const [dupBusy, setDupBusy] = useState(false);
   const [dupMsg, setDupMsg] = useState(null);
+  const [apprBusy, setApprBusy] = useState(false);
+  const [apprMsg, setApprMsg] = useState(null); // نتيجة اعتماد حساب المسؤول الحالي
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [renewOpen, setRenewOpen] = useState(false);
   const [delOpen, setDelOpen] = useState(false);
@@ -305,6 +307,24 @@ export function ClientInfoDialog({ open, onClose, tenant, isAr, t, onAction, bus
       setFixBusy(false);
     }
   };
+  // اعتماد حساب المسؤول الحالي — تفعيل دخول المنشأة عبر بوابة الشركات (/app).
+  // يرفع حساب بريد المنشأة الحالي إلى مسؤول؛ يُستخدم إن كان العميل مسجّلاً لكن
+  // دخوله مرفوض أو يُحوَّل لبوابة الموظف (لأن دوره العام user وليس admin).
+  const approveAdmin = async () => {
+    setApprBusy(true); setApprMsg(null);
+    try {
+      await callPortal("owner_approve_admin", { tenant_id: tenant.id, approve: true });
+      setApprMsg({ ok: true, text: isAr
+        ? `تم اعتماد ${tenant.admin_email || tenant.contact_email || "حساب المنشأة"} كمسؤول — يدخل الآن مساحة العمل /app مباشرة.`
+        : "Approved as company admin — /app access is now enabled." });
+      if (onRefresh) await onRefresh();
+    } catch (e) {
+      const code = String(e?.message || e || "");
+      setApprMsg({ ok: false, text: code === "no_pending"
+        ? (isAr ? "لا يوجد بريد مسؤول مسجل لهذه المنشأة — استخدم قسم تغيير البريد أولاً لربط بريد جديد." : "No admin email on this tenant — use the email change section first.")
+        : (isAr ? `تعذّر الاعتماد: ${code}` : `Failed: ${code}`) });
+    } finally { setApprBusy(false); }
+  };
   // حذف المنشآت المكرّرة (نفس الرقم الموحد) — يبقي هذه المنشأة وحدها.
   const deleteDuplicates = async () => {
     if (!window.confirm(isAr
@@ -324,7 +344,7 @@ export function ClientInfoDialog({ open, onClose, tenant, isAr, t, onAction, bus
       setDays("7");
       setAmount(String(tenant.quoted_amount || ""));
       setNewEmail("");
-      setEmailMsg(null); setFixUnified(""); setFixMsg(null); setDupMsg(null); setEmailBusy(false); setFixBusy(false);
+      setEmailMsg(null); setFixUnified(""); setFixMsg(null); setDupMsg(null); setApprMsg(null); setEmailBusy(false); setFixBusy(false); setApprBusy(false);
       const d = new Date(); d.setHours(0, 0, 0, 0); d.setFullYear(d.getFullYear() + 1);
       setEnd(d.toISOString().slice(0, 10));
       setConfirmOpen(false);
@@ -457,6 +477,17 @@ export function ClientInfoDialog({ open, onClose, tenant, isAr, t, onAction, bus
             </div>
             {emailMsg && (
               <div className={cn("text-xs rounded-lg px-3 py-2 leading-relaxed", emailMsg.ok ? "bg-emerald-50 text-emerald-700 border border-emerald-200" : "bg-rose-50 text-rose-700 border border-rose-200")}>{emailMsg.text}</div>
+            )}
+          </div>
+          {/* اعتماد حساب المسؤول الحالي — تفعيل دخول المنشأة عبر بوابة الشركات */}
+          <div className="space-y-2 rounded-xl border border-emerald-200 bg-emerald-50/40 p-3">
+            <div className="text-sm font-medium flex items-center gap-1.5"><ShieldCheck size={15} className="text-emerald-600" /> {isAr ? "تفعيل دخول المنشأة (اعتماد المسؤول)" : "Enable company login (approve admin)"}</div>
+            <div className="text-xs text-muted-foreground leading-relaxed">{isAr ? "إن كان العميل مسجّلاً بهذا البريد لكن دخوله عبر بوابة الشركات مرفوض أو يُحوَّل لبوابة الموظف — ارفع حسابه إلى مسؤول ليُعتمد الدخول لمساحة العمل. لا يغيّر البريد ولا الرقم الموحد." : "If the client is registered with this email but company-portal sign-in is refused or redirects them — promote the account to admin so workspace access is approved. Does not change the email or unified number."}</div>
+            <Button size="sm" onClick={approveAdmin} disabled={apprBusy || busy} className="gap-1.5 bg-emerald-600 hover:bg-emerald-700 text-white">
+              {apprBusy ? <Loader2 size={14} className="animate-spin" /> : <ShieldCheck size={14} />} {isAr ? "اعتماد المسؤول وتفعيل الدخول" : "Approve admin access"}
+            </Button>
+            {apprMsg && (
+              <div className={cn("text-xs rounded-lg px-3 py-2 leading-relaxed", apprMsg.ok ? "bg-emerald-50 text-emerald-700 border border-emerald-200" : "bg-rose-50 text-rose-700 border border-rose-200")}>{apprMsg.text}</div>
             )}
           </div>
           {/* تصحيح الرقم الموحد + حذف التكرارات — إصلاح أثر الخطأ السابق في رقم المنشأة */}
