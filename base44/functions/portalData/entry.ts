@@ -245,6 +245,12 @@ export default async function (req) {
       return Response.json({ ok: true });
     }
 
+    // ====== تحقق خفيف من جلسة المالك — تستخدمه بوابة حماية المستندات الخاصة بالمالك ======
+    if (action === "owner_check") {
+      if (!isOwner) return Response.json({ ok: false, error: "forbidden" }, { status: 403 });
+      return Response.json({ ok: true });
+    }
+
     // ====== إدارة العملاء — بوابة المالك ======
     if (action === "owner_list") {
       if (!isOwner) return Response.json({ ok: false, error: "forbidden" }, { status: 403 });

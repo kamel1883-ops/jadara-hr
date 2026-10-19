@@ -16,11 +16,10 @@ const BANNER_IMG =
   "https://media.base44.com/images/public/6a74edc8f347046365c2e1a4/eb6d89134_image.png";
 
 const MARKETING_PATHS = new Set([
-  "/", "/about", "/contact", "/quote", "/brochure", "/brochure-en",
+  "/", "/about", "/contact", "/quote",
   "/hr-system", "/payroll-system", "/attendance-system", "/performance-system",
-  "/qiwa-mudad", "/wps-mudad", "/eos-calculator", "/contracts", "/contract-sample",
-  "/samples", "/privacy", "/refund-policy", "/affiliate-program",
-  "/strategic-plan", "/ad-designs", "/app-store-screens",
+  "/qiwa-mudad", "/wps-mudad", "/eos-calculator", "/contracts",
+  "/privacy", "/refund-policy", "/affiliate-program",
 ]);
 
 function isMarketingPath(path) {

@@ -87,25 +87,49 @@ const AttendanceSystemPage = lazy(() => import("@/pages/landings/AttendanceSyste
 const PerformanceSystemPage = lazy(() => import("@/pages/landings/PerformanceSystemPage"));
 import { PortalLangProvider } from "@/lib/portalI18n";
 import SplashScreen from "@/components/SplashScreen";
+import OwnerDocsGuard from "@/components/OwnerDocsGuard";
 
-const PUBLIC_PATHS = ["/", "/about", "/contact", "/quote", "/login", "/register", "/forgot-password", "/reset-password", "/company-login", "/company-forgot-password", "/company-register", "/portal", "/owner-portal", "/qiwa-mudad", "/wps-mudad", "/eos-calculator", "/contracts", "/contract-sample", "/samples", "/brochure", "/brochure-en", "/strategic-plan", "/ad-designs", "/app-store-screens", "/hr-system", "/payroll-system", "/attendance-system", "/performance-system", "/privacy", "/refund-policy", "/affiliate-program"];
+// الصفحات العامة فقط: التسويق والتعريف وبوابات الدخول والمستندات القانونية.
+// لا يظهر أي قسم داخلي أو مستند خاص بالمالك ضمن هذه القائمة.
+const PUBLIC_PATHS = ["/", "/about", "/contact", "/quote", "/login", "/register", "/forgot-password", "/reset-password", "/company-login", "/company-forgot-password", "/company-register", "/portal", "/owner-portal", "/qiwa-mudad", "/wps-mudad", "/eos-calculator", "/contracts", "/hr-system", "/payroll-system", "/attendance-system", "/performance-system", "/privacy", "/refund-policy", "/affiliate-program"];
+
+// مستندات المالك الخاصة (البروشور، العينات، العقد، الخطة الاستراتيجية، التصاميم) —
+// لا تُفتح إلا بجلسة مالك حقيقية مُوثّقة خادمياً من بوابة المالك.
+const OWNER_DOC_PATHS = ["/strategic-plan", "/ad-designs", "/app-store-screens", "/brochure", "/brochure-en", "/contract-sample", "/samples"];
 
 const AuthenticatedApp = () => {
-  const { user, isLoadingAuth, isLoadingPublicSettings, authError, navigateToLogin } = useAuth();
+  const { user, isAuthenticated, isLoadingAuth, isLoadingPublicSettings, authError, navigateToLogin } = useAuth();
   const path = window.location.pathname;
   const isRestricted = user && user.role !== "admin";
-  const isPublicPage = PUBLIC_PATHS.includes(path) || path.startsWith("/blog") || path.startsWith("/jobs") || path.startsWith("/c") || path.startsWith("/portal");
+  const isOwnerDoc = OWNER_DOC_PATHS.includes(path);
+  const isPublicPage = PUBLIC_PATHS.includes(path) || path.startsWith("/blog") || path.startsWith("/jobs") || path.startsWith("/c/") || path.startsWith("/portal");
 
   if (!isPublicPage && (isLoadingPublicSettings || isLoadingAuth)) {
     return <SplashScreen />;
   }
 
-  if (authError && !isPublicPage) {
+  if (authError && !isPublicPage && !isOwnerDoc) {
     if (authError.type === 'user_not_registered') return <UserNotRegisteredError />;
     if (authError.type === 'auth_required') { navigateToLogin(); return null; }
   }
 
-  if (isRestricted && !isPublicPage) return <Navigate to="/portal" replace />;
+  // مستندات المالك: تُعرض خلف بوابة تتحقق من جلسة المالك خادمياً قبل أي عرض
+  if (isOwnerDoc) {
+    return (
+      <Routes>
+        <Route element={<OwnerDocsGuard />}>
+          <Route path="/strategic-plan" element={<StrategicPlan />} />
+          <Route path="/ad-designs" element={<AdDesigns />} />
+          <Route path="/app-store-screens" element={<AppStoreScreens />} />
+          <Route path="/brochure" element={<BrochureErrorBoundary><Brochure /></BrochureErrorBoundary>} />
+          <Route path="/brochure-en" element={<BrochureErrorBoundary><BrochureEn /></BrochureErrorBoundary>} />
+          <Route path="/contract-sample" element={<ContractSample />} />
+          <Route path="/samples" element={<Samples />} />
+        </Route>
+        <Route path="*" element={<Navigate to="/owner-portal" replace />} />
+      </Routes>
+    );
+  }
 
   if (isPublicPage) {
     return (
@@ -119,14 +143,6 @@ const AuthenticatedApp = () => {
           <Route path="/about" element={<About />} />
           <Route path="/contact" element={<Contact />} />
           <Route path="/quote" element={<Quote />} />
-          <Route path="/contract-sample" element={<ContractSample />} />
-          <Route path="/samples" element={<Samples />} />
-          <Route path="/brochure" element={<BrochureErrorBoundary><Brochure /></BrochureErrorBoundary>} />
-          <Route path="/brochure-en" element={<BrochureErrorBoundary><BrochureEn /></BrochureErrorBoundary>} />
-          {/* مستندات خاصة بالمالك فقط — بروابط مباشرة غير مرتبطة بأي بوابة أو قائمة تنقّل */}
-          <Route path="/strategic-plan" element={<StrategicPlan />} />
-          <Route path="/ad-designs" element={<AdDesigns />} />
-          <Route path="/app-store-screens" element={<AppStoreScreens />} />
           <Route path="/hr-system" element={<HrSystemPage />} />
           <Route path="/payroll-system" element={<PayrollSystemPage />} />
           <Route path="/attendance-system" element={<AttendanceSystemPage />} />
@@ -154,6 +170,11 @@ const AuthenticatedApp = () => {
       </Routes>
     );
   }
+
+  // لا وصول لأي قسم داخلي دون جلسة تسجيل دخول حقيقية (إيميل + كلمة مرور مفعّلة)
+  if (!isAuthenticated) { navigateToLogin(); return <SplashScreen />; }
+
+  if (isRestricted) return <Navigate to="/portal" replace />;
 
   // Render the main app (authenticated)
   return (
