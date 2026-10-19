@@ -4,6 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Fingerprint, Loader2, LogIn, LogOut, MapPin, CheckCircle2, Coffee, Play } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { usePortalI18n, usePortalT, portalDir } from "@/lib/portalI18n";
+import { resolveWorkHours } from "@/lib/branchHours";
 
 const localToday = () => {
   const d = new Date();
@@ -95,6 +96,8 @@ export default function EmployeeClock({ employee, org, branch, onChanged, clockA
 
   const wp = resolveWorkplace(org, branch);
   const radius = wp?.radius || 50;
+  // ساعات العمل المعتمدة: دوام فرع الموظف إن كان الفرع له دوام خاص، وإلا دوام المنشأة العام
+  const hours = resolveWorkHours(org, branch);
 
   const run = async (kind) => {
     setMsg({ type: "", text: "" });
@@ -141,11 +144,11 @@ export default function EmployeeClock({ employee, org, branch, onChanged, clockA
           const name = `${employee.employee_number} - ${employee.position}`;
           const bId = branch?.id || employee.branch_id || null;
           const bName = branch?.name || employee.branch_name || "";
-          // حساب حالة التأخير من إعدادات المنشأة (وقت الدوام + هامش السماح)
+          // حساب حالة التأخير من دوام الفرع المعتمد لموظفيه (وإلا دوام المنشأة)
           const checkInTime = nowHM();
           let arrivalStatus = "present";
-          const ws = String(org?.work_start_time || "").trim();
-          const grace = Number(org?.late_grace_minutes) || 0;
+          const ws = hours.work_start_time;
+          const grace = hours.late_grace_minutes;
           if (ws && checkInTime) {
             const toMin = (hm) => { const m = /^(\d{1,2}):(\d{2})/.exec(hm); return m ? Number(m[1]) * 60 + Number(m[2]) : null; };
             const startMin = toMin(ws), checkMin = toMin(checkInTime);
@@ -223,8 +226,15 @@ export default function EmployeeClock({ employee, org, branch, onChanged, clockA
             {now.toLocaleDateString(lang === "ar" ? "ar-EG" : "en-GB")} · {String(now.getHours()).padStart(2,"0")}:{String(now.getMinutes()).padStart(2,"0")}:{String(now.getSeconds()).padStart(2,"0")}
           </span>
         </div>
-        {org?.work_start_time && org?.work_end_time && (
-          <div className="text-xs text-muted-foreground">{t.schedLabel(org.work_start_time, org.work_end_time)}</div>
+        {hours.work_start_time && hours.work_end_time && (
+          <div className="text-xs text-muted-foreground">
+            {t.schedLabel(hours.work_start_time, hours.work_end_time)}
+            {hours.custom && wp?.isBranch && (
+              <span className="ms-1 text-violet-600 font-medium">
+                · {lang === "ar" ? `دوام فرع ${wp.name}` : `Branch ${wp.name}`}
+              </span>
+            )}
+          </div>
         )}
       </div>
 

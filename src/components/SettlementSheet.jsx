@@ -11,7 +11,7 @@ export default function SettlementSheet({ record, org }) {
   const r = record || {};
   const L = isAr;
   const t = L ? {
-    orgNameFallback: "اسم المنشأة", cr: "س.ت", vat: "رقم ضريبي", title: "مخالصة نهاية الخدمة", no: "رقم",
+    orgNameFallback: "اسم المنشأة", cr: "س.ت", title: "مخالصة نهاية الخدمة", no: "رقم",
     emp: "اسم الموظف", empNo: "الرقم الوظيفي", natId: "الهوية/الإقامة", nationality: "الجنسية", dept: "الإدارة", position: "المسمى الوظيفي",
     hireDate: "تاريخ المباشرة", lwd: "آخر يوم عمل", years: (n) => `${n} سنة`, reason: "سبب الإنهاء",
     item: "البند", detail: "التفصيل", amount: "المبلغ (ر.س)",
@@ -22,7 +22,7 @@ export default function SettlementSheet({ record, org }) {
     empSign: "توقيع الموظف", hrSign: "مدير الموارد البشرية", adminSign: "المعتمد من الإدارة",
     footer: (d) => `تم إصدار هذه المخالصة بواسطة منصة جداره لإدارة الموارد البشرية — ${d || ""}`,
   } : {
-    orgNameFallback: "Organization name", cr: "CR", vat: "VAT no", title: "End-of-service settlement", no: "No.",
+    orgNameFallback: "Organization name", cr: "CR", title: "End-of-service settlement", no: "No.",
     emp: "Employee name", empNo: "Employee no", natId: "ID/Iqama", nationality: "Nationality", dept: "Department", position: "Job title",
     hireDate: "Commencement date", lwd: "Last working date", years: (n) => `${n} years`, reason: "Termination reason",
     item: "Item", detail: "Detail", amount: "Amount (SAR)",
@@ -40,7 +40,6 @@ export default function SettlementSheet({ record, org }) {
       <div className="text-center mb-5">
         <div className="text-base font-bold">{t.title}</div>
         <div className="text-xs text-slate-500">{t.no}: {r.id ? r.id.slice(-6).toUpperCase() : ""} · {r.generated_date || ""}</div>
-        <div className="text-xs text-slate-500">{t.vat}: {org?.vat_number || "—"}</div>
       </div>
 
       <div className="grid grid-cols-2 gap-x-6 gap-y-2 text-sm mb-5">

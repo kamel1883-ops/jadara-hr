@@ -9,7 +9,7 @@ import {
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue
 } from "@/components/ui/select";
-import { Pencil, Plane, MapPin, Wallet, Download, Loader2, RefreshCw } from "lucide-react";
+import { Pencil, Plane, MapPin, Wallet, Download, Loader2, RefreshCw, Lock } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useI18n } from "@/lib/i18n";
 import { generateBusinessTripApproval } from "@/lib/docGenerators";
@@ -54,6 +54,7 @@ export default function BusinessTrips() {
     loading: "جارٍ التحميل...", empty: "لا توجد رحلات عمل بعد — ابدأ بإنشاء رحلة جديدة",
     thEmp: "الموظف", thType: "النوع", thDest: "الوجهة", thPeriod: "الفترة", thDays: "الأيام", thTransport: "التنقل", thCost: "التكلفة", thStatus: "الحالة",
     doc: "مستند الانتداب", genDoc: "توليد المستند",
+    lockedTrip: "الانتداب معتمد — لا يمكن تعديله أو حذفه",
   } : {
     title: "Business Trips & Deputation", subtitle: "Manage internal and external employee trips and related costs",
     sTotal: "Total trips", sInternal: "Internal", sExternal: "External", sCost: "Total costs",
@@ -61,6 +62,7 @@ export default function BusinessTrips() {
     loading: "Loading...", empty: "No business trips yet — create a new one",
     thEmp: "Employee", thType: "Type", thDest: "Destination", thPeriod: "Period", thDays: "Days", thTransport: "Transport", thCost: "Cost", thStatus: "Status",
     doc: "Trip document", genDoc: "Generate document",
+    lockedTrip: "Approved deputation — cannot be edited or deleted",
   };
 
   const [trips, setTrips] = useState([]);
@@ -90,7 +92,8 @@ export default function BusinessTrips() {
 
   const empNat = (id) => employees.find((e) => e.id === id)?.national_id || "";
 
-  const remove = async (id) => { await base44.entities.BusinessTrip.delete(id); load(); };
+  // بعد اعتماد الانتداب لا تبقى صلاحية للتعديل أو الحذف — تُعرض النتيجة للاطلاع فقط.
+  const LOCKED_TRIP = ["approved", "in_progress", "completed", "cancelled"];
 
   const genDoc = async (trip) => {
     const emp = employees.find((x) => x.id === trip.employee_id);
@@ -193,7 +196,11 @@ export default function BusinessTrips() {
                     <TableCell><span className={cn("text-xs px-2 py-1 rounded-full font-medium", st.cls)}>{st.label}</span></TableCell>
                     <TableCell>
                       <div className="flex gap-1 items-center">
-                        <button onClick={() => { setEditing(tr); setShowForm(true); }} className="p-1.5 rounded-lg hover:bg-slate-100 text-slate-500"><Pencil size={15} /></button>
+                        {LOCKED_TRIP.includes(tr.status) ? (
+                          <span title={t.lockedTrip} className="p-1.5 rounded-lg text-slate-300 cursor-default"><Lock size={15} /></span>
+                        ) : (
+                          <button onClick={() => { setEditing(tr); setShowForm(true); }} title={isAr ? "تعديل" : "Edit"} className="p-1.5 rounded-lg hover:bg-slate-100 text-slate-500"><Pencil size={15} /></button>
+                        )}
                         {tr.status === "completed" ? (
                           tr.approval_pdf_url ? (
                             <StoredDocButton value={tr.approval_pdf_url}
