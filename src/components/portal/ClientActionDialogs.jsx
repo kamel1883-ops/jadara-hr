@@ -64,6 +64,8 @@ export function waLink(t, isAr) {
     `• شريحة الاشتراك: ${t.pricing_tier || "—"}`,
     `• عدد الموظفين المتوقع: ${t.employee_count || 0}`,
     ...priceLines,
+    // صلاحية العرض 48 ساعة — تُرسل مع العروض المدفوعة فقط (طلبات التجربة المجانية بلا صلاحية)
+    ...(amount > 0 ? [`صلاحية هذا العرض 48 ساعة من تاريخ الإصدار.`] : []),
     ``,
     `بيانات التحويل البنكي:`,
     `المستفيد: ${PROVIDER_BANK.beneficiaryAr}`,
@@ -81,6 +83,7 @@ export function waLink(t, isAr) {
     `• Tier: ${t.pricing_tier || "—"}`,
     `• Expected employees: ${t.employee_count || 0}`,
     ...priceLines,
+    ...(amount > 0 ? [`This quotation is valid for 48 hours from the issue date.`] : []),
     ``,
     `Bank transfer details:`,
     `Beneficiary: ${PROVIDER_BANK.beneficiaryEn}`,

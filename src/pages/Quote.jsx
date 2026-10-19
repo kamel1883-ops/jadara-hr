@@ -303,6 +303,13 @@ export default function Quote() {
           <div className="text-2xl font-extrabold text-violet-900">{isCustomT ? (isAr ? "تأثير خاص" : "Custom") : `${totalYear1.toLocaleString()} ${isAr ? "ريال" : "SAR"}`}</div>
         </div>
         <div className="text-sm text-muted-foreground pt-3">{t.renewNote}</div>
+        {/* صلاحية العرض: تُطبع على العروض المدفوعة فقط — طلبات فترة التجربة المجانية بلا أي صلاحية */}
+        {mode === "buy" && (
+          <div className="text-base font-bold text-amber-800 bg-amber-50 border border-amber-200 rounded-xl px-4 py-3 flex items-center gap-2">
+            <AlertTriangle size={15} className="shrink-0" />
+            {isAr ? "صلاحية هذا العرض 48 ساعة من تاريخ الإصدار." : "This quotation is valid for 48 hours from the issue date."}
+          </div>
+        )}
       </div>
     </div>
   );

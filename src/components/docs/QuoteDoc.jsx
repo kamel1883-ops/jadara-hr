@@ -48,6 +48,7 @@ export default function QuoteDoc({
         discBadge: "نسبة الخصم", discApplied: "قيمة الخصم المُخصومة",
         netAnnualLabel: "المبلغ بعد الخصم", setupLabel: "رسوم التأسيس (لمرة واحدة)", year1Label: "إجمالي السنة الأولى", byAgreement: "حسب الاتفاق",
         sigName: `${PROVIDER.signerLabel} - ${PROVIDER.signerName}`,
+        validityNote: "صلاحية هذا العرض 48 ساعة من تاريخ الإصدار.",
       }
     : {
         pageTitle: "Quotation — Annual Subscription",
@@ -70,6 +71,7 @@ export default function QuoteDoc({
         discBadge: "Discount rate", discApplied: "Deducted discount value",
         netAnnualLabel: "Amount after discount", setupLabel: "Setup fee (one-time)", year1Label: "Year 1 total", byAgreement: "By agreement",
         sigName: `${PROVIDER.signerLabelEn} - ${PROVIDER.signerNameEn}`,
+        validityNote: "This quotation is valid for 48 hours from the issue date.",
       };
 
   const v = (x) => (x == null || String(x).trim() === "" ? "—" : x);
@@ -166,6 +168,9 @@ export default function QuoteDoc({
             <div style={{ fontSize: 24, fontWeight: 800, color: "#5b21b6" }}>{num(bd.finalAnnual)} {L.annual}</div>
           </div>
           <div style={{ fontSize: 11, color: "#64748b", marginTop: 12, paddingTop: 10, borderTop: "1px solid #ddd6fe" }}>{L.renewNote}</div>
+          <div style={{ fontSize: 12.5, fontWeight: 800, color: "#b45309", background: "#fffbeb", border: "1px solid #fde68a", borderRadius: 10, padding: "8px 12px", marginTop: 10 }}>
+            {L.validityNote}
+          </div>
         </div>
       </div>
 

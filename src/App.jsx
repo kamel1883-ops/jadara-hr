@@ -10,7 +10,6 @@ import VaultLive from '@/components/VaultLive';
 import { LanguageProvider } from '@/lib/i18n';
 import UserNotRegisteredError from '@/components/UserNotRegisteredError';
 import ScrollToTop from './components/ScrollToTop';
-import NationalDayModal from '@/components/landing/NationalDayModal';
 import Layout from "@/components/Layout";
 import AnimatedOutlet from "@/components/AnimatedOutlet";
 const Dashboard = lazy(() => import("@/pages/Dashboard"));
@@ -214,7 +213,6 @@ function App() {
         <VaultLive>
         <Router>
           <ScrollToTop />
-          <NationalDayModal />
           <Suspense fallback={<SplashScreen />}>
             <AuthenticatedApp />
           </Suspense>
