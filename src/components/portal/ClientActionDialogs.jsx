@@ -260,8 +260,16 @@ export function ClientInfoDialog({ open, onClose, tenant, isAr, t, onAction, bus
     try {
       const d = await callPortal("owner_change_email", { tenant_id: tenant.id, new_email: em });
       setEmailMsg({ ok: true, text: isAr
-        ? (d.same ? "البريد مطابق للبريد الحالي — لا حاجة للتغيير." : `تم ربط المنشأة بالبريد ${em} واعتماده مسؤول الدخول.`)
-        : (d.same ? "Email already matches." : `Tenant re-linked to ${em} as the admin account.`) });
+        ? (d.same
+            ? "البريد مطابق للبريد الحالي — لا حاجة للتغيير."
+            : d.linked_pending
+              ? `تم ربط المنشأة بالبريد ${em} وإرسال رسالة تفعيل إليه — يسجّل العميل نفسه مرة واحدة بهذا البريد من بوابة الشركات («سجّل حسابك»)، ثم تعتمد دخوله بزر «اعتماد المسؤول».${d.email_sent === false ? " (تعذّر إرسال البريد — أبلغ العميل يدوياً)" : ""}`
+              : `تم ربط المنشأة بالبريد ${em} واعتماده مسؤول الدخول.`)
+        : (d.same
+            ? "Email already matches."
+            : d.linked_pending
+              ? `Tenant re-linked to ${em} and an activation email was sent — the client registers once with this email from the company portal, then you approve access.${d.email_sent === false ? " (Email could not be sent — notify the client manually)" : ""}`
+              : `Tenant re-linked to ${em} as the admin account.`) });
       setNewEmail("");
       if (onRefresh) await onRefresh();
     } catch (e) {

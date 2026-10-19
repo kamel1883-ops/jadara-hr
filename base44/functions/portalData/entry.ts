@@ -1,4 +1,5 @@
 import { createClientFromRequest } from "npm:@base44/sdk@0.8.54";
+import { wrapEmailContent } from "../../shared/emailFooter.ts";
 import { verifyToken } from "../../shared/portalToken.ts";
 import {
   PAID_STATUSES, computeWorkDaysSet, computeWorkDaysInMonth,
@@ -660,14 +661,67 @@ export default async function (req) {
       };
       let newUser = await findUserByEmail();
       let inviteErr = "";
+      let invited = false;
       if (!newUser) {
-        // لم يُوجد حساب — ادعُ البريد كمسؤول منشأة. الإنشاء قد يستغرق لحظة حتى يظهر
-        // في القائمة، فننتظر قليلاً ثم نعيد البحث. سبب فشل الدعوة يُحفظ ويُرد للواجهة
-        // بدل ابتلاعه — حتى لا يختفي السبب الحقيقي وراء رسالة عامة.
-        try { await base44.asServiceRole.users.inviteUser(new_email, "admin"); }
-        catch (e: any) { inviteErr = String(e?.message || e || "invite_error"); }
+        // وحدة asServiceRole.users غير موجودة في وحدات خدمة-الدور بإصدار SDK 0.8.54،
+        // فنستدعي نقطة الدعوة مباشرة بخدمة-الدور (نفس الرأس الذي يفعّل asServiceRole).
+        try {
+          const srv = String(req.headers.get("Base44-Api-Url") || "https://base44.app").replace(/\/$/, "");
+          const appId = String(req.headers.get("Base44-App-Id") || "");
+          const svcAuth = String(req.headers.get("Base44-Service-Authorization") || "");
+          if (appId && svcAuth.startsWith("Bearer ")) {
+            const resp = await fetch(`${srv}/apps/${appId}/runtime/users/invite-user`, {
+              method: "POST",
+              headers: { "Content-Type": "application/json", "Authorization": svcAuth },
+              body: JSON.stringify({ user_email: new_email, role: "admin" }),
+            });
+            if (resp.ok) invited = true;
+            else inviteErr = `invite_http_${resp.status}`;
+          } else inviteErr = "service_token_missing";
+        } catch (e: any) { inviteErr = String(e?.message || e || "invite_error"); }
+        // خط ثانٍ: وحدة المستخدمين في العميل (تعمل إن حمل الطلب رمزاً صالحاً)
+        if (!invited) {
+          try { await (base44 as any).users.inviteUser(new_email, "admin"); invited = true; inviteErr = ""; }
+          catch (e: any) { inviteErr += "|users:" + String(e?.message || e); }
+        }
         await new Promise((r) => setTimeout(r, 1500));
         newUser = await findUserByEmail();
+      }
+      if (!newUser) {
+        // بديل يشتغل دائماً حتى لو تعذّرت الدعوة: اربط المنشأة بالبريد الجديد
+        // كمسؤول قيد التفعيل (admin_status pending) وأرسل للبريد رسالة تفعيل —
+        // يسجّل العميل نفسه مرة واحدة من بوابة الشركات (تحقّق بريدها يطابق المنشأة
+        // بعد الربط) ثم يعتمد المالك الدخول بزر «اعتماد المسؤول».
+        await base44.asServiceRole.entities.Tenant.update(tenant_id, {
+          admin_email: new_email,
+          contact_email: new_email,
+          admin_user_id: "",
+          admin_status: "pending",
+        });
+        // البريد القديم يفقد المسؤولية فوراً — هو سبب طلب التغيير
+        if (oldUserId) { try { await base44.asServiceRole.entities.User.update(oldUserId, { role: "user" }); } catch {} }
+        let emailSent = false;
+        try {
+          await base44.asServiceRole.integrations.Core.SendEmail({
+            to: new_email,
+            subject: "تفعيل بريدكم الجديد في منصة جداره",
+            ...wrapEmailContent(
+              "مرحباً،\n\n" +
+              "تم تحديث البريد الإلكتروني لمنشأتكم في منصة جداره إلى:\n" + new_email + "\n\n" +
+              "جميع بيانات منشأتكم محفوظة ومرتبطة بالرقم الوطني الموحّد للمنشآت: " + String(t?.unified_number || "").trim() + "\n\n" +
+              "لتفعيل الدخول بهذا البريد (مرة واحدة فقط):\n" +
+              "1) افتحوا بوابة الشركات من موقع جداره واضغطوا «سجّل حسابك».\n" +
+              "2) أدخلوا بريدكم الجديد + الرقم الوطني الموحّد + عيّنوا كلمة مرور.\n" +
+              "3) أكّدوا رمز التحقق المرسل إلى بريدكم.\n" +
+              "4) بعد التسجيل يعتمد مساحكم المالك الدخول — ثم تدخلون مباشرة.\n\n" +
+              "لأي مساعدة: واتساب +966 59 470 0782 أو البريد info@jadara-hr.com\n\n" +
+              "تحياتنا — فريق دعم جداره"
+            ),
+            from_name: "جداره",
+          });
+          emailSent = true;
+        } catch {}
+        return Response.json({ ok: true, linked_pending: true, email_sent: emailSent, invite_err: inviteErr || undefined });
       }
       // أخطاء العمل تُرد بـ 200 + ok:false حتى يقرأ الواجهة كود السبب واسم المنشأة
       // صاحبة البريد/الرقم (رفض non-2xx يُبلَّغ من الـ SDK برسالة عامة تُخفي السبب).
