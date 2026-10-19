@@ -315,6 +315,16 @@ export default async function (req) {
       if (backfill.length) {
         try { await base44.asServiceRole.entities.Employee.bulkUpdate(backfill); } catch {}
       }
+      // تمييز المنشآت المكرّرة (نفس الرقم الموحد) — ليحذفها المالك من الواجهة بنقرة.
+      const unCount: Record<string, number> = {};
+      for (const x of tenants || []) {
+        const un = String(x.unified_number || "").trim();
+        if (un && !/\(المالك\)|\(owner\)/i.test(x?.name || "")) unCount[un] = (unCount[un] || 0) + 1;
+      }
+      for (const x of tenants || []) {
+        const un = String(x.unified_number || "").trim();
+        x.dup_count = un ? (unCount[un] || 0) : 0;
+      }
       const stats = { total: 0, trials: 0, quotes: 0, paid: 0, suspended: 0, cancelled: 0, revenue: 0 };
       for (const x of tenants || []) {
         if (/\(المالك\)|\(owner\)/i.test(x?.name || "")) continue;
@@ -610,8 +620,9 @@ export default async function (req) {
       return Response.json({ ok: true, deleted: true });
     }
 
-    // تغيير بريد المنشأة — عند فقدان البريد الأصلي. يدعو بريداً جديداً كمسؤول،
-    // يربط المنشأة به، ويُعيد تفعيل الحساب. كل البيانات تبقى عبر الرقم الموحد.
+    // تغيير بريد المنشأة — عند فقدان البريد الأصلي. يربط المنشأة بحساب موجود
+    // بنفس البريد (من تسجيل تجربة/عرض سعر سابق) أو يدعو بريداً جديداً كمسؤول،
+    // ثم يعتمده كمسؤول للمنشأة ويُعيد تفعيلها. كل البيانات تبقى عبر الرقم الموحد.
     if (action === "owner_change_email") {
       if (!isOwner) return Response.json({ ok: false, error: "forbidden" }, { status: 403 });
       const tenant_id = String(body.tenant_id || "");
@@ -622,29 +633,105 @@ export default async function (req) {
       const oldUserId = String(t.admin_user_id || "");
       const currentEmail = String(t.admin_email || t.contact_email || "").trim().toLowerCase();
       if (currentEmail === new_email && oldUserId) return Response.json({ ok: true, same: true });
-      // ادعُ البريد الجديد كمسؤول منشأة
-      try { await base44.asServiceRole.users.inviteUser(new_email, "admin"); } catch {
-        return Response.json({ ok: false, error: "invite_failed" }, { status: 500 });
+      // ابحث أولاً عن حساب موجود بهذا البريد (قد أُنشئ من طلب عرض سعر أو دعوة سابقة) —
+      // اعتماده بدل دعوة جديدة؛ فالدعوة تفشل بالخطأ 500 عندما يكون البريد مسجّلاً مسبقاً.
+      const findUserByEmail = async () => {
+        try {
+          const rows = await base44.asServiceRole.entities.User.filter({ email: new_email }, undefined, 20);
+          return (rows || []).find((u: any) => String(u.email || "").toLowerCase() === new_email) || null;
+        } catch { return null; }
+      };
+      let newUser = await findUserByEmail();
+      if (!newUser) {
+        // لم يُوجد حساب — ادعُ البريد كمسؤول منشأة (قد يفشل لأن الحساب أُنشئ للتو: أعد البحث بعدها)
+        try { await base44.asServiceRole.users.inviteUser(new_email, "admin"); } catch {}
+        newUser = await findUserByEmail();
       }
-      // ابحث عن المستخدم الجديد لربط admin_user_id به
-      const found = await base44.asServiceRole.entities.User.filter({}, undefined, 500);
-      const newUser = (found || []).find((u) => String(u.email || "").toLowerCase() === new_email);
-      const newUserId = String(newUser?.id || "");
+      // أخطاء العمل تُرد بـ 200 + ok:false حتى يقرأ الواجهة كود السبب واسم المنشأة
+      // صاحبة البريد/الرقم (رفض non-2xx يُبلَّغ من الـ SDK برسالة عامة تُخفي السبب).
+      if (!newUser) return Response.json({ ok: false, error: "invite_failed" });
+      const newUserId = String(newUser.id || "");
+      // حراسة: لا يُخطف بريد يخص مسؤول منشأة أخرى فعّالة (تجربة/اشتراك) — يُمنع ويُبلَّغ باسمها.
+      const otherAdmins = await base44.asServiceRole.entities.Tenant.filter({ admin_user_id: newUserId }, undefined, 20);
+      const conflict = (otherAdmins || []).find(
+        (x: any) => String(x.id) !== tenant_id && ["trial", "active"].includes(String(x.status || ""))
+      );
+      if (conflict)
+        return Response.json({ ok: false, error: "email_admin_of_other_tenant", tenant_name: conflict.name || "" });
+      // اعتمد صلاحية المسؤول للحساب — حتى لو أُنشئ سابقاً بصلاحية عامة (طلب عرض سعر/تجربة)
+      if (String(newUser.role || "") !== "admin") {
+        try { await base44.asServiceRole.entities.User.update(newUserId, { role: "admin" }); } catch {}
+      }
       // أَنسِ المالك القديم (إسقاط صلاحية المسؤول) لمنع الدخول بالبريد المفقود
       if (oldUserId && oldUserId !== newUserId) {
         try { await base44.asServiceRole.entities.User.update(oldUserId, { role: "user" }); } catch {}
       }
-      // أعد ربط المنشأة بالبريد/الحساب الجديد وأعد تفعيلها إن كانت موقوفة/ملغاة
+      // أعد ربط المنشأة بالبريد/الحساب الجديد، اعتماد المسؤولية، وأعد التفعيل إن كانت موقوفة/ملغاة
       const wasInactive = t.status === "expired" || t.status === "cancelled";
       const restoreStatus = wasInactive ? (t.suspended_from === "trial" ? "trial" : "active") : t.status;
       await base44.asServiceRole.entities.Tenant.update(tenant_id, {
         admin_email: new_email,
         contact_email: new_email,
         admin_user_id: newUserId,
+        admin_status: "approved",
         status: restoreStatus,
         suspended_from: wasInactive ? null : t.suspended_from,
       });
       return Response.json({ ok: true, reactivated: wasInactive });
+    }
+
+    // ====== تصحيح الرقم الموحد للمنشأة + إعادة ربط موظفيها — بأمر من المالك ======
+    // يُستخدم عند اكتشاف أن الرقم الموحد سُجّل خطأ (رقم غير صالح أو خانة زائدة):
+    // يصحّح رقم المنشأة وينقل موظفي الرقم القديم كاملاً إلى الرقم الصحيح،
+    // فتُحتسب الحضور والرواتب والطلبات ضمن المنشأة الصحيحة بلا اختلاط.
+    if (action === "owner_fix_unified") {
+      if (!isOwner) return Response.json({ ok: false, error: "forbidden" }, { status: 403 });
+      const tenant_id = String(body.tenant_id || "");
+      const new_unified = String(body.new_unified || "").trim();
+      if (!tenant_id || !/^7\d{7,11}$/.test(new_unified))
+        return Response.json({ ok: false, error: "invalid_unified" });
+      const t = await base44.asServiceRole.entities.Tenant.get(tenant_id);
+      if (!t) return Response.json({ ok: false, error: "not_found" });
+      // لا يُسمح باختطاف رقم موحد تخص منشأة أخرى (عدا التكرار لنفس المنشأة).
+      const holders = await base44.asServiceRole.entities.Tenant.filter({ unified_number: new_unified }, undefined, 20);
+      const foreign = (holders || []).find((x: any) => String(x.id) !== tenant_id && !/\(\u0627\u0644\u0645\u0627\u0644\u0643\)|\(owner\)/i.test(x?.name || ""));
+      if (foreign)
+        return Response.json({ ok: false, error: "unified_used_by_other", tenant_name: foreign.name || "" });
+      const from = String(t.unified_number || "").trim();
+      await base44.asServiceRole.entities.Tenant.update(tenant_id, { unified_number: new_unified });
+      let relinked = 0;
+      if (from && from !== new_unified) {
+        const emps = await base44.asServiceRole.entities.Employee.filter({ unified_number: from }, undefined, 2000);
+        if (emps?.length) {
+          await base44.asServiceRole.entities.Employee.bulkUpdate(
+            emps.map((e: any) => ({ id: e.id, unified_number: new_unified }))
+          );
+          relinked = emps.length;
+        }
+      }
+      return Response.json({ ok: true, relinked, unified_number: new_unified });
+    }
+
+    // ====== حذف منشآت مكرّرة بنفس الرقم الموحد — يبقي المنشأة المحدّدة ويحذف توأمها ======
+    // التكرار = سجل منشأة آخر يحمل الرقم الموحد نفسه (كفرّ لا يُكمل الدفع فيُنسى،
+    // أو نتج عن خطأ تسجيل سابق). الحذف لا يمسّ الموظفين (تُحفظ سجلاتهم).
+    if (action === "owner_delete_duplicates") {
+      if (!isOwner) return Response.json({ ok: false, error: "forbidden" }, { status: 403 });
+      const tenant_id = String(body.tenant_id || "");
+      const t = await base44.asServiceRole.entities.Tenant.get(tenant_id);
+      const un = String(t?.unified_number || "").trim();
+      if (!tenant_id || !un)
+        return Response.json({ ok: false, error: "no_unified" });
+      const all = await base44.asServiceRole.entities.Tenant.list("-created_date", 500);
+      const isOwnerRec = (x: any) => /\(\u0627\u0644\u0645\u0627\u0644\u0643\)|\(owner\)/i.test(x?.name || "");
+      const dups = (all || []).filter(
+        (x: any) => String(x.id) !== tenant_id && String(x.unified_number || "").trim() === un && !isOwnerRec(x)
+      );
+      let deleted = 0;
+      for (const d of dups) {
+        try { await base44.asServiceRole.entities.Tenant.delete(String(d.id)); deleted++; } catch {}
+      }
+      return Response.json({ ok: true, deleted, kept: tenant_id });
     }
 
     if (action === "owner_approve_admin") {
