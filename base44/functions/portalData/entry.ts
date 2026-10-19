@@ -2,8 +2,9 @@ import { createClientFromRequest } from "npm:@base44/sdk@0.8.54";
 import { verifyToken } from "../../shared/portalToken.ts";
 import {
   PAID_STATUSES, computeWorkDaysSet, computeWorkDaysInMonth,
-  computeAbsentDeduction, computeNetFromAttendance,
+  computeAbsentDeduction, computeNetFromAttendance, computeDeductibleShortfall, resolveBranchHours,
 } from "../../shared/payrollCompute.ts";
+import { monthKeyOf, dueInstallmentFor, planLoanDeduction } from "../../shared/loanDeductions.ts";
 import { notifyApproverForStatus } from "../../shared/approverNotify.ts";
 import { getDocumentLinkInCompany, buildDownloadUrl, storeDocument } from "../../shared/vaultClient.ts";
 import { vaultErrorCode, vaultErrorStatus } from "../../shared/vaultErrors.ts";
@@ -1278,12 +1279,15 @@ export default async function (req) {
       const empQuery = !isOwnerSession
         ? (bag?.unified ? { status: "active", unified_number: bag.unified } : { id: "__outside_company__" })
         : { status: "active" };
-      const [orgRow, activeEmps, existingPaysAll, attRecordsAll] = await Promise.all([
+      const [orgRow, activeEmps, existingPaysAll, attRecordsAll, branchRows, loanRows] = await Promise.all([
         sessionOrg(),
         base44.asServiceRole.entities.Employee.filter(empQuery, "-created_date", 500),
         base44.asServiceRole.entities.Payroll.filter({ month, year }, "-created_date", 1000),
         base44.asServiceRole.entities.Attendance.filter({ date: { $gte: `${year}-${mm}-01`, $lte: `${year}-${mm}-${endDay}` } }, "-created_date", 2000),
+        base44.asServiceRole.entities.Branch.list("-created_date", 500).catch(() => []),
+        base44.asServiceRole.entities.LoanRequest.list("-created_date", 500).catch(() => []),
       ]);
+      const monthKey = monthKeyOf(month, year);
       const existingPays = await rowsOfCompany(existingPaysAll || []);
       const attRecords = await rowsOfCompany(attRecordsAll || []);
       const orgFresh: any = orgRow || {};
@@ -1291,17 +1295,15 @@ export default async function (req) {
       const workDaysInMonth = computeWorkDaysInMonth(year, month, workDaysSet);
       const workHoursPerDay = Number(orgFresh.work_hours_per_day) || 0;
       const paidDaysByEmp: Record<string, number> = {};
-      const shortfallByEmp: Record<string, number> = {};
+      const workedHoursByEmp: Record<string, number[]> = {};
       for (const a of attRecords || []) {
         if (!a.employee_id) continue;
         if (!PAID_STATUSES.has(a.status)) continue;
         const dow = a.date ? new Date(a.date + "T00:00:00").getDay() : -1;
         if (dow >= 0 && !workDaysSet.has(dow)) continue;
         paidDaysByEmp[a.employee_id] = (paidDaysByEmp[a.employee_id] || 0) + 1;
-        if (workHoursPerDay > 0 && (a.status === "present" || a.status === "late")) {
-          const wh = Number(a.work_hours) || 0;
-          const gap = Number((workHoursPerDay - wh).toFixed(2));
-          if (gap > 0) shortfallByEmp[a.employee_id] = Number(((shortfallByEmp[a.employee_id] || 0) + gap).toFixed(2));
+        if (a.status === "present" || a.status === "late") {
+          workedHoursByEmp[a.employee_id] = [...(workedHoursByEmp[a.employee_id] || []), Number(a.work_hours) || 0];
         }
       }
       const existingIds = new Set((existingPays || []).map((p: any) => p.employee_id));
@@ -1315,10 +1317,15 @@ export default async function (req) {
         const transport = Number(e.transport_allowance) || 0;
         const other = Number(e.other_allowances) || 0;
         const gross = base + housing + transport + other;
+        const cfg = resolveBranchHours(orgFresh, e, branchRows || []);
+        const empHoursPerDay = cfg.work_hours_per_day > 0 ? cfg.work_hours_per_day : workHoursPerDay;
         const paidDays = Math.min(paidDaysByEmp[e.id] || 0, workDaysInMonth);
         const absentDays = Math.max(0, workDaysInMonth - paidDays);
-        const absentHours = shortfallByEmp[e.id] || 0;
-        const absentDeduction = computeAbsentDeduction(gross, absentDays, absentHours, workDaysInMonth, workHoursPerDay);
+        let absentHours = 0;
+        for (const wh of (workedHoursByEmp[e.id] || [])) absentHours += computeDeductibleShortfall(empHoursPerDay, wh, cfg.late_grace_minutes);
+        absentHours = Number(absentHours.toFixed(2));
+        const absentDeduction = computeAbsentDeduction(gross, absentDays, absentHours, workDaysInMonth, empHoursPerDay);
+        const loanDue = dueInstallmentFor(loanRows || [], e.id, monthKey);
         if (existingIds.has(e.id)) {
           const p = existingDrafts[e.id];
           if (p) updates.push({
@@ -1328,7 +1335,8 @@ export default async function (req) {
             employee_name: e.full_name || p.employee_name || "",
             salary_payment_method: e.salary_payment_method || p.salary_payment_method || "mudad",
             absent_days: absentDays, absent_hours: absentHours, absent_deduction: absentDeduction,
-            net_salary: computeNetFromAttendance(gross, absentDays, absentHours, workDaysInMonth, workHoursPerDay, p.bonus, p.overtime_amount, p.deductions, p.loan_installment),
+            loan_installment: loanDue,
+            net_salary: computeNetFromAttendance(gross, absentDays, absentHours, workDaysInMonth, empHoursPerDay, p.bonus, p.overtime_amount, p.deductions, loanDue),
             ...preparerIdentity(),
           });
           continue;
@@ -1337,10 +1345,10 @@ export default async function (req) {
           employee_id: e.id, emp_ref: e.emp_ref || "", national_id: e.emp_ref ? "" : (e.national_id || ""),
           month, year, salary_payment_method: e.salary_payment_method || "mudad",
           base_salary: base, housing_allowance: housing, transport_allowance: transport, other_allowances: other,
-          gross_salary: gross, bonus: 0, deductions: 0, loan_installment: 0,
+          gross_salary: gross, bonus: 0, deductions: 0, loan_installment: loanDue,
           overtime_hours: 0, overtime_amount: 0,
           absent_days: absentDays, absent_hours: absentHours, absent_deduction: absentDeduction,
-          net_salary: computeNetFromAttendance(gross, absentDays, absentHours, workDaysInMonth, workHoursPerDay, 0, 0, 0, 0), status: "draft",
+          net_salary: computeNetFromAttendance(gross, absentDays, absentHours, workDaysInMonth, empHoursPerDay, 0, 0, 0, loanDue), status: "draft",
           ...preparerIdentity(),
         });
       }
@@ -1366,7 +1374,15 @@ export default async function (req) {
       const gross = Number(next.gross_salary) || ((Number(next.base_salary)||0)+(Number(next.housing_allowance)||0)+(Number(next.transport_allowance)||0)+(Number(next.other_allowances)||0));
       const o: any = (await sessionOrg()) || {};
       const wdh = computeWorkDaysInMonth(Number(next.year), Number(next.month), computeWorkDaysSet(o.work_days));
-      const whp = Number(o.work_hours_per_day) || 0;
+      // ساعات العمل المعتمدة: دوام فرع الموظف إن كان له دوام خاص، وإلا إعدادات المنشأة
+      let whp = Number(o.work_hours_per_day) || 0;
+      try {
+        const empRow: any = await base44.asServiceRole.entities.Employee.get(String(p.employee_id));
+        if (empRow?.branch_id) {
+          const br: any = await base44.asServiceRole.entities.Branch.get(empRow.branch_id);
+          whp = resolveBranchHours(o, empRow, br ? [br] : []).work_hours_per_day || whp;
+        }
+      } catch { /* دوام المنشأة */ }
       const absent_deduction = computeAbsentDeduction(gross, next.absent_days, next.absent_hours, wdh, whp);
       const net_salary = computeNetFromAttendance(gross, next.absent_days, next.absent_hours, wdh, whp, next.bonus, next.overtime_amount, next.deductions, next.loan_installment);
       const prepUpd = preparerIdentity();
@@ -1386,6 +1402,26 @@ export default async function (req) {
         .filter((p) => p.status === "draft" && p.include_in_payroll !== false)
         .map((p) => ({ id: p.id, status: "approved", prepared_by_name: prep.prepared_by_name, prepared_by_id: prep.prepared_by_id }));
       if (updates.length) await base44.asServiceRole.entities.Payroll.bulkUpdate(updates);
+      // إثبات خصم أقساط السلف على ملفات السلف (تم استلام/المتبقي) وإغلاق السلفة عند اكتمالها
+      const approved = (pays || []).filter((p) => p.status === "draft" && p.include_in_payroll !== false);
+      if (approved.some((p: any) => Number(p.loan_installment) > 0)) {
+        const key = monthKeyOf(month, year);
+        const loanRows: any[] = await base44.asServiceRole.entities.LoanRequest.list("-created_date", 500).catch(() => []);
+        for (const p of approved) {
+          let want = Number(p.loan_installment) || 0;
+          if (want <= 0) continue;
+          for (const loan of loanRows.filter((l: any) => l.employee_id === p.employee_id)) {
+            if (want <= 0) break;
+            const plan = planLoanDeduction(loan, key, want, { by: prep.prepared_by_name, date: todayISO() });
+            if (!plan) continue;
+            await base44.asServiceRole.entities.LoanRequest.update(plan.id, plan.patch);
+            loan.paid_amount = plan.patch.paid_amount;
+            loan.payment_log = plan.patch.payment_log;
+            loan.status = plan.patch.status;
+            want = Number((want - plan.amount).toFixed(2));
+          }
+        }
+      }
       return Response.json({ ok: true, approved: updates.length });
     }
 

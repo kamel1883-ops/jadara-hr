@@ -15,15 +15,25 @@ export const computeWorkDaysInMonth = (year, month, workDaysSet) => {
   return count;
 };
 
-// الأجر اليومي = الإجمالي ÷ أيام عمل المنشأة بالشهر، والأجر بالساعة = الأجر اليومي ÷ ساعات اليوم
-export const computeDailyWage = (gross, workDaysInMonth) => (workDaysInMonth ? Number(gross) / workDaysInMonth : 0);
+// الأجر اليومي = إجمالي الراتب ÷ 30 يوماً (الأجر النظامي لليوم) — لا يُقسم على أيام عمل الشهر.
+// الأجر بالساعة = الأجر اليومي ÷ ساعات العمل المعتمدة للموظف (دوام فرعه، وإلا دوام المنشأة) — وليست 8 ساعات ثابتة.
+export const DAILY_DIVISOR = 30;
+export const computeDailyWage = (gross) => Number(((Number(gross) || 0) / DAILY_DIVISOR).toFixed(2));
 export const computeHourlyWage = (dailyWage, workHoursPerDay) => (workHoursPerDay > 0 ? dailyWage / workHoursPerDay : 0);
 
-// قيمة خصم الغياب (أيام + ساعات)
+// قيمة خصم الغياب (أيام) ونقص الدوام/التأخير (ساعات) — تُخصم مباشرة من الراتب
 export const computeAbsentDeduction = (gross, absentDays, absentHours, workDaysInMonth, workHoursPerDay) => {
-  const daily = computeDailyWage(gross, workDaysInMonth);
+  const daily = computeDailyWage(gross);
   const hourly = computeHourlyWage(daily, workHoursPerDay);
   return Number(((absentDays || 0) * daily + (absentHours || 0) * hourly).toFixed(2));
+};
+
+// نقص دوام اليوم المؤهل للخصم: ما زاد على فترة السماح المعتمدة يُخصم، وما داخل السماح يُعفى.
+export const computeDeductibleShortfall = (workHoursPerDay, actualHours, graceMinutes) => {
+  const hpd = Number(workHoursPerDay) || 0;
+  if (hpd <= 0) return 0;
+  const gap = hpd - (Number(actualHours) || 0) - (Number(graceMinutes) || 0) / 60;
+  return gap > 0 ? Number(gap.toFixed(2)) : 0;
 };
 
 // الصافي = الإجمالي − خصم الغياب + الحوافز + العمل الإضافي − الخصومات الأخرى − السلفة

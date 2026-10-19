@@ -16,10 +16,10 @@ import { leaveTypeLabel, formatCurrency, todayISO } from "@/lib/hr";
 import { badge, leaveTicketAmount, needsFinance } from "@/lib/approvals";
 import { entitledLeaveDays, usedLeaveTotal } from "@/lib/leaveBalance";
 import { useI18n } from "@/lib/i18n";
-import { generateLeaveSettlement, generateLoanStatement, generateBusinessTripApproval } from "@/lib/docGenerators";
+import { generateLeaveSettlement, generateLoanStatement, generateBusinessTripApproval, openLoanStatement } from "@/lib/docGenerators";
 import PullToRefresh from "@/components/PullToRefresh";
 import VaultDocLink from "@/components/VaultDocLink";
-import { uploadFileToVault } from "@/lib/vaultDocuments";
+import { uploadFileToVault, vaultFailureMessage } from "@/lib/vaultDocuments";
 import { enrichRecordsWithVault, VAULT_MODULES } from "@/lib/vaultGeneric";
 import { enrichEmployeesBatch, applySensitiveMap } from "@/lib/vaultSensitive";
 import { leaveDocumentErrorText } from "@/lib/saveLeaveDocument";
@@ -35,9 +35,8 @@ export default function Approvals() {
     fullClear: "تصفية كاملة", ticket: (v) => `تذكرة: ${formatCurrency(v)}`, deduct: (n) => `خصم رصيد: ${n} يوم`,
     loan: "سلفة", days: (s, e, n) => `${s} ← ${e} · ${n} يوم`, loanLine: (v, r) => `${formatCurrency(v)} · ${r}`,
     settlement: "المخالصة", genSettlement: "توليد المخالصة",
-    statement: "كشف السلفة", genStatement: "توليد الكشف",
-    loanPayBtn: "سداد جزئي", loanPayTitle: "تسجيل سداد السلفة — الموارد البشرية",
-    paidLabel: "مبلغ السداد هذه المرة (ر.س)", paidHint: "يُسجّل مدير الموارد البشرية المبالغ التي استلمها من الموظف لسداد السلفة. يُضاف هذا المبلغ إلى المسدَّد مسبقاً ويُحدّث المتبقي، وعند بلوغ إجمالي السلفة تُغلق تلقائياً (الحالة: مغلقة) ويتحدّث كشف السلفة فوراً ليعكس نفس الوضع كما هو في سجل الموارد البشرية — المسدد = قيمة السلفة والمتبقي 0.", alreadyPaidLabel: "تم سداد مسبقاً",
+    loanFile: "عرض الملف",
+    loanNote: (total, count, paid) => `إجمالي السلفة ${formatCurrency(total)} · عدد الدفعات ${count} · تم استلام ${formatCurrency(paid)} · المتبقي صفر · الحالة مغلقة (غير نشطة)`,
     remaining: "المتبقي", totalLoan: "إجمالي السلفة", save: "حفظ",
     empty: "لا توجد طلبات", rejectTitle: "رفض الطلب", rejectReason: "سبب الرفض", cancel: "إلغاء", confirmReject: "تأكيد الرفض",
     payTitle: "تأكيد الصرف — المالية/المحاسبة", leavePay: (v) => <>تصفية إجازة كاملة — تعويض التذكرة: <b className="text-foreground">{formatCurrency(v)}</b></>,
@@ -73,9 +72,8 @@ export default function Approvals() {
     fullClear: "Full clearance", ticket: (v) => `Ticket: ${formatCurrency(v)}`, deduct: (n) => `Balance deducted: ${n} days`,
     loan: "Loan", days: (s, e, n) => `${s} ← ${e} · ${n} days`, loanLine: (v, r) => `${formatCurrency(v)} · ${r}`,
     settlement: "Settlement", genSettlement: "Generate settlement",
-    statement: "Loan statement", genStatement: "Generate statement",
-    loanPayBtn: "Partial payment", loanPayTitle: "Record loan payment — HR",
-    paidLabel: "This payment (SAR)", paidHint: "HR records amounts received from the employee. This adds to what's already paid and updates the remaining balance. When it reaches the loan total it closes automatically and the statement refreshes instantly.", alreadyPaidLabel: "Already paid",
+    loanFile: "View file",
+    loanNote: (total, count, paid) => `Loan total ${formatCurrency(total)} · Installments ${count} · Received ${formatCurrency(paid)} · Remaining zero · Closed (inactive)`,
     remaining: "Remaining", totalLoan: "Loan total", save: "Save",
     empty: "No requests", rejectTitle: "Reject request", rejectReason: "Rejection reason", cancel: "Cancel", confirmReject: "Confirm rejection",
     payTitle: "Confirm payment — Finance/Accounting", leavePay: (v) => <>Full leave clearance — ticket compensation: <b className="text-foreground">{formatCurrency(v)}</b></>,
@@ -117,7 +115,6 @@ export default function Approvals() {
   const [proofFile, setProofFile] = useState(null);
   const [busy, setBusy] = useState(false);
   const [q, setQ] = useState("");
-  const [loanPayAmount, setLoanPayAmount] = useState("");
   const [genBusy, setGenBusy] = useState(null);
   const [deductionAmount, setDeductionAmount] = useState("");
   const [deductionNote, setDeductionNote] = useState("");
@@ -196,13 +193,9 @@ export default function Approvals() {
       } else if ((s === "awaiting_finance" || s === "hr_approved") && isFinance) {
         btns.push({ label: t.pay, cls: "bg-blue-600 hover:bg-blue-700", onClick: () => openFinance("loans", r) });
       }
-      const closed = (Number(r.amount) || 0) > 0 && (Number(r.paid_amount) || 0) >= (Number(r.amount) || 0);
-      if (s === "paid" && !closed && isHR) btns.push({ label: t.loanPayBtn, cls: "bg-amber-100 text-amber-700 hover:bg-amber-200", onClick: () => openLoanPay(r) });
-      if (r.statement_pdf_url) {
-        btns.push({ label: t.statement, cls: "bg-slate-100 text-slate-700 hover:bg-slate-200", docRef: r.statement_pdf_url, icon: "download" });
-      } else {
-        btns.push({ label: t.genStatement, cls: "bg-slate-100 text-slate-700 hover:bg-slate-200", onClick: () => makeLoanStatement(r), icon: "refresh", busyKey: "loan" + r.id });
-      }
+      // أقساط السلفة تنزل تلقائياً في مسير الرواتب — لا تسجيل يدوي للدفعات.
+      // «عرض الملف» يطبع كشف السلفة محدَّثاً بآخر مبلغ خصم وآخر مبلغ متبقٍ والإجمالي والحالة.
+      btns.push({ label: t.loanFile, cls: "bg-slate-100 text-slate-700 hover:bg-slate-200", onClick: () => openLoanFile(r), icon: "refresh", busyKey: "loan" + r.id });
       return btns;
     }
 
@@ -418,10 +411,15 @@ export default function Approvals() {
     catch (error) { alert(leaveDocumentErrorText(error, isAr)); }
     finally { setGenBusy(null); load(); }
   };
-  const makeLoanStatement = async (r) => {
+  // عرض ملف السلفة: يولّد الكشف محدَّثاً بآخر خصم وآخر متبقٍ ثم يفتحه مباشرة
+  const openLoanFile = async (r) => {
     setGenBusy("loan" + r.id);
-    try { await generateLoanStatement(r, empOf(r.employee_id), org); } catch (e) {}
-    finally { setGenBusy(null); load(); }
+    try {
+      const res = await openLoanStatement(r, empOf(r.employee_id), org);
+      if (!res.ok) alert(await vaultFailureMessage(res.code, isAr));
+    } catch (error) {
+      alert(leaveDocumentErrorText(error, isAr));
+    } finally { setGenBusy(null); load(); }
   };
   const openLoanHr = (r) => { setActing({ type: "loans", req: r, action: "loanhr" }); setNote(""); setLoanAmount(String(r.amount || "")); setLoanInstallments(String(r.installment_count || 1)); };
   const confirmLoanHr = async () => {
@@ -447,29 +445,6 @@ export default function Approvals() {
       try { await base44.functions.invoke("notifyApprover", { type: "loan", employeeId: req.employee_id, employeeName: req.employee_name, status: "awaiting_finance" }); } catch (e) {}
     } catch (e) { load(); }
     setBusy(false); setActing(null); setNote(""); load();
-  };
-  const openLoanPay = (r) => { setActing({ type: "loans", req: r, action: "loanpay" }); setLoanPayAmount(""); };
-  const confirmLoanPay = async () => {
-    if (!acting) return;
-    setBusy(true);
-    const amt = Math.max(0, Number(loanPayAmount) || 0);
-    const alreadyPaid = Number(acting.req.paid_amount) || 0;
-    const total = Number(acting.req.amount) || 0;
-    const totalPaid = Math.min(total, alreadyPaid + amt);
-    const closed = total > 0 && totalPaid >= total;
-    let log = [];
-    try { log = JSON.parse(acting.req.payment_log || "[]"); } catch { log = []; }
-    if (amt > 0) log = [...log, { date: todayISO(), amount: amt, by: me?.full_name || "" }];
-    const payment_log = JSON.stringify(log);
-    const updated = { ...acting.req, paid_amount: totalPaid, payment_log, status: closed ? "completed" : acting.req.status };
-    await update("loans", acting.req.id, {
-      paid_amount: totalPaid,
-      payment_log,
-      finance_status: "paid",
-      status: closed ? "completed" : acting.req.status,
-    });
-    try { await generateLoanStatement(updated, empOf(acting.req.employee_id), org); } catch (e) {}
-    setBusy(false); setActing(null); setLoanPayAmount(""); load();
   };
   const openTripApprove = (r) => { setActing({ type: "trips", req: r, action: "tripapprove" }); setNote(""); setProofFile(null); };
   const openTripReject = (r) => { setActing({ type: "trips", req: r, action: "tripreject" }); setNote(""); };
@@ -570,7 +545,8 @@ export default function Approvals() {
                    return (
                      <RequestCard key={r.id} r={r} emp={empOf(r.employee_id)} actions={actionsFor("loans", r)} t={t} genBusy={genBusy} statusBadgeOverride={closed ? { label: "مغلقة", cls: "bg-rose-50 text-rose-600" } : null} extra={
                        <div className="text-xs text-muted-foreground mt-1">
-                         {t.totalLoan}: <b className="text-foreground">{formatCurrency(r.amount)}</b> · تم سداد: <b className="text-emerald-600">{formatCurrency(paid)}</b> · {t.remaining}: <b className="text-amber-600">{formatCurrency(remaining)}</b>
+                         {t.totalLoan}: <b className="text-foreground">{formatCurrency(r.amount)}</b> · تم استلام: <b className="text-emerald-600">{formatCurrency(paid)}</b> · {t.remaining}: <b className="text-amber-600">{formatCurrency(remaining)}</b>
+                         {closed && <div className="text-rose-600 mt-1 font-medium">{t.loanNote(Number(r.amount) || 0, Number(r.installment_count) || 1, paid)}</div>}
                        </div>
                      }>
                        <span className="text-xs text-muted-foreground">{r.installment_count} · {formatCurrency(r.monthly_installment)}</span>
@@ -657,45 +633,6 @@ export default function Approvals() {
                 <Button variant="outline" onClick={() => setActing(null)}>{t.cancel}</Button>
                 <Button onClick={confirmFinance} disabled={busy || !proofFile} className="gap-1 bg-blue-600 hover:bg-blue-700">
                   {busy ? <Loader2 size={16} className="animate-spin" /> : <Check size={16} />} {t.confirmPay}
-                </Button>
-              </DialogFooter>
-            </div>
-          )}
-        </DialogContent>
-      </Dialog>
-
-      <Dialog open={acting?.action === "loanpay"} onOpenChange={() => setActing(null)}>
-        <DialogContent className="max-w-md">
-          <DialogHeader><DialogTitle>{t.loanPayTitle}</DialogTitle></DialogHeader>
-          {acting && (
-            <div className="space-y-4">
-              <div className="pb-1">
-                <div className="font-medium text-sm">{empOf(acting.req.employee_id)?.full_name || acting.req.employee_name}</div>
-                <div className="text-xs text-muted-foreground tabular-nums" dir="ltr">{empOf(acting.req.employee_id)?.national_id || "—"}</div>
-              </div>
-              <div className="grid grid-cols-3 gap-3 text-sm">
-                <div className="rounded-lg bg-slate-50 p-2.5">
-                  <div className="text-xs text-muted-foreground">{t.totalLoan}</div>
-                  <div className="font-bold">{formatCurrency(acting.req.amount)}</div>
-                </div>
-                <div className="rounded-lg bg-emerald-50 p-2.5">
-                  <div className="text-xs text-muted-foreground">{t.alreadyPaidLabel}</div>
-                  <div className="font-bold text-emerald-700">{formatCurrency(Number(acting.req.paid_amount) || 0)}</div>
-                </div>
-                <div className="rounded-lg bg-amber-50 p-2.5">
-                  <div className="text-xs text-muted-foreground">{t.remaining}</div>
-                  <div className="font-bold text-amber-700">{formatCurrency(Math.max(0, (Number(acting.req.amount) || 0) - (Number(acting.req.paid_amount) || 0) - (Number(loanPayAmount) || 0)))}</div>
-                </div>
-              </div>
-              <div className="space-y-1.5">
-                <Label className="text-xs font-medium text-muted-foreground">{t.paidLabel}</Label>
-                <Input type="number" min={0} dir="ltr" value={loanPayAmount} onChange={(e) => setLoanPayAmount(e.target.value)} placeholder="0" />
-              </div>
-              <div className="text-xs text-muted-foreground bg-slate-50 border border-border rounded-lg p-2.5">{t.paidHint}</div>
-              <DialogFooter>
-                <Button variant="outline" onClick={() => setActing(null)} disabled={busy}>{t.cancel}</Button>
-                <Button onClick={confirmLoanPay} disabled={busy} className="gap-1 bg-violet-600 hover:bg-violet-700">
-                  {busy && <Loader2 size={16} className="animate-spin" />} {t.save}
                 </Button>
               </DialogFooter>
             </div>

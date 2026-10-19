@@ -14,7 +14,9 @@ import { listCurrentOrg } from "@/lib/currentOrg";
 import { hoursForEmployee } from "@/lib/branchHours";
 import {
   PAID_STATUSES, computeWorkDaysSet, computeWorkDaysInMonth, computeAbsentDeduction, computeNetFromAttendance,
+  computeDeductibleShortfall,
 } from "@/lib/payrollCompute";
+import { dueInstallmentFor, monthKeyOf } from "@/lib/loanDeduction";
 
 /**
  * يبني (أو يستكمل) كشف شهر معيّن.
@@ -27,10 +29,12 @@ export async function buildSheet({ month, year, org, activeEmps, payrolls, batch
   const startDate = `${year}-${mm}-01`;
   const endDay = new Date(year, month, 0).getDate();
   const endDate = `${year}-${mm}-${String(endDay).padStart(2, "0")}`;
-  const [attRecords, branches] = await Promise.all([
+  const [attRecords, branches, loans] = await Promise.all([
     base44.entities.Attendance.filter({ date: { $gte: startDate, $lte: endDate } }, "-created_date", 2000),
     base44.entities.Branch.list("-created_date", 500).catch(() => []),
+    base44.entities.LoanRequest.list("-created_date", 500).catch(() => []),
   ]);
+  const monthKey = monthKeyOf(month, year);
 
   // أيام العمل الرسمية المعتمدة بالمنشأة (0=الأحد ... 6=السبت). الأيام خارجها = إجازة أسبوعية لا تُحسب.
   const orgFresh = org && org.work_days ? org : ((await listCurrentOrg())[0] || org || {});
@@ -38,9 +42,10 @@ export async function buildSheet({ month, year, org, activeEmps, payrolls, batch
   const workDaysInMonth = computeWorkDaysInMonth(year, month, workDaysSet);
   const orgWorkHoursPerDay = Number(orgFresh.work_hours_per_day) || 0;
 
-  // ساعات العمل اليومية المعتمدة لكل موظف: دوام فرعه إن كان له دوام خاص، وإلا دوام المنشأة.
+  // دوام الموظف المعتمد: فرعه إن كان الفرع له ساعات خاصة (وسماح تأخيره)، وإلا إعدادات المنشأة.
+  const hoursCfgOf = (emp) => hoursForEmployee(orgFresh, emp, branches || []);
   const hoursOf = (emp) => {
-    const h = hoursForEmployee(orgFresh, emp, branches || []);
+    const h = hoursCfgOf(emp);
     return h.work_hours_per_day > 0 ? h.work_hours_per_day : orgWorkHoursPerDay;
   };
 
@@ -59,15 +64,13 @@ export async function buildSheet({ month, year, org, activeEmps, payrolls, batch
       workedHoursByEmp[a.employee_id].push(Number(a.work_hours) || 0);
     }
   }
-  // نقص الساعات (التغيب الجزئي): مجموع الفرق الموجب بين ساعات دوام الموظف وساعات يومه الفعلي
+  // نقص الساعات المؤهل للخصم (تأخير/نقص دوام): ما زاد على فترة السماح المعتمدة فقط
   const shortfallFor = (emp) => {
     const hpd = hoursOf(emp);
     if (hpd <= 0) return 0;
+    const grace = hoursCfgOf(emp).late_grace_minutes;
     let total = 0;
-    for (const wh of (workedHoursByEmp[emp.id] || [])) {
-      const gap = Number((hpd - wh).toFixed(2));
-      if (gap > 0) total += gap;
-    }
+    for (const wh of (workedHoursByEmp[emp.id] || [])) total += computeDeductibleShortfall(hpd, wh, grace);
     return Number(total.toFixed(2));
   };
 
@@ -94,6 +97,8 @@ export async function buildSheet({ month, year, org, activeEmps, payrolls, batch
     const absentHours = shortfallFor(emp);
     const absentDeduction = computeAbsentDeduction(gross, absentDays, absentHours, workDaysInMonth, workHoursPerDay);
     const method = emp.salary_payment_method || "mudad";
+    // قسط السلفة المستحق هذا الشهر — ينزل تلقائياً ضمن خصم السلفيات حتى اكتمال السلفة وليس بعدها
+    const loanDue = dueInstallmentFor(loans || [], emp.id, monthKey);
 
     // موظف على رأس العمل وغير موجود في الكشف → صف مسودة جديد
     if (!inSheet.has(emp.id)) {
@@ -103,10 +108,10 @@ export async function buildSheet({ month, year, org, activeEmps, payrolls, batch
         national_id: emp.emp_ref ? "" : (emp.national_id || ""), emp_ref: emp.emp_ref || "",
         month, year, batch, salary_payment_method: method,
         base_salary: base, housing_allowance: housing, transport_allowance: transport, other_allowances: other,
-        gross_salary: gross, bonus: 0, deductions: 0, loan_installment: 0,
+        gross_salary: gross, bonus: 0, deductions: 0, loan_installment: loanDue,
         overtime_hours: 0, overtime_amount: 0,
         absent_days: absentDays, absent_hours: absentHours, absent_deduction: absentDeduction,
-        net_salary: computeNetFromAttendance(gross, absentDays, absentHours, workDaysInMonth, workHoursPerDay, 0, 0, 0, 0),
+        net_salary: computeNetFromAttendance(gross, absentDays, absentHours, workDaysInMonth, workHoursPerDay, 0, 0, 0, loanDue),
         status: "draft",
       });
       continue;
@@ -121,7 +126,8 @@ export async function buildSheet({ month, year, org, activeEmps, payrolls, batch
       salary_payment_method: emp.salary_payment_method || p.salary_payment_method || "mudad",
       base_salary: base, housing_allowance: housing, transport_allowance: transport, other_allowances: other,
       gross_salary: gross, absent_days: absentDays, absent_hours: absentHours, absent_deduction: absentDeduction,
-      net_salary: computeNetFromAttendance(gross, absentDays, absentHours, workDaysInMonth, workHoursPerDay, p.bonus, p.overtime_amount, p.deductions, p.loan_installment),
+      loan_installment: loanDue,
+      net_salary: computeNetFromAttendance(gross, absentDays, absentHours, workDaysInMonth, workHoursPerDay, p.bonus, p.overtime_amount, p.deductions, loanDue),
     };
     const changed = Object.entries(next).some(([k, v]) =>
       typeof v === "number" ? Number(p[k] || 0) !== v : String(p[k] ?? "") !== String(v ?? "")

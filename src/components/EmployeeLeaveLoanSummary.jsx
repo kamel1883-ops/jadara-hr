@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from "react";
 import { base44 } from "@/api/base44Client";
 import { entitledLeaveDays, usedLeaveTotal, sumUsedDays, getOrgOnce, getEmployeeAnnualDays, openingUsedDays } from "@/lib/leaveBalance";
-import { generateLeaveSettlement, generateLoanStatement } from "@/lib/docGenerators";
+import { generateLeaveSettlement, openLoanStatement } from "@/lib/docGenerators";
 import { formatCurrency, leaveTypeLabel } from "@/lib/hr";
 import { badge } from "@/lib/approvals";
 import { Download, FileText, Loader2, RefreshCw, CalendarDays, Wallet } from "lucide-react";
@@ -22,7 +22,8 @@ export default function EmployeeLeaveLoanSummary({ employee }) {
     usedBreak: (p, s) => `المستخدم = رصيد افتتاحي ${p} يوم (قبل النظام) + ${s} يوم معتمدة داخل النظام`,
     approvedOf: (a, r) => `معتمدة ${a} يوم من ${r} مطلوبة`,
     loansTitle: "السلف", noLoans: "لا توجد سلف",
-    paid: (v) => `تم سداد ${v}`, rem: (v) => `متبقي ${v}`, closed: "مغلقة", statement: "الكشف",
+    paid: (v) => `تم استلام ${v}`, rem: (v) => `متبقي ${v}`, closed: "مغلقة (غير نشطة)", statement: "الكشف", loanFile: "عرض الملف",
+    loanNote: (tot, cnt, paidV) => `إجمالي السلفة ${tot} · عدد الدفعات ${cnt} · تم استلام ${paidV} · المتبقي صفر`,
   } : {
     leaveTitle: "Leave balance (auto-calculated from hire date)",
     entitled: "Accrued", used: "Used", remaining: "Remaining", day: "days",
@@ -32,7 +33,8 @@ export default function EmployeeLeaveLoanSummary({ employee }) {
     usedBreak: (p, s) => `Used = ${p} d opening balance (pre-system) + ${s} d approved in-system`,
     approvedOf: (a, r) => `${a} d approved of ${r} d requested`,
     loansTitle: "Loans", noLoans: "No loans",
-    paid: (v) => `Paid ${v}`, rem: (v) => `Remaining ${v}`, closed: "Closed", statement: "Statement",
+    paid: (v) => `Received ${v}`, rem: (v) => `Remaining ${v}`, closed: "Closed (inactive)", statement: "Statement", loanFile: "View file",
+    loanNote: (tot, cnt, paidV) => `Loan total ${tot} · Installments ${cnt} · Received ${paidV} · Remaining zero`,
   };
 
   const [leaves, setLeaves] = useState([]);
@@ -83,8 +85,11 @@ export default function EmployeeLeaveLoanSummary({ employee }) {
   };
   const genLoan = async (l) => {
     setBusy("loan" + l.id);
-    try { await generateLoanStatement(l, employee, org); await load(); }
-    finally { setBusy(null); }
+    try {
+      const res = await openLoanStatement(l, employee, org);
+      if (!res.ok) alert(isAr ? "تعذّر فتح ملف السلفة من الخزنة" : "Could not open the loan file");
+      await load();
+    } finally { setBusy(null); }
   };
 
   return (
@@ -166,19 +171,17 @@ export default function EmployeeLeaveLoanSummary({ employee }) {
                         {closed ? t.closed : badge(l.status).label}
                       </span>
                     </div>
+                    {closed && (
+                      <div className="text-rose-600 mt-0.5">
+                        {t.loanNote(formatCurrency(Number(l.amount) || 0), Number(l.installment_count) || 1, formatCurrency(paid))}
+                      </div>
+                    )}
                   </div>
                   <div className="shrink-0">
-                    {l.statement_pdf_url ? (
-                      <StoredDocButton value={l.statement_pdf_url}
-                        className="inline-flex items-center gap-1 px-2 py-1 rounded-md bg-slate-100 text-slate-700 hover:bg-slate-200">
-                        <FileText size={13} /> {t.statement}
-                      </StoredDocButton>
-                    ) : (
-                      <button type="button" onClick={() => genLoan(l)} disabled={busy === "loan" + l.id}
-                        className="inline-flex items-center gap-1 px-2 py-1 rounded-md bg-slate-50 text-slate-600 hover:bg-slate-100 disabled:opacity-50">
-                        {busy === "loan" + l.id ? <Loader2 size={13} className="animate-spin" /> : <RefreshCw size={13} />} {t.generate}
-                      </button>
-                    )}
+                    <button type="button" onClick={() => genLoan(l)} disabled={busy === "loan" + l.id}
+                      className="inline-flex items-center gap-1 px-2 py-1 rounded-md bg-slate-100 text-slate-700 hover:bg-slate-200 disabled:opacity-50">
+                      {busy === "loan" + l.id ? <Loader2 size={13} className="animate-spin" /> : <FileText size={13} />} {t.loanFile}
+                    </button>
                   </div>
                 </div>
               );

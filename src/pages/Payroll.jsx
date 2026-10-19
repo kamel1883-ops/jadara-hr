@@ -22,6 +22,7 @@ import PayrollPrintSheet from "@/components/reports/PayrollPrintSheet";
 import { enrichEmployeesBatch } from "@/lib/vaultSensitive";
 import { hoursForEmployee } from "@/lib/branchHours";
 import { groupByBatch, openBatchNumber, nextBatchNumber, batchTitle, batchOf } from "@/lib/payrollBatch";
+import { commitLoanDeductions } from "@/lib/loanDeduction";
 import PayrollBatchesStrip from "@/components/payroll/PayrollBatchesStrip";
 import PayslipDialog from "@/components/payroll/PayslipDialog";
 
@@ -280,6 +281,8 @@ export default function Payroll() {
     await base44.entities.Payroll.bulkUpdate(drafts.map((p) => ({
       id: p.id, batch: targetBatch, status: "approved", prepared_by_name: "مسؤول الموارد البشرية", prepared_by_id: "",
     })));
+    // إثبات خصم أقساط السلف على ملفات السلف (تم استلام/المتبقي) وإغلاق السلفة عند اكتمالها
+    try { await commitLoanDeductions(drafts, { month, year, byName: "مسؤول الموارد البشرية" }); } catch (e) { /* الخصم مثبت على الرواتب */ }
     setBatching(false);
     if (alreadySettled) {
       alert(isAr

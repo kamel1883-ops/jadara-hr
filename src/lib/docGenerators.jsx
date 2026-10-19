@@ -1,7 +1,7 @@
 import React from "react";
 import { base44 } from "@/api/base44Client";
 import { renderToPdfBlob } from "@/lib/pdfDocs";
-import { archiveBlobToVault } from "@/lib/vaultDocuments";
+import { archiveBlobToVault, openStoredDoc } from "@/lib/vaultDocuments";
 import saveLeaveDocument from "@/lib/saveLeaveDocument";
 import { enrichEmployee } from "@/lib/vaultSensitive";
 import { entitledLeaveDays, usedLeaveTotal } from "@/lib/leaveBalance";
@@ -48,6 +48,14 @@ export async function generateLoanStatement(loan, emp, org) {
   const url = await archiveBlobToVault(blob, { fileName: `loan-statement-${loan.id}.pdf`, empRef: employee?.emp_ref || null, docType: "loan_statement" });
   if (url) await base44.entities.LoanRequest.update(loan.id, { statement_pdf_url: url });
   return url || loan?.statement_pdf_url || "";
+}
+
+// عرض ملف السلفة محدَّثاً: يُولّد الكشف بآخر مبلغ خصم وآخر متبقٍ ثم يفتحه مباشرة
+export async function openLoanStatement(loan, emp, org) {
+  const url = await generateLoanStatement(loan, emp, org);
+  const ref = url || loan?.statement_pdf_url || "";
+  if (!ref) return { ok: false, code: "missing" };
+  return openStoredDoc(ref);
 }
 
 // مستند موافقة الانتداب — يُولّد PDF بتفاصيل الرحلة والملاحظات ويُخزّن على الطلب، ويُرجع الرابط
