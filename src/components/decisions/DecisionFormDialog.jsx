@@ -13,7 +13,7 @@ import { translateTo7 } from "@/lib/translate7";
 const TYPES = [
   { v: "appointment" }, { v: "transfer" }, { v: "promotion" }, { v: "assignment" },
   { v: "secondment" }, { v: "exemption" }, { v: "reward" }, { v: "deduction" },
-  { v: "warning" }, { v: "termination" }, { v: "policy" }, { v: "other" },
+  { v: "warning" }, { v: "termination" }, { v: "policy" }, { v: "circular" }, { v: "other" },
 ];
 
 export default function DecisionFormDialog({ open, onClose, onSaved, employees, departments }) {
@@ -21,18 +21,18 @@ export default function DecisionFormDialog({ open, onClose, onSaved, employees, 
   const isAr = lang === "ar";
   const t = isAr ? {
     title: "إصدار قرار إداري", type: "نوع القرار", titleL: "عنوان القرار", body: "نص القرار",
-    target: "نطاق الإرسال", all: "جميع الموظفين", dept: "قسم محدد", emp: "موظف محدد",
+    target: "نطاق الإرسال", all: "جميع الموظفين", dept: "قسم محدد", managers: "مدراء الأقسام فقط", emp: "موظف محدد",
     chooseDept: "اختر الإدارة", chooseEmp: "اختر الموظف", issued: "تاريخ الإصدار", effective: "تاريخ النفاذ",
     translating: "جارٍ الترجمة إلى 7 لغات…", save: "إصدار القرار وإرساله", cancel: "إلغاء",
     errTitle: "أدخل عنواناً ونصاً للقرار", errTarget: "حدّد نطاق الإرسال",
-    types: { appointment: "تعيين", transfer: "نقل", promotion: "ترقية", assignment: "تكليف", secondment: "إعارة", exemption: "إعفاء", reward: "مكافأة", deduction: "خصم", warning: "إنذار", termination: "إنهاء", policy: "سياسة", other: "قرار" },
+    types: { appointment: "تعيين", transfer: "نقل", promotion: "ترقية", assignment: "تكليف", secondment: "إعارة", exemption: "إعفاء", reward: "مكافأة", deduction: "خصم", warning: "إنذار", termination: "إنهاء", policy: "سياسة", circular: "تعميم", other: "قرار" },
   } : {
     title: "Issue administrative decision", typeL: "Decision type", type: "Decision type", titleL: "Decision title", body: "Decision body",
-    target: "Send scope", all: "All employees", dept: "Specific department", emp: "Specific employee",
+    target: "Send scope", all: "All employees", dept: "Specific department", managers: "Department managers only", emp: "Specific employee",
     chooseDept: "Select department", chooseEmp: "Select employee", issued: "Issue date", effective: "Effective date",
     translating: "Translating into 7 languages…", save: "Issue & send decision", cancel: "Cancel",
     errTitle: "Enter a title and body", errTarget: "Select the send scope",
-    types: { appointment: "Appointment", transfer: "Transfer", promotion: "Promotion", assignment: "Assignment", secondment: "Secondment", exemption: "Exemption", reward: "Reward", deduction: "Deduction", warning: "Warning", termination: "Termination", policy: "Policy", other: "Decision" },
+    types: { appointment: "Appointment", transfer: "Transfer", promotion: "Promotion", assignment: "Assignment", secondment: "Secondment", exemption: "Exemption", reward: "Reward", deduction: "Deduction", warning: "Warning", termination: "Termination", policy: "Policy", circular: "Circular", other: "Decision" },
   };
 
   const today = new Date().toISOString().slice(0, 10);
@@ -107,6 +107,7 @@ export default function DecisionFormDialog({ open, onClose, onSaved, employees, 
                 <SelectContent>
                   <SelectItem value="all">{t.all}</SelectItem>
                   <SelectItem value="department">{t.dept}</SelectItem>
+                  <SelectItem value="managers">{t.managers}</SelectItem>
                   <SelectItem value="employee">{t.emp}</SelectItem>
                 </SelectContent>
               </Select>

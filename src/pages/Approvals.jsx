@@ -64,6 +64,7 @@ export default function Approvals() {
     finNote: "ملاحظات/وصف المالية", finNotePh: "تحويل بنكي / سند توقيع / …. يُسجّل على الطلب.",
     tripFinTitle: "صرف الانتداب — المالية/المحاسبة", tripFinWarn: "عند التأكيد تُقفل العملية ويُسجّل إثبات التحويل ويصبح الطلب مكتملًا.",
     finProof: "إثبات التحويل",
+    medicalDoc: "التقرير الطبي",
   } : {
     title: "Approvals & Requests", subtitle: "Approval flow: Direct manager ← HR ← Finance ← Settlement with proof",
     loading: "Loading...", tabLeaves: (n) => `Leaves (${n})`, tabLoans: (n) => `Loans (${n})`,
@@ -101,6 +102,7 @@ export default function Approvals() {
     finNote: "Finance notes/description", finNotePh: "Bank transfer / receipt / …. Recorded on the request.",
     tripFinTitle: "Trip payout — Finance/Accounting", tripFinWarn: "On confirmation the process closes, the transfer proof is recorded and the request is completed.",
     finProof: "Transfer proof",
+    medicalDoc: "Medical report",
   };
 
   const [leaves, setLeaves] = useState([]);
@@ -529,6 +531,7 @@ export default function Approvals() {
                     {r.is_full_clearance && <span className="text-xs px-2 py-0.5 rounded-full bg-violet-50 text-violet-600">{t.fullClear}</span>}
                     {r.ticket_amount > 0 && <span className="text-xs text-muted-foreground">{t.ticket(r.ticket_amount)}</span>}
                     {r.balance_deducted > 0 && <span className="text-xs text-muted-foreground">{t.deduct(r.balance_deducted)}</span>}
+                    {r.medical_report_url && <VaultDocLink value={r.medical_report_url} label={t.medicalDoc} className="text-xs h-6 px-2 rounded-full bg-rose-50 text-rose-600 border-0" />}
                     {r.hr_document_url && <VaultDocLink value={r.hr_document_url} label="تذاكر الموارد البشرية" className="text-xs h-6 px-2 rounded-full bg-violet-50 text-violet-600 border-0" />}
                     {r.finance_proof_url && <VaultDocLink value={r.finance_proof_url} label="إثبات المالية" className="text-xs h-6 px-2 rounded-full bg-blue-50 text-blue-600 border-0" />}
                   </RequestCard>

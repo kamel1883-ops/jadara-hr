@@ -107,10 +107,17 @@ export default async function (req) {
         if (recUn) return recUn === bagForFetch.unified;
         return bagForFetch.ids.has(String(rec?.employee_id || ""));
       };
+      // نطاق "مدراء الأقسام": أي موظف يُعتبر مديراً — إما بمستواه الوظيفي
+      // (manager/executive/supervisor) أو لأنه مدير مباشر لموظف آخر (manager_id).
+      const companyEmployees: any[] = (bagForFetch as any)?.employees || [];
+      const managedIds = new Set(companyEmployees.map((e: any) => String(e?.manager_id || "")).filter(Boolean));
+      const viewerRole = String((emp as any)?.role_level || "");
+      const isManagerViewer = isOwnerSession || ["owner", "executive", "manager", "supervisor"].includes(viewerRole) || managedIds.has(String(employeeId));
       const matchesTarget = (rec: any) => {
         if (!rec || !sameCompanyRecord(rec)) return false;
         if (rec.target === "all") return !!String(rec.unified_number || "").trim();
         if (rec.target === "department") return !!rec.department && !!emp?.department && rec.department === emp.department;
+        if (rec.target === "managers") return isManagerViewer;
         if (rec.target === "employee") return String(rec.employee_id || "") === String(employeeId);
         return false;
       };

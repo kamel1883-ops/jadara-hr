@@ -11,8 +11,8 @@ import { CLIENT_LOGO_CSS, PRINT_MARK_PX } from "@/lib/printBrand";
 import { cn } from "@/lib/utils";
 
 const TYPE_LABEL = {
-  ar: { appointment: "تعيين", transfer: "نقل", promotion: "ترقية", assignment: "تكليف", secondment: "إعارة", exemption: "إعفاء", reward: "مكافأة", deduction: "خصم", warning: "إنذار", termination: "إنهاء", policy: "سياسة", other: "قرار" },
-  en: { appointment: "Appointment", transfer: "Transfer", promotion: "Promotion", assignment: "Assignment", secondment: "Secondment", exemption: "Exemption", reward: "Reward", deduction: "Deduction", warning: "Warning", termination: "Termination", policy: "Policy", other: "Decision" },
+  ar: { appointment: "تعيين", transfer: "نقل", promotion: "ترقية", assignment: "تكليف", secondment: "إعارة", exemption: "إعفاء", reward: "مكافأة", deduction: "خصم", warning: "إنذار", termination: "إنهاء", policy: "سياسة", circular: "تعميم", other: "قرار" },
+  en: { appointment: "Appointment", transfer: "Transfer", promotion: "Promotion", assignment: "Assignment", secondment: "Secondment", exemption: "Exemption", reward: "Reward", deduction: "Deduction", warning: "Warning", termination: "Termination", policy: "Policy", circular: "Circular", other: "Decision" },
 };
 
 function trOf(rec) {
@@ -30,13 +30,13 @@ export default function Decisions() {
     title: "القرارات الإدارية", sub: "إصدار القرارات وإرسالها لبوابة الموظف (7 لغات) — محفوظة بتاريخها وصيغتها للرجوع مستقبلاً.",
     issue: "إصدار قرار جديد", empty: "لا توجد قرارات بعد", num: "الرقم", type: "النوع", titleL: "العنوان", target: "النطاق", issued: "الإصدار", effective: "النفاذ", status: "الحالة", by: "أصدره", actions: "إجراءات",
     view: "عرض الصيغة", del: "حذف", archive: "أرشفة", print: "طباعة", confirmDel: "حذف هذا القرار نهائياً؟",
-    targetAll: "الجميع", targetDept: "قسم", targetEmp: "موظف", langAr: "العربية",
+    targetAll: "الجميع", targetDept: "قسم", targetManagers: "مدراء الأقسام", targetEmp: "موظف", langAr: "العربية",
     issued2: "صدر", effL: "ينفذ", revoked: "مؤرشف", active: "ساري",
   } : {
     title: "Administrative Decisions", sub: "Issue decisions and publish them to the employee portal (7 languages) — preserved with date and wording for future reference.",
     issue: "New decision", empty: "No decisions yet", num: "Number", type: "Type", titleL: "Title", target: "Scope", issued: "Issued", effective: "Effective", status: "Status", by: "By", actions: "Actions",
     view: "View wording", del: "Delete", archive: "Archive", print: "Print", confirmDel: "Delete this decision permanently?",
-    targetAll: "All", targetDept: "Department", targetEmp: "Employee", langAr: "Arabic",
+    targetAll: "All", targetDept: "Department", targetManagers: "Department managers", targetEmp: "Employee", langAr: "Arabic",
     issued2: "Issued", effL: "Effective", revoked: "Archived", active: "Active",
   };
 
@@ -79,11 +79,12 @@ export default function Decisions() {
   const printDecision = (r) => {
     const lc = localized(r, isAr ? "ar" : "en");
     const typeLabel = (TYPE_LABEL[isAr ? "ar" : "en"])[r.decision_type] || r.decision_type;
-    const targetLabel = r.target === "all" ? t.targetAll : r.target === "department" ? `${t.targetDept}: ${r.department}` : `${t.targetEmp}: ${r.employee_name}`;
+    const targetLabel = r.target === "all" ? t.targetAll : r.target === "department" ? `${t.targetDept}: ${r.department}` : r.target === "managers" ? t.targetManagers : `${t.targetEmp}: ${r.employee_name}`;
     const orgName = org?.name || (isAr ? "جداره" : "Jadara");
     const orgLogo = org?.logo_url || "";
     const orgUnified = org?.unified_number || "";
-    const docTitle = isAr ? "قرار إداري" : "Administrative Decision";
+    const isCircular = r.decision_type === "circular";
+    const docTitle = isCircular ? (isAr ? "تعميم" : "Circular") : (isAr ? "قرار إداري" : "Administrative Decision");
     const esc = (s) => String(s || "").replace(/</g, "<").replace(/>/g, ">");
     const crown = `<svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#c5a059" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="m2 4 3 12h14l3-12-6.5 6L12 4l-3.5 6L2 4Z"/><path d="M5 20h14"/></svg>`;
     const html = `<!DOCTYPE html><html dir="${isAr ? "rtl" : "ltr"}" lang="${isAr ? "ar" : "en"}"><head><meta charset="utf-8"><title>${(lc.title || r.title || "").replace(/"/g, "")}</title><style>
@@ -164,7 +165,7 @@ export default function Decisions() {
               <tbody>
                 {rows.map((r) => {
                   const typeLabel = (TYPE_LABEL[isAr ? "ar" : "en"])[r.decision_type] || r.decision_type;
-                  const targetLabel = r.target === "all" ? t.targetAll : r.target === "department" ? `${t.targetDept}: ${r.department}` : `${t.targetEmp}: ${r.employee_name}`;
+                  const targetLabel = r.target === "all" ? t.targetAll : r.target === "department" ? `${t.targetDept}: ${r.department}` : r.target === "managers" ? t.targetManagers : `${t.targetEmp}: ${r.employee_name}`;
                   const statusCls = r.status === "archived" ? "bg-slate-100 text-slate-500" : "bg-emerald-50 text-emerald-600";
                   return (
                     <tr key={r.id} className="border-b border-border last:border-0">
