@@ -17,9 +17,7 @@ const TEMPLATE_HEADERS = [
   "سعودي (نعم/لا)", "الجنس (ذكر/أنثى)", "تاريخ الميلاد", "رقم الجوال",
   "الإدارة / القسم", "الفرع", "المسمى الوظيفي", "الدرجة الوظيفية",
   "المستوى الوظيفي (owner/executive/manager/supervisor/employee/worker)", "تاريخ المباشرة",
-  "إجمالي رصيد الإجازات المستحق",
   "رصيد الإجازات المستخدم",
-  "رصيد الإجازات المتبقي (تلقائي)",
   "نوع العقد (دوام كامل/جزئي/عقد)", "تاريخ بدء العقد", "تاريخ نهاية العقد",
   "الراتب الأساسي", "بدل السكن", "بدل المواصلات",
   "بدلات أخرى", "تاريخ انتهاء الإقامة", "رقم الجواز", "تاريخ انتهاء الجواز",
@@ -36,7 +34,7 @@ export default function EmployeeImport({ open, onClose, onSaved }) {
   const isAr = lang === "ar";
   const t = isAr ? {
     title: "استيراد الموظفين عبر Excel",
-    desc: "حمّل القالب، عبّئ بيانات موظفيك (مع تحديد الفرع لكل موظف)، ثم ارفع الملف. اضغط «استيراد الآن» للتحقق ومعاينة الموظفين المكتشَفين، ثم أكّد إضافتهم إلى المنشأة.",
+    desc: "حمّل القالب، عبّئ بيانات موظفيك (مع تحديد الفرع لكل موظف ورصيد الإجازات المستخدم فقط — رصيد أول المدة)، ثم ارفع الملف. المستحق يُحسب تلقائياً من تاريخ المباشرة والمتبقي = المستحق − المستخدم. اضغط «استيراد الآن» للتحقق والمعاينة، ثم أكّد إضافتهم إلى المنشأة.",
     download: "تحميل قالب Excel (XLSX)",
     upload: "اختر ملف Excel/CSV",
     importing: "جارٍ التحليل والتحقق…",
@@ -49,16 +47,11 @@ export default function EmployeeImport({ open, onClose, onSaved }) {
     issuesTitle: "أخطاء مكتشفة في الملف",
     issuesHint: "الترقيم يبدأ من أول موظف في الملف (وليس رقم صف الإكسل) — افتح الملف وصحّح الموظف المذكور برقمه.",
     validList: "الموظفون الصالحون",
-    entitledHint: "إجمالي المستحق في الإكسل للمطابقة فقط: لا يُضاف إلى الرصيد ولا يُحتسب معه، بل يُعاد توليده تلقائياً من تاريخ المباشرة حتى اليوم بمعدل 21 أو 30 يوماً بالسنة (و30 إلزامياً بعد 5 سنوات). يُقبل الملف إذا كان فرق المطابقة 3 أيام أو أقل لكل موظف، وما تجاوز ذلك يُرفض الملف كاملاً. عمود «رصيد الإجازات المستخدم» هو ما يُنقل فعلياً إلى ملف الموظف، والمتبقي = المستحق المحسوب − المستخدم.",
+    entitledHint: "المستحق يُحسب تلقائياً من تاريخ المباشرة حتى اليوم بمعدل 21 أو 30 يوماً بالسنة (و30 إلزامياً بعد 5 سنوات خدمة). عمود «رصيد الإجازات المستخدم» هو رصيد أول المدة الذي يُنقل إلى ملف الموظف، والمتبقي = المستحق المحسوب − المستخدم.",
     usedLabel: "المستخدم",
     remainingLabel: "المتبقي",
     computedLabel: "المستحق المحسوب",
-    matchOk: (excel, sys) => `مطابق (الإكسل ${excel} · النظام ${sys})`,
-    matchDiff: (diff) => `غير مطابق — الفرق ${diff} يوم`,
-    rejectedTitle: "الملف غير مقبول — إجمالي رصيد الإجازات المستحق",
-    rejectedHint: "هؤلاء الموظفون تجاوز فرق إجمالي الرصيد المستحق بين الإكسل وحساب النظام من تاريخ المباشرة حدّ الثلاثة أيام. لا يتم استيراد أي موظف من هذا الملف حتى تصحيح الأرقام وإعادة الرفع.",
-    rejectedBanner: "الملف غير مقبول: صحّح عمود «إجمالي رصيد الإجازات المستحق» ثم أعد رفع الملف.",
-    colEmployee: "الموظف", colHire: "تاريخ المباشرة", colExcel: "إجمالي الإكسل", colSystem: "حساب النظام", colDiff: "الفرق", colRate: "المعدل",
+    colEmployee: "الموظف", colHire: "تاريخ المباشرة", colSystem: "المستحق المحسوب", colRate: "المعدل",
     confirmQ: "هل ترغب بإضافة هؤلاء الموظفين إلى المنشأة؟ سيتم تثبيتهم في قائمة الموظفين النشطين.",
     confirmBtn: "إضافة الموظفين إلى المنشأة",
     adding: "جارٍ الإضافة…",
@@ -69,7 +62,7 @@ export default function EmployeeImport({ open, onClose, onSaved }) {
     errGeneric: "تعذّر قراءة الملف، تأكد من تطابق الأعمدة مع القالب",
   } : {
     title: "Import Employees via Excel",
-    desc: "Download the template, fill your staff data (set the branch per employee), then upload. Click 'Import now' to verify and preview detected employees, then confirm adding them to the organization.",
+    desc: "Download the template, fill your staff data (branch per employee plus used leave balance only — opening balance). Entitlement is computed automatically from the hire date; remaining = entitlement − used. Click 'Import now' to verify and preview, then confirm.",
     download: "Download Excel template (XLSX)",
     upload: "Choose an Excel/CSV file",
     importing: "Analyzing & verifying…",
@@ -82,16 +75,11 @@ export default function EmployeeImport({ open, onClose, onSaved }) {
     issuesTitle: "Issues found in the file",
     issuesHint: "Numbering starts from the first employee in the file (not the Excel row number).",
     validList: "Valid employees",
-    entitledHint: "The Excel total entitlement is for comparison only: it is never added to or counted with the balance; the total is regenerated automatically from the hire date up to today at 21 or 30 days/year (30 mandatory after 5 years). The file is accepted when the comparison difference is 3 days or fewer per employee; anything beyond rejects the whole file. The 'Used Leave Balance' column is what is actually transferred to the employee file, and the remaining = computed entitlement − used.",
+    entitledHint: "Entitlement is computed automatically from the hire date up to today at 21 or 30 days/year (30 mandatory after 5 years). The 'Used Leave Balance' column is the opening balance transferred to the employee file, and remaining = computed entitlement − used.",
     usedLabel: "Used",
     remainingLabel: "Remaining",
     computedLabel: "Computed entitlement",
-    matchOk: (excel, sys) => `Matched (Excel ${excel} · system ${sys})`,
-    matchDiff: (diff) => `Mismatch — difference ${diff} days`,
-    rejectedTitle: "File not accepted — total accrued leave balance",
-    rejectedHint: "These employees' total accrued balance differs from the system calculation from the hire date by more than three days. No employee is imported from this file until the figures are corrected and re-uploaded.",
-    rejectedBanner: "File not accepted: fix the 'Total Accrued Leave Balance' column, then re-upload the file.",
-    colEmployee: "Employee", colHire: "Hire date", colExcel: "Excel total", colSystem: "System", colDiff: "Diff", colRate: "Rate",
+    colEmployee: "Employee", colHire: "Hire date", colSystem: "Computed entitlement", colRate: "Rate",
     confirmQ: "Do you want to add these employees to the organization? They will be confirmed in the active employees list.",
     confirmBtn: "Add employees to organization",
     adding: "Adding…",
@@ -128,17 +116,13 @@ export default function EmployeeImport({ open, onClose, onSaved }) {
     setDlBusy(false);
 
     const colLetter = (n) => { let s = ""; let nn = n + 1; while (nn > 0) { const r = (nn - 1) % 26; s = String.fromCharCode(65 + r) + s; nn = Math.floor((nn - 1) / 26); } return s; };
-    const totalIdx = TEMPLATE_HEADERS.indexOf("إجمالي رصيد الإجازات المستحق");
-    const usedIdx = TEMPLATE_HEADERS.indexOf("رصيد الإجازات المستخدم");
-    const remIdx = TEMPLATE_HEADERS.indexOf("رصيد الإجازات المتبقي (تلقائي)");
-    const totalCol = colLetter(totalIdx);
-    const usedCol = colLetter(usedIdx);
+    void colLetter;
 
     const sample = [
       "محمد عبدالله", "1001", "1234567890", "mohammed@company.sa", "نعم", "ذكر",
       "1990-01-15", "0551234567", "المبيعات", mainName, "مندوب مبيعات",
       "الثالثة", "employee", "2023-03-01",
-      "21", "10", `=${totalCol}2-${usedCol}2`,
+      "10",
       "دوام كامل", "2023-03-01", "2024-03-01",
       "8000", "1000", "500", "0",
       "2027-05-01", "X1234567", "2030-01-01", "T123456", "2026-12-31", "SA00001234",
@@ -150,9 +134,7 @@ export default function EmployeeImport({ open, onClose, onSaved }) {
     const extraRows = 40;
     const rows = [TEMPLATE_HEADERS, sample];
     for (let i = 0; i < extraRows; i++) {
-      const row = TEMPLATE_HEADERS.map(() => "");
-      row[remIdx] = `=${totalCol}${3 + i}-${usedCol}${3 + i}`;
-      rows.push(row);
+      rows.push(TEMPLATE_HEADERS.map(() => ""));
     }
 
     const wb = new ExcelJS.Workbook();
@@ -278,11 +260,6 @@ export default function EmployeeImport({ open, onClose, onSaved }) {
                           <div className="flex items-center justify-between gap-2">
                             <span className="font-medium">
                               {e.full_name} <span className="text-muted-foreground">({e.employee_number})</span>
-                              {e.entitled_match != null && (
-                                <span className={e.entitled_match ? "ms-2 text-emerald-600" : "ms-2 text-rose-600"}>
-                                  · {e.entitled_match ? t.matchOk(e.entitled_excel, e.entitled_system) : t.matchDiff(e.entitled_diff)}
-                                </span>
-                              )}
                             </span>
                             <span className="text-muted-foreground text-left">{e.department} · {e.branch_name}</span>
                           </div>
@@ -303,42 +280,7 @@ export default function EmployeeImport({ open, onClose, onSaved }) {
                   </div>
                 )}
 
-                {preview.entitlement_rejected && (
-                  <div className="rounded-xl bg-rose-50 border border-rose-200 p-3 space-y-2">
-                    <div className="flex items-center gap-2 text-rose-700 text-sm font-medium"><AlertTriangle size={14} /> {t.rejectedTitle}</div>
-                    <p className="text-[11px] leading-relaxed text-rose-600">{t.rejectedHint}</p>
-                    <div className="max-h-56 overflow-auto">
-                      <table className="w-full text-xs">
-                        <thead>
-                          <tr className="text-rose-700">
-                            <th className="text-start font-semibold py-1 pe-2">{t.colEmployee}</th>
-                            <th className="text-start font-semibold py-1 pe-2">{t.colHire}</th>
-                            <th className="text-start font-semibold py-1 pe-2">{t.colRate}</th>
-                            <th className="text-start font-semibold py-1 pe-2">{t.colExcel}</th>
-                            <th className="text-start font-semibold py-1 pe-2">{t.colSystem}</th>
-                            <th className="text-start font-semibold py-1">{t.colDiff}</th>
-                          </tr>
-                        </thead>
-                        <tbody className="divide-y divide-rose-200">
-                          {preview.entitlement_mismatches.map((m, i) => (
-                            <tr key={i}>
-                              <td className="py-1.5 pe-2 font-medium">{m.name}<span className="text-muted-foreground"> ({m.employee_number})</span></td>
-                              <td className="py-1.5 pe-2">{m.hire_date}</td>
-                              <td className="py-1.5 pe-2">{m.annual_days}</td>
-                              <td className="py-1.5 pe-2">{m.entitled_excel}</td>
-                              <td className="py-1.5 pe-2">{m.entitled_system}</td>
-                              <td className="py-1.5 font-bold">{m.entitled_diff > 0 ? `+${m.entitled_diff}` : m.entitled_diff}</td>
-                            </tr>
-                          ))}
-                        </tbody>
-                      </table>
-                    </div>
-                  </div>
-                )}
-
-                {preview.entitlement_rejected ? (
-                  <div className="text-sm text-rose-600 bg-rose-50 border border-rose-200 rounded-lg p-3">{t.rejectedBanner}</div>
-                ) : preview.valid > 0 ? (
+                {preview.valid > 0 ? (
                   <div className="rounded-xl border border-violet-200 bg-violet-50/60 p-3 space-y-2">
                     <div className="text-sm text-violet-700 font-medium">{t.confirmQ}</div>
                     <Button type="button" onClick={runConfirm} disabled={saving} className="gap-2 w-full">

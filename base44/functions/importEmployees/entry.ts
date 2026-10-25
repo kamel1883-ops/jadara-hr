@@ -111,6 +111,8 @@ function normalizeRecord(r) {
     annual_leave_entitlement: (ann === 30) ? 30 : 21,
     ticket_entitlement: TICKET[tk] || 'yearly',
     ticket_value: num(r.ticket_value),
+    // رصيد أول المدة = المستخدم فقط (من العميل). عمودا المستحق/المتبقي أُزيلا من القالب؛
+    // يُقبلان هنا فقط لتوافق الملفات القديمة ثم يُتجاهلان — الحساب دائماً من تاريخ المباشرة.
     prior_used_leave: num(r.prior_used_leave),
     leave_total_entitled: num(r.leave_total_entitled),
     leave_used: num(r.leave_used),
@@ -202,8 +204,7 @@ export default async function (req) {
       if (n) fileNumbers.add(n);
     }
     const issues = []; // { row, name, employee_number, problems: [] }
-    // موظفون تجاوز فرق الإجمالي المستحق حدّ المسامحة (3 أيام) → يُرفض الملف كاملاً بلا استيراد جزئي
-    const entitlementMismatch = [];
+
     let rowNo = 0;
 
     for (const rawRow of records) {
@@ -255,31 +256,11 @@ export default async function (req) {
       const rawAnn = num(rawRow.annual_leave_entitlement);
       const empChoice = rawAnn === 30 ? 30 : (rawAnn === 21 ? 21 : annualDays);
       r.annual_leave_entitlement = empChoice;
-      // الإجمالي المستحق: يُحسب في النظام من تاريخ المباشرة الفعلي حتى تاريخ رفع الملف (اليوم)،
-      // بمعدل 21 أو 30 يوماً بالسنة، و30 إلزامياً بعد 5 سنوات خدمة. تاريخ رفع الملف مرجع للمقارنة
-      // فقط ولا يُخزَّن كأساس دائم — الاحتساب يبقى من تاريخ المباشرة.
+      // الإجمالي المستحق: يُحسب في النظام دائماً من تاريخ المباشرة حتى اليوم
+      // بمعدل 21 أو 30 يوماً بالسنة، و30 إلزامياً بعد 5 سنوات خدمة.
+      // لا يُقرأ من الملف ولا يُقارن معه — الملف يعطي المستخدم فقط (رصيد أول المدة).
       const sysEntitled = computeEntitlement(r.hire_date, empChoice);
       const rate = yearsOfServiceHire(r.hire_date) >= 5 ? 30 : empChoice;
-      const excelEntitled = num(r.leave_total_entitled);
-      // المقارنة: فرق مطلق حتى 3 أيام مقبول (زائداً أو ناقصاً)؛ وما زاد عليه يجعل الملف غير مقبول كاملاً.
-      let entitledDiff = null;
-      let entitledMatch = null;
-      if (excelEntitled > 0) {
-        entitledDiff = Math.round((excelEntitled - sysEntitled) * 100) / 100;
-        entitledMatch = Math.abs(entitledDiff) <= 3;
-        if (!entitledMatch) {
-          entitlementMismatch.push({
-            row: rowNo,
-            name: r.full_name || '—',
-            employee_number: r.employee_number || '—',
-            hire_date: r.hire_date,
-            annual_days: rate,
-            entitled_excel: excelEntitled,
-            entitled_system: sysEntitled,
-            entitled_diff: entitledDiff,
-          });
-        }
-      }
       // القيمة الصريحة (قد تكون سالبة عند تجاوز الاستحقاق) — لا تُصفَّر
       r.leave_balance = Math.round((sysEntitled - r.prior_used_leave) * 10) / 10;
       r.unified_number = myUnified;
@@ -290,10 +271,8 @@ export default async function (req) {
         department: r.department,
         position: r.position,
         branch_name: r.branch_name,
-        entitled_excel: excelEntitled || null,
+        hire_date: r.hire_date,
         entitled_system: sysEntitled,
-        entitled_match: entitledMatch,
-        entitled_diff: entitledDiff,
         entitled_rate: rate,
         used: Number(r.prior_used_leave) || 0,
         remaining: r.leave_balance,
@@ -304,8 +283,7 @@ export default async function (req) {
     const errors = [];
 
     // مرحلة التأكيد فقط: نُنشئ الموظفين فعلياً ونربط المديرين المباشرين.
-    // رفض شامل للدفعة: أي موظف تجاوز فرق الإجمالي المستحق حدّ 3 أيام يمنع الحفظ كاملاً.
-    if (confirm && toCreate.length && entitlementMismatch.length === 0) {
+    if (confirm && toCreate.length) {
       // === عزل البيانات الحساسة في الخزنة السعودية ===
       // الحقول الحساسة تُرسل للخزنة وتُستبدل برمز معتم (emp_ref) في Base44.
       // إن لم تكن الخزنة مُهيّأة بعد، نستمر بالنمط القديم (تخزين محلي) حتى لا ينكسر الاستيراد.
@@ -372,10 +350,7 @@ export default async function (req) {
       incomplete_count: incomplete.length,
       incomplete: incomplete.slice(0, 100),
       issues: issues.slice(0, 200),
-      // رفض الملف: الفرق بين إجمالي المستحق في الإكسل وحساب النظام من تاريخ المباشرة يتجاوز 3 أيام
-      entitlement_rejected: entitlementMismatch.length > 0,
-      entitlement_mismatch_count: entitlementMismatch.length,
-      entitlement_mismatches: entitlementMismatch.slice(0, 200),
+
       preview: confirm ? [] : validPreview.slice(0, 200),
       confirm,
       saved,
