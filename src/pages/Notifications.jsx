@@ -6,6 +6,7 @@ import { Input } from "@/components/ui/input";
 import { Bell, Check } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useI18n } from "@/lib/i18n";
+import { loadMyRole, visibleInCompanyPortal } from "@/lib/roleNotifications";
 
 const TYPE_LABEL = {
   attendance: { ar: "حضور", en: "Attendance" },
@@ -42,11 +43,13 @@ export default function Notifications() {
   const [q, setQ] = useState("");
   const [typeFilter, setTypeFilter] = useState("all");
 
+  // صفحة إشعارات بوابة الشركات: نفس نطاق الجرس (إشعاراتي + مرحلة الموارد فقط).
   const load = async () => {
     setLoading(true);
     try {
+      const role = await loadMyRole();
       const data = await base44.entities.Notification.list("-created_date", 500);
-      setItems(data || []);
+      setItems((data || []).filter((n) => visibleInCompanyPortal(n, role)));
     } catch {} finally { setLoading(false); }
   };
   useEffect(() => { load(); }, []);
@@ -55,7 +58,7 @@ export default function Notifications() {
   const markAll = async () => {
     if (!unread) return;
     try {
-      await base44.entities.Notification.updateMany({ is_read: false }, { $set: { is_read: true } });
+      await Promise.all(filtered.filter((n) => !n.is_read).map((n) => base44.entities.Notification.update(n.id, { is_read: true })));
       load();
     } catch {}
   };

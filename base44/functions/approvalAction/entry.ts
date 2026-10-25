@@ -124,6 +124,15 @@ export default async function (req) {
       await su(entity, id, action === "approve"
         ? { manager_status: "approved", manager_id: actorId, manager_name: actorName, manager_date: today(), manager_note: note, status: "manager_approved" }
         : { manager_status: "rejected", manager_id: actorId, manager_name: actorName, manager_date: today(), manager_note: note, status: "rejected" });
+      // إحالة العهد/الشكاوى للموارد البشرية: بريد + إشعار داخلي لمعتمد الموارد (كبقية الأنواع)
+      if (action === "approve") {
+        try {
+          const detail = type === "equipment"
+            ? `عهدة: ${r.item_label || r.custom_type || r.item_type || ""}`
+            : `شكوى: ${String(r.description || r.custom_type || "").slice(0, 80)}`;
+          await notifyApproverForStatus(base44, { type, employeeId: r.employee_id, employeeName: emp?.full_name || r.employee_name, status: "manager_approved", employeeNationalId: emp?.national_id || "", employeeNumber: emp?.employee_number || "", position: emp?.position || "", details: detail });
+        } catch {}
+      }
       return Response.json({ ok: true });
     }
 

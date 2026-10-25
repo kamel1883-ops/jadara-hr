@@ -42,19 +42,26 @@ export async function notifyApproverForStatus(
     };
   };
 
-  // تحديد المعتمد المختص بناءً على المرحلة الحالية للطلب — من نفس المنشأة فقط
+  // تحديد المعتمد المختص بناءً على المرحلة الحالية للطلب — من نفس المنشأة فقط.
+  // - pending_manager: المدير المباشر لصاحب الطلب فقط (لا يصل لمدير آخر).
+  // - manager_approved: معتمد الموارد البشرية للمنشأة.
+  // - awaiting_finance: المعتمد المالي للمنشأة (يصرف مستحقات الجميع).
   let approver: any = null;
   let stageLabel = "";
+  let stage = "";
   if (["pending_manager", "pending"].includes(status)) {
     const manager = (employees || []).find((e) => e.id === requester?.manager_id) || null;
     approver = manager && sameTenant(manager) ? manager : await tenantAdmin();
     stageLabel = "المدير المباشر";
+    stage = "manager";
   } else if (status === "manager_approved") {
     approver = (employees || []).find((e) => e.is_approver_hr && sameTenant(e)) || await tenantAdmin();
     stageLabel = "الموارد البشرية";
+    stage = "hr";
   } else if (["hr_approved", "hr_settled", "awaiting_finance"].includes(status)) {
     approver = (employees || []).find((e) => e.is_approver_finance && sameTenant(e)) || await tenantAdmin();
     stageLabel = "المالية";
+    stage = "finance";
   }
 
   if (!approver || !approver.email) return { ok: true, skipped: true, reason: "no-approver-email" };
@@ -77,12 +84,17 @@ export async function notifyApproverForStatus(
     `\nيرجى الدخول إلى بوابة الموظف لمراجعة الطلب واتخاذ الإجراء المناسب.\n\n` +
     `مع التحية،\nمنصة جداره للموارد البشرية`;
 
-  // إشعار داخلي موجّه للمعتمد (يظهر في جرس البوابة إن كان مستخدماً مسجلاً)
+  // إشعار داخلي موجّه للمعتمد فقط:
+  // - مرحلة المدير: يظهر في بوابة الموظف لدى مديره المباشر فقط (employee_id).
+  // - مرحلة الموارد: يظهر في بوابة الشركات لدى مسؤول الموارد البشرية.
+  // - مرحلة المالية: يظهر في بوابة الموظف لدى المعتمد المالي فقط — لا يظهر لمسؤول الموارد البشرية.
+  // حقل stage يتيح لكل واجهة عرض ما يخص دورها فقط.
   try {
     await base44.asServiceRole.entities.Notification.create({
       title: subject,
       body: bodyText,
       type: "approval_pending",
+      stage,
       employee_id: approver.id || "",
       user_id: approver.user_id || "",
       unified_number: requesterUn,

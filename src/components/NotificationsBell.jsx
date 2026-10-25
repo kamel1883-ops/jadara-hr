@@ -3,6 +3,7 @@ import { Link } from "react-router-dom";
 import { base44 } from "@/api/base44Client";
 import { Bell, Check } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { loadMyRole, visibleInCompanyPortal } from "@/lib/roleNotifications";
 
 const fmtDateTime = (iso) => {
   if (!iso) return "";
@@ -16,7 +17,15 @@ export default function NotificationsBell({ tone = "light", align = "left" }) {
   const [open, setOpen] = useState(false);
   const ref = useRef(null);
 
-  const load = async () => { try { const n = await base44.entities.Notification.list("-created_date", 30); setItems(n || []); } catch {} };
+  // جرس بوابة الشركات: يعرض إشعاراتي + إشعارات مرحلة الموارد البشرية فقط.
+  // إشعارات المدير المباشر والمعتمد المالي موجّهة لأصحابها في بوابة الموظف — لا تظهر هنا لغيرهم.
+  const load = async () => {
+    try {
+      const role = await loadMyRole();
+      const n = await base44.entities.Notification.list("-created_date", 100);
+      setItems((n || []).filter((x) => visibleInCompanyPortal(x, role)).slice(0, 30));
+    } catch {}
+  };
   useEffect(() => { load(); const i = setInterval(load, 30000); return () => clearInterval(i); }, []);
   useEffect(() => {
     const h = (e) => { if (ref.current && !ref.current.contains(e.target)) setOpen(false); };
@@ -26,7 +35,8 @@ export default function NotificationsBell({ tone = "light", align = "left" }) {
   const unread = items.filter((n) => !n.is_read).length;
   const markRead = async () => {
     if (!unread) return;
-    try { await base44.entities.Notification.updateMany({ is_read: false }, { $set: { is_read: true } }); load(); } catch {}
+    // تعليم إشعاراتي المعروضة فقط — لا نمسّ إشعارات بقية المعتمدين.
+    try { await Promise.all(items.filter((n) => !n.is_read).map((n) => base44.entities.Notification.update(n.id, { is_read: true }))); load(); } catch {}
   };
   const toggle = () => { const next = !open; setOpen(next); if (next && unread) setTimeout(markRead, 500); };
 
