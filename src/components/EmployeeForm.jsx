@@ -22,7 +22,7 @@ const empty = {
   full_name: "",
   employee_number: "", national_id: "", email: "", gender: "male", is_saudi: false,
   birth_date: "", phone: "",
-  department: "", branch_id: "", branch_name: "", position: "", job_grade: "", role_level: "employee", hire_date: "",
+  department: "", branch_id: "", branch_name: "", branch_ids: [], position: "", job_grade: "", role_level: "employee", hire_date: "",
   contract_type: "full_time", contract_start_date: "", contract_end_date: "", status: "active",
   termination_reason: "none", termination_date: "", manager_id: "",
   is_approver_manager: false, is_approver_finance: false, is_approver_hr: false,
@@ -50,7 +50,7 @@ export default function EmployeeForm({ open, onClose, onSaved, employee, unified
     fullName: "الاسم الكامل", empNo: "الرقم الوظيفي",
     natIdSaudi: "الهوية الوطنية", natIdExpat: "رقم الإقامة",
     email: "بريد العمل (لربط الحساب)", gender: "الجنس", male: "ذكر", female: "أنثى",
-    birth: "تاريخ الميلاد", phone: "رقم الجوال", dept: "الإدارة", branch: "الفرع", noBranch: "بدون فرع", position: "المسمى الوظيفي", jobGrade: "الدرجة الوظيفية", hireDate: "تاريخ المباشرة (ثابت — مرجع نهاية الخدمة والإجازات، وأساس فئة اشتراك التأمينات)", contractStart: "تاريخ بدء العقد", contractEnd: "تاريخ نهاية العقد",
+    birth: "تاريخ الميلاد", phone: "رقم الجوال", dept: "الإدارة",    branch: "الفرع", noBranch: "بدون فرع", branchMulti: "فروع إضافية مسموح البصمة فيها", branchMultiHint: "إلى جانب فرعه الأساسي — يستطيع البصمة في أي فرع محدد هنا ضمن نطاقه وساعات دوامه.", position: "المسمى الوظيفي", jobGrade: "الدرجة الوظيفية", hireDate: "تاريخ المباشرة (ثابت — مرجع نهاية الخدمة والإجازات، وأساس فئة اشتراك التأمينات)", contractStart: "تاريخ بدء العقد", contractEnd: "تاريخ نهاية العقد",
     contract: "نوع العقد", full: "دوام كامل", part: "دوام جزئي", cont: "عقد",
     status: "الحالة الوظيفية", active: "على رأس العمل", onLeave: "في إجازة", terminated: "منهي", resigned: "مستقيل",
     base: "الراتب الأساسي (ريال)", housing: "بدل السكن", transport: "بدل المواصلات", other: "بدلات أخرى",
@@ -81,7 +81,7 @@ export default function EmployeeForm({ open, onClose, onSaved, employee, unified
     fullName: "Full name", empNo: "Employee number",
     natIdSaudi: "National ID", natIdExpat: "Iqama number",
     email: "Work email (account linking)", gender: "Gender", male: "Male", female: "Female",
-    birth: "Birth date", phone: "Phone", dept: "Department", branch: "Branch", noBranch: "No branch", position: "Job title", jobGrade: "Job grade", hireDate: "Commencement date (fixed — EOS & leave reference; basis of the GOSI contribution category)", contractStart: "Contract start date", contractEnd: "Contract end date",
+    birth: "Birth date", phone: "Phone", dept: "Department",    branch: "Branch", noBranch: "No branch", branchMulti: "Extra branches allowed for check-in", branchMultiHint: "In addition to the primary branch — may check in at any selected branch within its range and work hours.", position: "Job title", jobGrade: "Job grade", hireDate: "Commencement date (fixed — EOS & leave reference; basis of the GOSI contribution category)", contractStart: "Contract start date", contractEnd: "Contract end date",
     contract: "Contract type", full: "Full-time", part: "Part-time", cont: "Contract",
     status: "Employment status", active: "Active", onLeave: "On leave", terminated: "Terminated", resigned: "Resigned",
     base: "Base salary (SAR)", housing: "Housing allowance", transport: "Transport allowance", other: "Other allowances",
@@ -118,12 +118,17 @@ export default function EmployeeForm({ open, onClose, onSaved, employee, unified
 
   // الحقول المحلية تظهر فوراً، ثم تُملأ الهوية والميلاد من الخزنة.
   // الاعتماد على المعرّف والمرجع فقط حتى لا يُلغى الطلب عند إعادة رسم القائمة.
+  const parseBranchIds = (v) => {
+    if (Array.isArray(v)) return v.map(String).filter(Boolean);
+    if (typeof v === "string" && v.trim()) { try { const p = JSON.parse(v); if (Array.isArray(p)) return p.map(String).filter(Boolean); } catch {} }
+    return [];
+  };
   useEffect(() => {
     if (!employee) { setForm(empty); return; }
-    setForm({ ...empty, ...employee });
+    setForm({ ...empty, ...employee, branch_ids: parseBranchIds(employee.branch_ids) });
     if (!open || !employee.emp_ref) return;
     let active = true;
-    enrichEmployee(employee).then((e) => { if (active) setForm({ ...empty, ...e }); });
+    enrichEmployee(employee).then((e) => { if (active) setForm({ ...empty, ...e, branch_ids: parseBranchIds(e.branch_ids ?? employee.branch_ids) }); });
     return () => { active = false; };
   }, [employee?.id, employee?.emp_ref, open]);
   useEffect(() => {
@@ -186,7 +191,8 @@ export default function EmployeeForm({ open, onClose, onSaved, employee, unified
   const submit = async (e) => {
     e.preventDefault(); setSaving(true);
     try {
-      const payload = { ...form, base_salary: Number(form.base_salary) || 0, housing_allowance: Number(form.housing_allowance) || 0, transport_allowance: Number(form.transport_allowance) || 0, other_allowances: Number(form.other_allowances) || 0, ticket_value: Number(form.ticket_value) || 0, prior_used_leave: fromExcel ? (Number(form.prior_used_leave) || 0) : 0, leave_entitled_manual: null, leave_used_manual: form.leave_used_manual == null || form.leave_used_manual === "" ? null : Number(form.leave_used_manual) || 0 };
+      const extraBranches = parseBranchIds(form.branch_ids).filter((id) => id && id !== form.branch_id);
+      const payload = { ...form, branch_ids: extraBranches.length ? JSON.stringify(extraBranches) : "", base_salary: Number(form.base_salary) || 0, housing_allowance: Number(form.housing_allowance) || 0, transport_allowance: Number(form.transport_allowance) || 0, other_allowances: Number(form.other_allowances) || 0, ticket_value: Number(form.ticket_value) || 0, prior_used_leave: fromExcel ? (Number(form.prior_used_leave) || 0) : 0, leave_entitled_manual: null, leave_used_manual: form.leave_used_manual == null || form.leave_used_manual === "" ? null : Number(form.leave_used_manual) || 0 };
       // الكاش المحسوب (leave_balance) ملك الإصلاح والاعتماد — لا يُكتب من نموذج التعديل
       // حتى لا يعيد حفظ قيم قديمة ما تم إصلاحه بعد فتح النموذج.
       delete payload.leave_balance;
@@ -243,6 +249,28 @@ export default function EmployeeForm({ open, onClose, onSaved, employee, unified
                 
               </MobileSelect>
             </Field>
+            {branches.length > 0 && (
+              <Field label={t.branchMulti}>
+                <div className="rounded-xl border border-border p-2.5 space-y-1.5 max-h-36 overflow-y-auto bg-white">
+                  {branches.filter((b) => b.id !== form.branch_id).map((b) => {
+                    const ids = parseBranchIds(form.branch_ids);
+                    const on = ids.includes(String(b.id));
+                    return (
+                      <label key={b.id} className="flex items-center gap-2 text-sm cursor-pointer rounded-lg px-2 py-1.5 hover:bg-violet-50">
+                        <input
+                          type="checkbox"
+                          checked={on}
+                          onChange={() => set("branch_ids", on ? ids.filter((x) => x !== String(b.id)) : [...ids, String(b.id)])}
+                          className="w-4 h-4 accent-violet-600"
+                        />
+                        <span>{b.name}{b.is_main ? ` (${isAr ? "رئيسي" : "main"})` : ""}</span>
+                      </label>
+                    );
+                  })}
+                </div>
+                <p className="text-xs text-muted-foreground mt-1.5 leading-relaxed">{t.branchMultiHint}</p>
+              </Field>
+            )}
             <Field label={t.position}><Input value={form.position} onChange={(e) => set("position", e.target.value)} required /></Field>
             <Field label={t.roleLevel}>
               <MobileSelect value={form.role_level || "employee"} onValueChange={(v) => set("role_level", v)}>

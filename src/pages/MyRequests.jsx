@@ -77,6 +77,7 @@ export default function MyRequests() {
   const [employee, setEmployee] = useState(null);
   const [org, setOrg] = useState(null);
   const [branch, setBranch] = useState(null);
+  const [branches, setBranches] = useState([]);
   const [leaves, setLeaves] = useState([]);
   const [loans, setLoans] = useState([]);
   const [attendance, setAttendance] = useState([]);
@@ -118,7 +119,7 @@ export default function MyRequests() {
         setSignInMsg({ type: "err", text: data?.error || t.loading });
         setLoading(false); return;
       }
-      setEmployee(data.employee); setOrg(data.org); setBranch(data.branch || null);
+      setEmployee(data.employee); setOrg(data.org); setBranch(data.branch || null); setBranches(data.branches || []);
       setLeaves(data.leaves || []); setLoans(data.loans || []);
       setAttendance(data.attendance || []); setTrips(data.trips || []);
       setWarnings(data.warnings || []);
@@ -153,7 +154,7 @@ export default function MyRequests() {
   const handlePortalLogout = () => {
     portalSession.clear();
     setSession(null);
-    setEmployee(null); setOrg(null); setBranch(null);
+    setEmployee(null); setOrg(null); setBranch(null); setBranches([]);
     setLeaves([]); setLoans([]); setAttendance([]); setTrips([]); setWarnings([]); setReviews([]); setTrainings([]); setSettlements([]);
     setInvestigations([]);
     setDecisions([]); setIncentives([]); setEquipmentReqs([]); setComplaints([]);
@@ -215,9 +216,9 @@ export default function MyRequests() {
       const res = await base44.functions.invoke("portalData", { ...portalArgs, action: "today_attendance" });
       return res?.data?.today || null;
     },
-    clockIn: async (lat, lng, accuracy) => {
+    clockIn: async (lat, lng, accuracy, branchId) => {
       const res = await base44.functions.invoke("portalData", {
-        ...portalArgs, action: "clock_in", check_in: nowHM(), lat, lng, accuracy,
+        ...portalArgs, action: "clock_in", check_in: nowHM(), lat, lng, accuracy, branch_id: branchId || "",
       });
       const data = res?.data || res;
       if (!data?.ok) {
@@ -380,7 +381,7 @@ export default function MyRequests() {
             </div>
 
             {can("attendance") && (
-              <EmployeeClock employee={employee} org={org} branch={branch} onChanged={() => load(session)} clockApi={clockApi} initialToday={todayAtt} />
+              <EmployeeClock employee={employee} org={org} branch={branch} branches={branches} onChanged={() => load(session)} clockApi={clockApi} initialToday={todayAtt} />
             )}
 
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-6">

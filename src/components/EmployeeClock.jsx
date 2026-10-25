@@ -65,7 +65,7 @@ function resolveWorkplace(org, branch) {
   return null;
 }
 
-export default function EmployeeClock({ employee, org, branch, onChanged, clockApi, initialToday }) {
+export default function EmployeeClock({ employee, org, branch, branches, onChanged, clockApi, initialToday }) {
   const { lang } = usePortalI18n();
   const t = usePortalT("clock");
 
@@ -94,10 +94,20 @@ export default function EmployeeClock({ employee, org, branch, onChanged, clockA
   };
   useEffect(() => { if (employee?.id) loadToday(); }, [employee?.id, clockApi, initialToday]);
 
-  const wp = resolveWorkplace(org, branch);
+  // الفروع المسموح البصمة فيها: القائمة القادمة من الخادم، أو الفرع الأساسي كاحتياط
+  const candidates = (branches && branches.length ? branches : (branch ? [branch] : []));
+  const [selBranchId, setSelBranchId] = useState("");
+  useEffect(() => {
+    const ids = candidates.map((b) => String(b.id));
+    if (!ids.includes(String(selBranchId))) {
+      setSelBranchId(String(employee?.branch_id || ids[0] || ""));
+    }
+  }, [employee?.branch_id, (branches || []).map((b) => b.id).join(",")]);
+  const selected = candidates.find((b) => String(b.id) === String(selBranchId)) || candidates[0] || branch || null;
+  const wp = resolveWorkplace(org, selected);
   const radius = wp?.radius || 50;
-  // ساعات العمل المعتمدة: دوام فرع الموظف إن كان الفرع له دوام خاص، وإلا دوام المنشأة العام
-  const hours = resolveWorkHours(org, branch);
+  // ساعات العمل المعتمدة: دوام الفرع الذي يبصم فيه الموظف إن كان له دوام خاص، وإلا دوام المنشأة العام
+  const hours = resolveWorkHours(org, selected);
 
   const run = async (kind) => {
     setMsg({ type: "", text: "" });
@@ -139,11 +149,11 @@ export default function EmployeeClock({ employee, org, branch, onChanged, clockA
       if (kind === "in") {
         if (today && today.check_in) { setMsg({ type: "err", text: t.alreadyIn }); setBusy(false); return; }
         if (clockApi?.clockIn) {
-          await clockApi.clockIn(chosen.lat, chosen.lng, chosen.acc);
+          await clockApi.clockIn(chosen.lat, chosen.lng, chosen.acc, selected?.id || "");
         } else {
           const name = `${employee.employee_number} - ${employee.position}`;
-          const bId = branch?.id || employee.branch_id || null;
-          const bName = branch?.name || employee.branch_name || "";
+          const bId = selected?.id || employee.branch_id || null;
+          const bName = selected?.name || employee.branch_name || "";
           // حساب حالة التأخير من دوام الفرع المعتمد لموظفيه (وإلا دوام المنشأة)
           const checkInTime = nowHM();
           let arrivalStatus = "present";
@@ -218,6 +228,22 @@ export default function EmployeeClock({ employee, org, branch, onChanged, clockA
           </p>
         </div>
       </div>
+
+      {candidates.length > 1 && (
+        <div className="flex items-center gap-2 mb-4 rounded-xl bg-violet-50/60 border border-violet-200 px-3 py-2">
+          <MapPin size={14} className="text-violet-600 shrink-0" />
+          <label className="text-xs text-muted-foreground whitespace-nowrap">{lang === "ar" ? "فرع البصمة:" : "Check-in branch:"}</label>
+          <select
+            value={String(selBranchId)}
+            onChange={(e) => setSelBranchId(e.target.value)}
+            className="text-xs font-medium bg-white border border-border rounded-lg px-2 py-1.5 flex-1 min-w-0"
+          >
+            {candidates.map((b) => (
+              <option key={b.id} value={String(b.id)}>{b.name || b.id}</option>
+            ))}
+          </select>
+        </div>
+      )}
 
       <div className="flex flex-wrap items-center justify-between gap-2 mb-4 rounded-xl bg-muted/60 border border-border px-3 py-2">
         <div className="text-xs">

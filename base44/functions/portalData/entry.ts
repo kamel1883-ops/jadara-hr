@@ -176,6 +176,33 @@ export default async function (req) {
         const myUn = String(emp?.unified_number || "").trim();
         if (branch && branchUn && myUn && branchUn !== myUn) branch = null;
       }
+      // الفروع المسموح للموظف البصمة فيها: فرعه الأساسي + الفروع الإضافية (branch_ids) —
+      // تُرسل بإحداثياتها وساعات دوامها ليختار التطبيق أقرب فرع في نطاقه ويُسجَّل الحضور عليه.
+      let branches: any[] = [];
+      if (!isOwnerSession) {
+        const ids: string[] = [];
+        if (emp?.branch_id) ids.push(String(emp.branch_id));
+        try {
+          const extra = JSON.parse(emp?.branch_ids || "[]");
+          if (Array.isArray(extra)) for (const x of extra) { const s = String(x || "").trim(); if (s && !ids.includes(s)) ids.push(s); }
+        } catch {}
+        const myUn = String(emp?.unified_number || "").trim();
+        for (const bid of ids.slice(0, 20)) {
+          try {
+            const br: any = await base44.asServiceRole.entities.Branch.get(bid);
+            if (!br) continue;
+            const branchUn = String(br?.unified_number || "").trim();
+            if (branchUn && myUn && branchUn !== myUn) continue;
+            branches.push({
+              id: br.id, name: br.name || "",
+              lat: br.lat ?? null, lng: br.lng ?? null, radius: br.radius ?? null,
+              custom_hours: !!br.custom_hours,
+              work_start_time: br.work_start_time || "", work_end_time: br.work_end_time || "",
+              late_grace_minutes: br.late_grace_minutes ?? null,
+            });
+          } catch {}
+        }
+      }
       const publicEmployee = { ...(emp || {}) };
       delete publicEmployee.portal_password_hash;
       delete publicEmployee.portal_password_salt;
@@ -184,6 +211,7 @@ export default async function (req) {
         employee: publicEmployee,
         org: orgRow || null,
         branch,
+        branches,
         leaves, loans, attendance, trips, warnings,
         reviews, trainings,
         settlements: paidSettlements,
@@ -1071,12 +1099,33 @@ export default async function (req) {
       const recs = await base44.asServiceRole.entities.Attendance.filter(
         { employee_id: employeeId, date }, "-created_date", 5
       );
-      // ربط سجل الحضور بفرع الموظف (للتمييز في تقارير الحضور حسب الفرع)
+      // ربط سجل الحضور بالفرع الذي بصم فيه الموظف فعلاً (للتمييز في تقارير الحضور حسب الفرع).
+      // التطبيق يرسل branch_id لأقرب فرع مسموح في نطاقه، والخادم يتحقق أنه ضمن فروع الموظف
+      // (الأساسي + branch_ids) ومن نفس منشأته قبل اعتماده — أي فرع آخر يُرفض ويُعتمد الأساسي.
+      const allowedIds: string[] = [];
+      if (!isOwnerSession && emp?.branch_id) allowedIds.push(String(emp.branch_id));
+      if (!isOwnerSession) {
+        try {
+          const extra = JSON.parse(emp?.branch_ids || "[]");
+          if (Array.isArray(extra)) for (const x of extra) { const s = String(x || "").trim(); if (s && !allowedIds.includes(s)) allowedIds.push(s); }
+        } catch {}
+      }
+      let wantBid = String(body.branch_id || "").trim();
+      if (!allowedIds.includes(wantBid)) wantBid = String(emp?.branch_id || "");
       let branchId: any = null, branchName = "";
       let branchLat: any = null, branchLng: any = null, branchRadius: any = null;
-      if (!isOwnerSession && emp?.branch_id) {
-        try { const br = await base44.asServiceRole.entities.Branch.get(emp.branch_id); branchId = br?.id || emp.branch_id; branchName = br?.name || emp.branch_name || ""; branchLat = br?.lat; branchLng = br?.lng; branchRadius = br?.radius; }
-        catch { branchId = emp.branch_id; branchName = emp.branch_name || ""; }
+      let branchHours: any = null;
+      if (!isOwnerSession && wantBid) {
+        try {
+          const br = await base44.asServiceRole.entities.Branch.get(wantBid);
+          const myUn = String(emp?.unified_number || "").trim();
+          const brUn = String(br?.unified_number || "").trim();
+          if (br && (!brUn || !myUn || brUn === myUn)) {
+            branchId = br?.id || wantBid; branchName = br?.name || emp.branch_name || "";
+            branchLat = br?.lat; branchLng = br?.lng; branchRadius = br?.radius; branchHours = br;
+          } else { branchId = wantBid; branchName = emp?.branch_name || ""; }
+        }
+        catch { branchId = wantBid; branchName = emp?.branch_name || ""; }
       } else if (!isOwnerSession) { branchId = emp?.branch_id || null; branchName = emp?.branch_name || ""; }
 
       // التحقق المُحكم من موقع الموظف الفعلي (ضد تزييف GPS):
@@ -1099,12 +1148,14 @@ export default async function (req) {
         }
       }
 
-      // تحديد حالة الحضور: إذا وصل الموظف بعد وقت الدوام + هامش التسامح → "late"، وإلا → "present"
+      // تحديد حالة الحضور من دوام الفرع الذي بصم فيه إن كان له دوام خاص، وإلا دوام المنشأة:
+      // إذا وصل بعد وقت الدوام + هامش التسامح → "late"، وإلا → "present"
       let arrivalStatus = "present";
       try {
         const org = orgForWp || {};
-        const workStart = String(org.work_start_time || "").trim();
-        const graceMinutes = Number(org.late_grace_minutes) || 0;
+        const useBh = !!(branchHours && branchHours.custom_hours && String(branchHours.work_start_time || "").trim());
+        const workStart = String((useBh ? branchHours.work_start_time : org.work_start_time) || "").trim();
+        const graceMinutes = Number((useBh ? branchHours.late_grace_minutes : org.late_grace_minutes)) || 0;
         if (workStart && checkIn) {
           const toMin = (hm: string) => { const m = /^(\d{1,2}):(\d{2})/.exec(hm); return m ? Number(m[1]) * 60 + Number(m[2]) : null; };
           const startMin = toMin(workStart);

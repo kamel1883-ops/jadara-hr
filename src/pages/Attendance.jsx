@@ -71,6 +71,23 @@ export default function Attendance() {
     .filter((r) => statusFilter === "all" || r.status === statusFilter)
     .filter((r) => branchFilter === "all" || r.branch_id === branchFilter);
 
+  // تجميع السجل حسب الفرع (فرع ثم الذي يليه) عند عرض كل الفروع —
+  // مرتب بترتيب الفروع المعرّف، ثم «بدون فرع» في النهاية.
+  const grouped = (() => {
+    const map = new Map();
+    for (const r of filtered) {
+      const key = r.branch_id ? String(r.branch_id) : "__none__";
+      if (!map.has(key)) map.set(key, { id: key, name: r.branch_name || (isAr ? "بدون فرع" : "No branch"), rows: [] });
+      map.get(key).rows.push(r);
+    }
+    const order = new Map((branches || []).map((b, i) => [String(b.id), i]));
+    return [...map.values()].sort((a, b) => {
+      const oa = order.has(String(a.id)) ? order.get(String(a.id)) : 9999;
+      const ob = order.has(String(b.id)) ? order.get(String(b.id)) : 9999;
+      return oa - ob || String(a.name).localeCompare(String(b.name), isAr ? "ar" : "en");
+    });
+  })();
+
   const addRecord = async (e) => {
     e.preventDefault();
     if (!newRec.employee_id) return;
@@ -158,64 +175,74 @@ export default function Attendance() {
         </div>
       </form>
 
-      <div className="bg-white rounded-2xl border border-border overflow-hidden">
-        {loading ? (
-          <div className="p-10 text-center text-muted-foreground">{t.loading}</div>
-        ) : filtered.length === 0 ? (
-          <div className="p-14 text-center">
-            <CalendarCheck size={40} className="mx-auto text-slate-300 mb-3" />
-            <p className="text-muted-foreground">{t.empty}</p>
-          </div>
-        ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm">
-              <thead className="bg-slate-50 text-muted-foreground text-xs">
-                <tr>
-                  <th className="text-right px-4 py-3 font-medium">{isAr ? "الرقم" : "#"}</th>
-                  <th className="text-right px-4 py-3 font-medium">{t.thEmp}</th>
-                  <th className="text-right px-4 py-3 font-medium">{isAr ? "الهوية/الإقامة" : "National ID"}</th>
-                  <th className="text-right px-4 py-3 font-medium">{t.thBranch}</th>
-                  <th className="text-right px-4 py-3 font-medium">{t.thIn}</th>
-                  <th className="text-right px-4 py-3 font-medium">{t.thOut}</th>
-                  <th className="text-right px-4 py-3 font-medium">{t.thStatus}</th>
-                  <th className="text-right px-4 py-3 font-medium">{t.thActions}</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-border">
-                {filtered.map((r, i) => (
-                  <tr key={r.id} className="hover:bg-slate-50">
-                    <td className="px-4 py-3 font-medium tabular-nums">{i + 1}</td>
-                    <td className="px-4 py-3 font-medium">
-                      <div>{employees.find((e) => e.id === r.employee_id)?.full_name || r.employee_name}</div>
-                      {r.prepared_by_name && (
-                        <div className="text-[10px] text-violet-600 mt-0.5">
-                          {isAr ? "أُعدّت بواسطة" : "Prepared by"}: {r.prepared_by_name}{r.prepared_by_id ? ` — ${r.prepared_by_id}` : ""}
-                        </div>
-                      )}
-                    </td>
-                    <td className="px-4 py-3 text-xs tabular-nums text-muted-foreground">{r.national_id || (employees.find((e) => e.id === r.employee_id)?.national_id || "—")}</td>
-                    <td className="px-4 py-3 text-xs text-muted-foreground">{r.branch_name || "—"}</td>
-                    <td className="px-4 py-3 tabular-nums">{r.check_in || "-"}</td>
-                    <td className="px-4 py-3 tabular-nums">{r.check_out || "-"}</td>
-                    <td className="px-4 py-3"><StatusBadge status={r.status} /></td>
-                    <td className="px-4 py-3">
-                      <Select value={r.status} onValueChange={(v) => updateStatus(r, v)}>
-                        <SelectTrigger className="w-32 h-8 text-xs"><SelectValue /></SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="present">{t.present}</SelectItem>
-                          <SelectItem value="late">{t.late}</SelectItem>
-                          <SelectItem value="absent">{t.absent}</SelectItem>
-                          <SelectItem value="leave">{t.leave}</SelectItem>
-                        </SelectContent>
-                      </Select>
-                      </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        )}
-      </div>
+      {loading ? (
+        <div className="bg-white rounded-2xl border border-border p-10 text-center text-muted-foreground">{t.loading}</div>
+      ) : filtered.length === 0 ? (
+        <div className="bg-white rounded-2xl border border-border p-14 text-center">
+          <CalendarCheck size={40} className="mx-auto text-slate-300 mb-3" />
+          <p className="text-muted-foreground">{t.empty}</p>
+        </div>
+      ) : (
+        <div className="space-y-4">
+          {grouped.map((g) => (
+            <div key={g.id} className="bg-white rounded-2xl border border-border overflow-hidden">
+              {branchFilter === "all" && (
+                <div className="flex items-center justify-between px-4 py-2.5 bg-violet-50/60 border-b border-violet-100">
+                  <div className="font-semibold text-sm text-violet-800">{g.name}</div>
+                  <div className="text-xs text-violet-600 tabular-nums">{g.rows.length} {isAr ? "سجل" : "records"}</div>
+                </div>
+              )}
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm">
+                  <thead className="bg-slate-50 text-muted-foreground text-xs">
+                    <tr>
+                      <th className="text-right px-4 py-3 font-medium">{isAr ? "الرقم" : "#"}</th>
+                      <th className="text-right px-4 py-3 font-medium">{t.thEmp}</th>
+                      <th className="text-right px-4 py-3 font-medium">{isAr ? "الهوية/الإقامة" : "National ID"}</th>
+                      {branchFilter !== "all" && <th className="text-right px-4 py-3 font-medium">{t.thBranch}</th>}
+                      <th className="text-right px-4 py-3 font-medium">{t.thIn}</th>
+                      <th className="text-right px-4 py-3 font-medium">{t.thOut}</th>
+                      <th className="text-right px-4 py-3 font-medium">{t.thStatus}</th>
+                      <th className="text-right px-4 py-3 font-medium">{t.thActions}</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-border">
+                    {g.rows.map((r, i) => (
+                      <tr key={r.id} className="hover:bg-slate-50">
+                        <td className="px-4 py-3 font-medium tabular-nums">{i + 1}</td>
+                        <td className="px-4 py-3 font-medium">
+                          <div>{employees.find((e) => e.id === r.employee_id)?.full_name || r.employee_name}</div>
+                          {r.prepared_by_name && (
+                            <div className="text-[10px] text-violet-600 mt-0.5">
+                              {isAr ? "أُعدّت بواسطة" : "Prepared by"}: {r.prepared_by_name}{r.prepared_by_id ? ` — ${r.prepared_by_id}` : ""}
+                            </div>
+                          )}
+                        </td>
+                        <td className="px-4 py-3 text-xs tabular-nums text-muted-foreground">{r.national_id || (employees.find((e) => e.id === r.employee_id)?.national_id || "—")}</td>
+                        {branchFilter !== "all" && <td className="px-4 py-3 text-xs text-muted-foreground">{r.branch_name || "—"}</td>}
+                        <td className="px-4 py-3 tabular-nums">{r.check_in || "-"}</td>
+                        <td className="px-4 py-3 tabular-nums">{r.check_out || "-"}</td>
+                        <td className="px-4 py-3"><StatusBadge status={r.status} /></td>
+                        <td className="px-4 py-3">
+                          <Select value={r.status} onValueChange={(v) => updateStatus(r, v)}>
+                            <SelectTrigger className="w-32 h-8 text-xs"><SelectValue /></SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="present">{t.present}</SelectItem>
+                              <SelectItem value="late">{t.late}</SelectItem>
+                              <SelectItem value="absent">{t.absent}</SelectItem>
+                              <SelectItem value="leave">{t.leave}</SelectItem>
+                            </SelectContent>
+                          </Select>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
 
       <div className="mt-5">
         <h3 className="text-lg font-bold mb-2 flex items-center gap-2">
