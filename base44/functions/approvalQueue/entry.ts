@@ -67,10 +67,12 @@ export default async function (req) {
     for (const e of allEmployees || []) {
       if (e.id) { idToNat.set(e.id, e.national_id || ""); idToName.set(e.id, e.full_name || ""); }
     }
+    // العرض المعتمد: الاسم الكامل أولاً ثم الهوية — يُفضَّل الاسم الحقيقي من سجل الموظف
+    // على القيمة المخزّنة في الطلب (الطلبات القديمة من البوابة خزّنت "رقم - مسمى" مؤقتاً).
     const withNat = (arr) => (arr || []).map((r) => ({
       ...r,
       national_id: r.national_id || idToNat.get(r.employee_id) || "",
-      employee_name: r.employee_name || idToName.get(r.employee_id) || "",
+      employee_name: idToName.get(r.employee_id) || r.employee_name || "",
     }));
 
     if (myEmp.is_approver_manager) {
@@ -93,7 +95,7 @@ export default async function (req) {
       const subName = (id) => subs.find((s) => s.id === id)?.full_name || "";
       const done = (arr) => (arr || [])
         .filter((r) => subIds.has(r.employee_id) && !mgrPending.includes(r.status))
-        .map((r) => ({ ...r, employee_name: r.employee_name || subName(r.employee_id) }));
+        .map((r) => ({ ...r, national_id: r.national_id || idToNat.get(r.employee_id) || "", employee_name: subName(r.employee_id) || idToName.get(r.employee_id) || r.employee_name || "" }));
       // سجلّات الحضور والانصراف لمرؤوسي المدير — أحدث 300 سجل
       const allAttendance = await base44.asServiceRole.entities.Attendance.list("-date", 300);
       const attendance = withNat((allAttendance || []).filter((a) => subIds.has(a.employee_id)));
@@ -101,7 +103,7 @@ export default async function (req) {
         role: "manager",
         myEmp, org: myOrg,
         actorId, actorName,
-        subordinates: subs.map((s) => ({ id: s.id, full_name: s.full_name, department: s.department, position: s.position, national_id: s.national_id || "", employee_number: s.employee_number || "" })),
+        subordinates: subs.map((s) => ({ id: s.id, full_name: s.full_name, department: s.department, position: s.position, national_id: s.national_id || "", employee_number: s.employee_number || "", hire_date: s.hire_date || "", annual_leave_entitlement: s.annual_leave_entitlement ?? null, prior_used_leave: s.prior_used_leave ?? 0, opening_balance_source: s.opening_balance_source || "", leave_used_manual: s.leave_used_manual ?? null })),
         leaves: withNat(bySub(allLeaves)),
         loans: withNat(bySub(allLoans)),
         trips: withNat(bySub(allTrips)),

@@ -52,7 +52,9 @@ export default async function (req) {
     const emp = isOwnerSession
       ? { id: "owner", full_name: Deno.env.get("OWNER_FULL_NAME") || "مالك النظام", employee_number: "", position: "المالك", department: "الإدارة", role_level: "owner", user_id: null }
       : await base44.asServiceRole.entities.Employee.get(employeeId);
-    const empLabel = isOwnerSession ? "مالك النظام" : `${emp.employee_number} - ${emp.position}`;
+    // اسم الموظف المعروض في الطلبات: الاسم الكامل + رقم الهوية يُعرضان في الواجهة،
+    // أما حقل employee_name المخزّن فيبقى الاسم الكامل فقط (لا الرقم الوظيفي ولا المسمى).
+    const empLabel = isOwnerSession ? "مالك النظام" : (String(emp.full_name || "").trim() || `${emp.employee_number} - ${emp.position}`);
     // سلطة المالك مرتبطة بجلسة المالك فقط (employeeId === "owner"، Via verifyOwnerLogin) —
     // لا تُشتق من Employee.role_level القابل للتعديل لمنع التصعيد.
     const isOwner = isOwnerSession;

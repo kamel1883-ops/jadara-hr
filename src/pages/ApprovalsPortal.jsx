@@ -12,6 +12,7 @@ import { ClipboardCheck, Check, X, Loader2, Download, Plane, Printer, Users } fr
 import { cn } from "@/lib/utils";
 import { leaveTypeLabel, formatCurrency } from "@/lib/hr";
 import { badge } from "@/lib/approvals";
+import { entitledLeaveDays, usedLeaveTotal, getEmployeeAnnualDays } from "@/lib/leaveBalance";
 import { usePortalI18n, usePortalT, portalDir } from "@/lib/portalI18n";
 import ManagerAttendanceSection from "@/components/portal/ManagerAttendanceSection";
 import SettlementSheet from "@/components/SettlementSheet";
@@ -98,6 +99,30 @@ export default function ApprovalsPortal({ portalSession }) {
     setBusy(r.id);
     try { await call({ type, action: "approve", id: r.id }); }
     finally { setBusy(false); }
+  };
+
+  // صندوق تأكيد موافقة المدير على الإجازة: يعرض رصيد الموظف قبل الخصم مع خياري إلغاء/متابعة.
+  const [mgrConfirm, setMgrConfirm] = useState(null);
+  const mgrConfirmInfo = (r) => {
+    if (!r) return null;
+    const sub = (data?.subordinates || []).find((s) => s.id === r.employee_id) || {};
+    const emp = { ...sub, full_name: r.employee_name || sub.full_name, national_id: r.national_id || sub.national_id };
+    const asOf = r.start_date ? new Date(r.start_date) : new Date();
+    const entitled = entitledLeaveDays(emp, data?.org || null, asOf);
+    const otherLeaves = (data?.leaveHistory || []).filter((l) => l.employee_id === r.employee_id && l.id !== r.id);
+    const used = usedLeaveTotal(emp, otherLeaves);
+    const before = Math.round((entitled - used) * 10) / 10;
+    const requested = Math.max(0, Number(r.days_count) || 0);
+    const consume = r.leave_type === "annual" || r.is_full_clearance;
+    const after = Math.round((before - (consume ? requested : 0)) * 10) / 10;
+    return { emp, entitled, used, before, requested, after, consume, annualDays: getEmployeeAnnualDays(emp, data?.org || null) };
+  };
+  const openManagerLeaveConfirm = (r) => setMgrConfirm(r);
+  const confirmManagerLeave = async () => {
+    if (!mgrConfirm) return;
+    const r = mgrConfirm;
+    setMgrConfirm(null);
+    await managerApprove("leaves", r);
   };
 
   const Card = ({ r, children, actions, kindBadge }) => (
@@ -191,7 +216,7 @@ export default function ApprovalsPortal({ portalSession }) {
           {leaves.map((r) => (
             <Card key={r.id} r={r}
               actions={[
-                { label: t.approve, cls: "bg-emerald-600 hover:bg-emerald-700", onClick: () => managerApprove("leaves", r), busyKey: r.id },
+                { label: t.approve, cls: "bg-emerald-600 hover:bg-emerald-700", onClick: () => openManagerLeaveConfirm(r), busyKey: r.id },
                 { label: t.reject, cls: "bg-rose-50 text-rose-600 hover:bg-rose-100", onClick: () => openReject("leaves", r) },
               ]}>
               {r.leave_type === "permission" && (
@@ -206,6 +231,20 @@ export default function ApprovalsPortal({ portalSession }) {
               )}
               {r.is_full_clearance && <span className="text-xs px-2 py-0.5 rounded-full bg-violet-50 text-violet-600">{t.fullClear}</span>}
               {r.reason && <span className="text-xs text-muted-foreground">{r.reason}</span>}
+              {r.medical_report_url && (
+                <StoredDocButton value={r.medical_report_url} className="inline-flex items-center gap-1 text-xs h-6 px-2 rounded-full bg-rose-50 text-rose-600 border-0">
+                  <Download size={12} /> {isAr ? "التقرير الطبي" : "Medical report"}
+                </StoredDocButton>
+              )}
+              {(() => {
+                const info = mgrConfirmInfo(r);
+                if (!info) return null;
+                return (
+                  <span className="text-[11px] text-muted-foreground">
+                    {isAr ? `الرصيد: مستحق ${info.entitled} · مستخدم ${info.used} · متبقي ${info.before}` : `Balance: ${info.entitled} entitled · ${info.used} used · ${info.before} left`}
+                  </span>
+                );
+              })()}
             </Card>
           ))}
         </div>
@@ -333,7 +372,7 @@ export default function ApprovalsPortal({ portalSession }) {
                   const b = badge(r.status);
                   return (
                   <div key={r.key} className="grid grid-cols-12 gap-2 px-3 py-2.5 text-xs border-t items-center">
-                    <div className="col-span-3 font-medium truncate">{r.emp}</div>
+                    <div className="col-span-3 min-w-0"><div className="font-medium truncate">{r.emp || "—"}</div>{r.nat && <div className="text-[11px] text-muted-foreground tabular-nums" dir="ltr">{r.nat}</div>}</div>
                     <div className="col-span-2 text-muted-foreground">{r.date || "—"}</div>
                     <div className="col-span-2">{r.kind}</div>
                     <div className="col-span-2 text-muted-foreground truncate">{r.detail}</div>
@@ -366,6 +405,57 @@ export default function ApprovalsPortal({ portalSession }) {
                 {busy ? <Loader2 size={16} className="animate-spin" /> : <X size={16} />} {t.confirmReject}
               </Button>
             </DialogFooter>
+          </DialogContent>
+        </Dialog>
+
+        <Dialog open={!!mgrConfirm} onOpenChange={() => setMgrConfirm(null)}>
+          <DialogContent className="max-w-md">
+            <DialogHeader><DialogTitle>{isAr ? "تأكيد موافقة الإجازة" : "Confirm leave approval"}</DialogTitle></DialogHeader>
+            {mgrConfirm && (() => {
+              const info = mgrConfirmInfo(mgrConfirm);
+              return (
+                <div className="space-y-4">
+                  <div className="pb-1">
+                    <div className="font-medium text-sm">{mgrConfirm.employee_name || "—"}</div>
+                    {(mgrConfirm.national_id || info?.emp?.national_id) && <div className="text-xs text-muted-foreground tabular-nums" dir="ltr">{mgrConfirm.national_id || info?.emp?.national_id}</div>}
+                    {(info?.emp?.hire_date || mgrConfirm.hire_date) && <div className="text-xs text-muted-foreground mt-0.5">{isAr ? "تاريخ المباشرة: " : "Hire date: "}<b className="text-foreground">{info?.emp?.hire_date || mgrConfirm.hire_date}</b>{info ? (isAr ? ` · الاستحقاق السنوي: ${info.annualDays} يوم` : ` · Annual: ${info.annualDays}d`) : ""}</div>}
+                  </div>
+                  <div className="text-sm text-muted-foreground">{leaveTypeLabel(mgrConfirm.leave_type)} · {t.days(mgrConfirm.start_date, mgrConfirm.end_date, mgrConfirm.days_count)}</div>
+                  {mgrConfirm.medical_report_url && (
+                    <StoredDocButton value={mgrConfirm.medical_report_url} className="inline-flex items-center gap-1 text-xs h-7 px-2.5 rounded-full bg-rose-50 text-rose-600 border-0">
+                      <Download size={13} /> {isAr ? "التقرير الطبي المرفق" : "Attached medical report"}
+                    </StoredDocButton>
+                  )}
+                  {info && (
+                    <>
+                      <div className="grid grid-cols-3 gap-2 text-sm">
+                        <div className="rounded-lg bg-slate-50 p-2.5"><div className="text-xs text-muted-foreground">{isAr ? "المستحق" : "Entitled"}</div><div className="font-bold">{info.entitled}</div></div>
+                        <div className="rounded-lg bg-amber-50 p-2.5"><div className="text-xs text-muted-foreground">{isAr ? "المستخدم" : "Used"}</div><div className="font-bold">{info.used}</div></div>
+                        <div className="rounded-lg bg-emerald-50 p-2.5"><div className="text-xs text-muted-foreground">{isAr ? "المتبقي قبل الخصم" : "Remaining"}</div><div className="font-bold text-emerald-700">{info.before}</div></div>
+                      </div>
+                      <div className="text-xs text-muted-foreground">
+                        {isAr ? "المدة المطلوبة: " : "Requested: "}<b className="text-foreground">{info.requested} {isAr ? "يوم" : "days"}</b>
+                        {info.consume
+                          ? (isAr ? " · تُخصم من الرصيد — المتبقي بعد الموافقة: " : " · deducted — remaining after: ")
+                          : (isAr ? " · لا تُخصم من رصيد الإجازات السنوية" : " · not deducted from annual balance")}
+                        {info.consume && <b className={info.after < 0 ? "text-rose-600" : "text-foreground"}>{info.after}</b>}
+                      </div>
+                      {info.consume && info.after < 0 && (
+                        <div className="text-xs text-rose-700 bg-rose-50 border border-rose-200 rounded-lg p-2.5">
+                          {isAr ? "تنبيه: المدة المطلوبة تتجاوز رصيد الموظف المتبقي." : "Warning: requested days exceed the remaining balance."}
+                        </div>
+                      )}
+                    </>
+                  )}
+                  <DialogFooter>
+                    <Button variant="outline" onClick={() => setMgrConfirm(null)}>{t.cancel}</Button>
+                    <Button onClick={confirmManagerLeave} disabled={!!busy} className="gap-1 bg-emerald-600 hover:bg-emerald-700">
+                      {busy ? <Loader2 size={16} className="animate-spin" /> : <Check size={16} />} {isAr ? "تأكيد الموافقة" : "Confirm approval"}
+                    </Button>
+                  </DialogFooter>
+                </div>
+              );
+            })()}
           </DialogContent>
         </Dialog>
       </div>
