@@ -79,7 +79,7 @@ export default async function (req) {
           manager_date: today(), status: "manager_approved",
         });
         // تنبيه الموارد البشرية بوجود طلب سلفة انتقل لمرحلة اعتمادها
-        try { await notifyApproverForStatus(base44, { type: "loan", employeeId: r.employee_id, employeeName: r.employee_name, status: "manager_approved" }); } catch {}
+        try { await notifyApproverForStatus(base44, { type: "loan", employeeId: r.employee_id, employeeName: emp?.full_name || r.employee_name, status: "manager_approved", employeeNationalId: emp?.national_id || "", employeeNumber: emp?.employee_number || "", position: emp?.position || "", details: `سلفة بمبلغ ${r.amount || 0}` }); } catch {}
       } else {
         await su("LoanRequest", id, {
           manager_status: "rejected", manager_id: actorId, manager_name: actorName,
@@ -102,7 +102,7 @@ export default async function (req) {
           manager_date: today(), status: "manager_approved",
         });
         // تنبيه الموارد البشرية بوجود انتداب انتقل لمرحلة اعتمادها
-        try { await notifyApproverForStatus(base44, { type: "trip", employeeId: r.employee_id, employeeName: r.employee_name, status: "manager_approved" }); } catch {}
+        try { await notifyApproverForStatus(base44, { type: "trip", employeeId: r.employee_id, employeeName: emp?.full_name || r.employee_name, status: "manager_approved", employeeNationalId: emp?.national_id || "", employeeNumber: emp?.employee_number || "", position: emp?.position || "", details: `انتداب إلى ${r.destination || ""}` }); } catch {}
       } else {
         await su("BusinessTrip", id, {
           manager_status: "rejected", manager_id: actorId, manager_name: actorName,
@@ -149,7 +149,7 @@ export default async function (req) {
         }
         await su("LoanRequest", id, patch);
         // تنبيه المالية بوجود سلفة بانتظار الصرف
-        try { await notifyApproverForStatus(base44, { type: "loan", employeeId: r.employee_id, employeeName: r.employee_name, status: "awaiting_finance" }); } catch {}
+        try { const empN = (allEmployees || []).find((e) => e.id === r.employee_id); await notifyApproverForStatus(base44, { type: "loan", employeeId: r.employee_id, employeeName: empN?.full_name || r.employee_name, status: "awaiting_finance", employeeNationalId: empN?.national_id || "", employeeNumber: empN?.employee_number || "", position: empN?.position || "", details: `سلفة بمبلغ ${r.amount || patch.amount || 0}` }); } catch {}
       } else {
         await su("LoanRequest", id, {
           hr_status: "rejected", hr_id: actorId, hr_name: actorName, hr_date: today(), hr_note: note,
@@ -172,7 +172,7 @@ export default async function (req) {
           hr_note: note, status: "awaiting_finance",
         });
         // تنبيه المالية بوجود انتداب بانتظار الصرف
-        try { await notifyApproverForStatus(base44, { type: "trip", employeeId: r.employee_id, employeeName: r.employee_name, status: "awaiting_finance" }); } catch {}
+        try { const empN = (allEmployees || []).find((e) => e.id === r.employee_id); await notifyApproverForStatus(base44, { type: "trip", employeeId: r.employee_id, employeeName: empN?.full_name || r.employee_name, status: "awaiting_finance", employeeNationalId: empN?.national_id || "", employeeNumber: empN?.employee_number || "", position: empN?.position || "", details: `انتداب إلى ${r.destination || ""}` }); } catch {}
       } else {
         await su("BusinessTrip", id, {
           hr_note: note, status: "rejected",
@@ -196,7 +196,7 @@ export default async function (req) {
           manager_date: today(), status: "manager_approved",
         });
         // تنبيه الموارد البشرية بوجود طلب إجازة انتقل لمرحلة تصفيتها واعتمادها
-        try { await notifyApproverForStatus(base44, { type: "leave", employeeId: leave.employee_id, employeeName: leave.employee_name, status: "manager_approved" }); } catch {}
+        try { await notifyApproverForStatus(base44, { type: "leave", employeeId: leave.employee_id, employeeName: emp?.full_name || leave.employee_name, status: "manager_approved", employeeNationalId: emp?.national_id || "", employeeNumber: emp?.employee_number || "", position: emp?.position || "", details: `إجازة من ${leave.start_date || ""} إلى ${leave.end_date || ""} (${leave.days_count || 0} يوم)` }); } catch {}
       } else {
         await su("LeaveRequest", id, {
           manager_status: "rejected", manager_id: actorId, manager_name: actorName,

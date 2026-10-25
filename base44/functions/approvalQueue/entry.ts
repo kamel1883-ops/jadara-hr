@@ -101,7 +101,7 @@ export default async function (req) {
         role: "manager",
         myEmp, org: myOrg,
         actorId, actorName,
-        subordinates: subs.map((s) => ({ id: s.id, full_name: s.full_name, department: s.department, position: s.position, national_id: s.national_id || "" })),
+        subordinates: subs.map((s) => ({ id: s.id, full_name: s.full_name, department: s.department, position: s.position, national_id: s.national_id || "", employee_number: s.employee_number || "" })),
         leaves: withNat(bySub(allLeaves)),
         loans: withNat(bySub(allLoans)),
         trips: withNat(bySub(allTrips)),

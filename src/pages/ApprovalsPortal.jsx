@@ -8,7 +8,7 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
-import { ClipboardCheck, Check, X, Loader2, Download, Plane, Printer } from "lucide-react";
+import { ClipboardCheck, Check, X, Loader2, Download, Plane, Printer, Users } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { leaveTypeLabel, formatCurrency } from "@/lib/hr";
 import { badge } from "@/lib/approvals";
@@ -163,7 +163,28 @@ export default function ApprovalsPortal({ portalSession }) {
       <div dir={portalDir(lang)} className="animate-fade-in">
         <PageHeader title={t.mTitle} subtitle={t.mSub} />
         {data?.message && <div className="mb-4 text-sm text-amber-700 bg-amber-50 border border-amber-200 rounded-lg p-3">{data.message}</div>}
-        {data?.subordinates?.length > 0 && <div className="mb-3 text-xs text-muted-foreground">{t.subInfo(data.subordinates.length)}</div>}
+        {(data?.subordinates?.length > 0) && (
+          <div className="mb-5 rounded-2xl border border-white/60 bg-white/50 backdrop-blur-md shadow-lg p-4">
+            <div className="flex items-center gap-2 mb-1">
+              <Users size={16} className="text-violet-600" />
+              <h3 className="text-sm font-semibold">{t.teamTitle} ({data.subordinates.length})</h3>
+            </div>
+            <p className="text-xs text-muted-foreground mb-3">{t.teamSub}</p>
+            <div className="grid sm:grid-cols-2 gap-2">
+              {data.subordinates.map((s) => (
+                <div key={s.id} className="rounded-xl border border-white/60 bg-white/70 px-3 py-2.5">
+                  <div className="font-medium text-sm">{s.full_name || "—"}</div>
+                  <div className="text-xs text-muted-foreground tabular-nums mt-0.5" dir="ltr">
+                    {[s.employee_number, s.national_id].filter(Boolean).join(" · ") || "—"}
+                  </div>
+                  {[s.position, s.department].filter(Boolean).length > 0 && (
+                    <div className="text-[11px] text-muted-foreground mt-0.5">{[s.position, s.department].filter(Boolean).join(" · ")}</div>
+                  )}
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
         {total === 0 && <Empty />}
         {leaves.length > 0 && <h3 className="text-sm font-semibold text-muted-foreground mt-5 mb-2">{isAr ? "الإجازات والاستئذان" : "Leaves & permissions"}</h3>}
         <div className="space-y-3">

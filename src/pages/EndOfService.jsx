@@ -265,6 +265,10 @@ export default function EndOfService() {
       try {
         await base44.functions.invoke("notifyApprover", {
           type: "settlement", employeeId: s.employee_id, employeeName: s.employee_name, status: "awaiting_finance",
+          employeeNationalId: employees.find((e) => e.id === s.employee_id)?.national_id || s.national_id || "",
+          employeeNumber: employees.find((e) => e.id === s.employee_id)?.employee_number || "",
+          position: employees.find((e) => e.id === s.employee_id)?.position || "",
+          details: `مخالصة نهاية خدمة — ${s.reason || ""} (آخر دوام ${s.last_working_date || ""})`,
         });
       } catch {}
     } catch (e) {}

@@ -1258,7 +1258,13 @@ export default async function (req) {
         manager_id, manager_name,
       });
       // تنبيه المدير المباشر ببريد + إشعار داخلي بوجود طلب إجازة ينتظر موافقته
-      try { await notifyApproverForStatus(base44, { type: "leave", employeeId, employeeName: empLabel, status: "pending_manager" }); } catch {}
+      try {
+        await notifyApproverForStatus(base44, {
+          type: "leave", employeeId, employeeName: emp?.full_name || empLabel, status: "pending_manager",
+          employeeNationalId: emp?.national_id || "", employeeNumber: emp?.employee_number || "", position: emp?.position || "",
+          details: `إجازة ${p.leave_type || ""} من ${p.start_date || ""} إلى ${p.end_date || ""} (${p.days_count || 0} يوم)`,
+        });
+      } catch {}
       return Response.json({ ok: true, leave: created });
     }
 
@@ -1280,7 +1286,13 @@ export default async function (req) {
         paid_amount: 0,
       });
       // تنبيه المدير المباشر ببريد + إشعار داخلي بوجود طلب سلفة ينتظر موافقته
-      try { await notifyApproverForStatus(base44, { type: "loan", employeeId, employeeName: empLabel, status: "pending_manager" }); } catch {}
+      try {
+        await notifyApproverForStatus(base44, {
+          type: "loan", employeeId, employeeName: emp?.full_name || empLabel, status: "pending_manager",
+          employeeNationalId: emp?.national_id || "", employeeNumber: emp?.employee_number || "", position: emp?.position || "",
+          details: `سلفة بمبلغ ${p.amount || 0} على ${p.installment_count || 1} قسط`,
+        });
+      } catch {}
       return Response.json({ ok: true, loan });
     }
 
@@ -1296,7 +1308,13 @@ export default async function (req) {
         status: "pending_manager", manager_status: "pending", hr_status: "pending",
         manager_id, manager_name,
       });
-      try { await notifyApproverForStatus(base44, { type: "equipment", employeeId, employeeName: empLabel, status: "pending_manager" }); } catch {}
+      try {
+        await notifyApproverForStatus(base44, {
+          type: "equipment", employeeId, employeeName: emp?.full_name || empLabel, status: "pending_manager",
+          employeeNationalId: emp?.national_id || "", employeeNumber: emp?.employee_number || "", position: emp?.position || "",
+          details: `عهدة: ${p.item_label || p.custom_type || p.item_type || ""}`,
+        });
+      } catch {}
       return Response.json({ ok: true, equipment: created });
     }
 
@@ -1318,7 +1336,12 @@ export default async function (req) {
         manager_status: confidential ? "approved" : "pending", hr_status: "pending",
         manager_id: confidential ? null : manager_id, manager_name: confidential ? "" : manager_name,
       });
-      try { await notifyApproverForStatus(base44, { type: "complaint", employeeId, employeeName: empLabel, status }); } catch {}
+      try {
+        await notifyApproverForStatus(base44, {
+          type: "complaint", employeeId, employeeName: emp?.full_name || empLabel, status,
+          employeeNationalId: emp?.national_id || "", employeeNumber: emp?.employee_number || "", position: emp?.position || "",
+        });
+      } catch {}
       return Response.json({ ok: true, complaint: created });
     }
 
@@ -1405,7 +1428,13 @@ export default async function (req) {
         manager_status: "pending", manager_id, manager_name,
       });
       // تنبيه المدير المباشر ببريد + إشعار داخلي بوجود طلب انتداب ينتظر موافقته
-      try { await notifyApproverForStatus(base44, { type: "trip", employeeId, employeeName: empLabel, status: "pending_manager" }); } catch {}
+      try {
+        await notifyApproverForStatus(base44, {
+          type: "trip", employeeId, employeeName: emp?.full_name || empLabel, status: "pending_manager",
+          employeeNationalId: emp?.national_id || "", employeeNumber: emp?.employee_number || "", position: emp?.position || "",
+          details: `انتداب إلى ${p.destination || ""} من ${p.start_date || ""} إلى ${p.end_date || ""}`,
+        });
+      } catch {}
       return Response.json({ ok: true, trip: created });
     }
 

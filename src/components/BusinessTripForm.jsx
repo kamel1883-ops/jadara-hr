@@ -97,7 +97,7 @@ export default function BusinessTripForm({ open, onClose, onSaved, employees, ed
       else {
         await base44.entities.BusinessTrip.create({ ...payload, status: "pending_manager", manager_status: "pending" });
         // تنبيه المدير المباشر ببريد بوجود طلب انتداب ينتظر موافقته
-        try { await base44.functions.invoke("notifyApprover", { type: "trip", employeeId: form.employee_id, employeeName: emp?.full_name, status: "pending_manager" }); } catch {}
+        try { await base44.functions.invoke("notifyApprover", { type: "trip", employeeId: form.employee_id, employeeName: emp?.full_name, employeeNationalId: emp?.national_id || "", employeeNumber: emp?.employee_number || "", position: emp?.position || "", details: `انتداب إلى ${form.destination || ""}`, status: "pending_manager" }); } catch {}
       }
       onSaved?.(); onClose?.();
     } catch (error) {

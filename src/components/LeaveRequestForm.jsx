@@ -92,7 +92,7 @@ export default function LeaveRequestForm({ open, onClose, onSaved, employees, cu
       else {
         await base44.entities.LeaveRequest.create(payload);
         // تنبيه المدير المباشر ببريد بوجود طلب إجازة ينتظر موافقته
-        try { await base44.functions.invoke("notifyApprover", { type: "leave", employeeId: form.employee_id, employeeName: emp?.full_name, status: "pending_manager" }); } catch {}
+        try { await base44.functions.invoke("notifyApprover", { type: "leave", employeeId: form.employee_id, employeeName: emp?.full_name, employeeNationalId: emp?.national_id || "", employeeNumber: emp?.employee_number || "", position: emp?.position || "", details: `إجازة من ${form.start_date} إلى ${form.end_date} (${days} يوم)`, status: "pending_manager" }); } catch {}
       }
       onSaved?.(); onClose?.();
     } catch (error) {

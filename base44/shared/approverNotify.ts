@@ -11,7 +11,12 @@ const TYPE_LABEL: Record<string, string> = { leave: "إجازة", loan: "سلف�
 
 export async function notifyApproverForStatus(
   base44: any,
-  params: { type: string; employeeId: string; employeeName?: string; status: string }
+  params: {
+    type: string; employeeId: string; employeeName?: string; status: string;
+    // هوية صاحب الطلب — تُمرَّر من المتصل عند توفرها، ويُكملها سجل الموظف كاحتياط.
+    // (national_id قد يكون مُعمّى في الخزنة فيبقى فارغاً — يُعرض «—» بدل كتم الإشعار)
+    employeeNationalId?: string; employeeNumber?: string; position?: string; details?: string;
+  }
 ): Promise<{ ok: boolean; skipped?: boolean; reason?: string; sentTo?: string }> {
   const { type, employeeId, employeeName, status } = params;
   if (!employeeId || !status) return { ok: true, skipped: true, reason: "missing-data" };
@@ -55,13 +60,21 @@ export async function notifyApproverForStatus(
   if (!approver || !approver.email) return { ok: true, skipped: true, reason: "no-approver-email" };
 
   const label = TYPE_LABEL[type] || "طلب";
-  const empName = employeeName || requester?.full_name || "—";
+  // employeeName قد يصل بصيغة «رقم - مهنة» من مسار البوابة — الاسم الحقيقي من السجل أولاً.
+  const empName = requester?.full_name || employeeName || "—";
+  const empNumber = params.employeeNumber || requester?.employee_number || "—";
+  const empNid = params.employeeNationalId || requester?.national_id || "—";
+  const empPos = params.position || requester?.position || "—";
   const subject = `لديك طلب ${label} بانتظار الموافقة — منصة جداره`;
   const bodyText =
     `السلام عليكم ${approver.full_name || ""}،\n\n` +
     `لديك طلب ${label} بانتظار ${stageLabel} على بوابة الموظف في منصة جداره.\n\n` +
-    `الموظف: ${empName}\n\n` +
-    `يرجى الدخول إلى بوابة الموظف لمراجعة الطلب واتخاذ الإجراء المناسب.\n\n` +
+    `الموظف: ${empName}\n` +
+    `الرقم الوظيفي: ${empNumber}\n` +
+    `رقم الهوية / الإقامة: ${empNid}\n` +
+    `المسمى الوظيفي: ${empPos}\n` +
+    (params.details ? `بيان الطلب: ${params.details}\n` : "") +
+    `\nيرجى الدخول إلى بوابة الموظف لمراجعة الطلب واتخاذ الإجراء المناسب.\n\n` +
     `مع التحية،\nمنصة جداره للموارد البشرية`;
 
   // إشعار داخلي موجّه للمعتمد (يظهر في جرس البوابة إن كان مستخدماً مسجلاً)

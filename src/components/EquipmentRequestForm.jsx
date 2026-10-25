@@ -58,7 +58,7 @@ export default function EquipmentRequestForm({ open, onClose, onSaved, employee,
       if (portalCreate) await portalCreate(payload);
       else {
         await base44.entities.EquipmentRequest.create(payload);
-        try { await base44.functions.invoke("notifyApprover", { type: "equipment", employeeId: employee.id, employeeName: employee.full_name, status: "pending_manager" }); } catch {}
+        try { await base44.functions.invoke("notifyApprover", { type: "equipment", employeeId: employee.id, employeeName: employee.full_name, employeeNationalId: employee.national_id || "", employeeNumber: employee.employee_number || "", position: employee.position || "", details: `عهدة: ${form.item_label}`, status: "pending_manager" }); } catch {}
       }
       onSaved?.(); onClose?.();
     } finally { setSaving(false); }

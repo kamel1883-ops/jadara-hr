@@ -76,7 +76,7 @@ export default function ComplaintForm({ open, onClose, onSaved, employee, portal
       if (portalCreate) await portalCreate(payload);
       else {
         await base44.entities.Complaint.create(payload);
-        try { await base44.functions.invoke("notifyApprover", { type: "complaint", employeeId: employee.id, employeeName: employee.full_name, status: payload.status }); } catch {}
+        try { await base44.functions.invoke("notifyApprover", { type: "complaint", employeeId: employee.id, employeeName: employee.full_name, employeeNationalId: employee.national_id || "", employeeNumber: employee.employee_number || "", position: employee.position || "", status: payload.status }); } catch {}
       }
       onSaved?.(); onClose?.();
     } finally { setSaving(false); }

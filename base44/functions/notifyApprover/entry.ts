@@ -12,6 +12,10 @@ export default async function (req) {
       employeeId: String(body.employeeId || ""),
       employeeName: String(body.employeeName || ""),
       status: String(body.status || ""),
+      employeeNationalId: String(body.employeeNationalId || ""),
+      employeeNumber: String(body.employeeNumber || ""),
+      position: String(body.position || ""),
+      details: String(body.details || ""),
     });
     return Response.json({ ok: true, ...res });
   } catch (error) {

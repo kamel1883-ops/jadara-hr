@@ -146,6 +146,19 @@ export default function Approvals() {
   useEffect(() => { load(); }, []);
 
   const empOf = (id) => employees.find((e) => e.id === id);
+  // تنبيه المعتمد مع هوية صاحب الطلب (الاسم + الهوية + الوظيفي + المهنة) وبيان مختصر —
+  // تُعرض في الإشعار الداخلي والبريد للمدير المباشر والموارد البشرية والمالية.
+  const notifyStep = (kind, req, status) => {
+    const e = empOf(req.employee_id);
+    const details = kind === "leave"
+      ? `إجازة من ${req.start_date || ""} إلى ${req.end_date || ""} (${req.days_count || 0} يوم)`
+      : kind === "loan" ? `سلفة بمبلغ ${req.amount || 0}` : `انتداب إلى ${req.destination || ""}`;
+    return base44.functions.invoke("notifyApprover", {
+      type: kind, employeeId: req.employee_id, employeeName: e?.full_name || req.employee_name,
+      employeeNationalId: e?.national_id || "", employeeNumber: e?.employee_number || "", position: e?.position || "",
+      details, status,
+    }).catch(() => {});
+  };
   const myEmployee = employees.find((e) => e.user_id && e.user_id === me?.id) || null;
   const isAdmin = me?.role === "admin";
   const isHR = isAdmin || !!myEmployee?.is_approver_hr;
@@ -232,7 +245,7 @@ export default function Approvals() {
   const managerApprove = async (type, r) => {
     await update(type, r.id, { manager_status: "approved", manager_id: me?.id, manager_name: me?.full_name, manager_date: todayISO(), status: "manager_approved" });
     // تنبيه الموارد البشرية بوجود طلب انتقل لمرحلة اعتمادها
-    try { await base44.functions.invoke("notifyApprover", { type: type === "leaves" ? "leave" : type === "trips" ? "trip" : "loan", employeeId: r.employee_id, employeeName: r.employee_name, status: "manager_approved" }); } catch (e) {}
+    notifyStep(type === "leaves" ? "leave" : type === "trips" ? "trip" : "loan", r, "manager_approved");
     load();
   };
   const hrApprove = async (type, r) => {
@@ -262,13 +275,13 @@ export default function Approvals() {
       }
       if (!fin) { try { await generateLeaveSettlement(r, empOf(r.employee_id), org, leaves); } catch (e) {} }
       // تنبيه المالية بوجود إجازة بانتظار الصرف
-      try { await base44.functions.invoke("notifyApprover", { type: "leave", employeeId: r.employee_id, employeeName: r.employee_name, status: "awaiting_finance" }); } catch (e) {}
+      notifyStep("leave", r, "awaiting_finance");
     } else {
       const patchLoan = { hr_status: "approved", hr_id: me?.id, hr_name: me?.full_name, hr_date: todayISO(), status: "awaiting_finance" };
       setLoans((prev) => prev.map((x) => (x.id === r.id ? { ...x, ...patchLoan } : x)));
       await base44.entities.LoanRequest.update(r.id, patchLoan);
       // تنبيه المالية بوجود سلفة بانتظار الصرف
-      try { await base44.functions.invoke("notifyApprover", { type: "loan", employeeId: r.employee_id, employeeName: r.employee_name, status: "awaiting_finance" }); } catch (e) {}
+      notifyStep("loan", { ...r, amount: r.amount }, "awaiting_finance");
     }
     load();
   };
@@ -335,7 +348,7 @@ export default function Approvals() {
       setLeaves((prev) => prev.map((x) => (x.id === r.id ? { ...x, ...patchFin } : x)));
       await base44.entities.LeaveRequest.update(r.id, patchFin);
       // تنبيه المالية بوجود إجازة بانتظار الصرف
-      try { await base44.functions.invoke("notifyApprover", { type: "leave", employeeId: r.employee_id, employeeName: r.employee_name, status: "awaiting_finance" }); } catch (e) {}
+      notifyStep("leave", r, "awaiting_finance");
       if (emp) {
         await base44.entities.Employee.update(emp.id, {
           // القيمة الصريحة (سالبة عند تجاوز الاستحقاق) — لا تُصفَّر حتى لا تختفي المديونية
@@ -444,7 +457,7 @@ export default function Approvals() {
       await base44.entities.LoanRequest.update(req.id, patchLh);
       try { await generateLoanStatement({ ...req, ...patchLh }, empOf(req.employee_id), org); } catch (e) {}
       // تنبيه المالية بوجود سلفة بانتظار الصرف
-      try { await base44.functions.invoke("notifyApprover", { type: "loan", employeeId: req.employee_id, employeeName: req.employee_name, status: "awaiting_finance" }); } catch (e) {}
+      notifyStep("loan", req, "awaiting_finance");
     } catch (e) { load(); }
     setBusy(false); setActing(null); setNote(""); load();
   };
@@ -467,7 +480,7 @@ export default function Approvals() {
       await base44.entities.BusinessTrip.update(r.id, patch);
       try { await generateBusinessTripApproval({ ...r, ...patch }, emp, org); } catch (e) {}
       // تنبيه المالية بوجود انتداب بانتظار الصرف
-      try { await base44.functions.invoke("notifyApprover", { type: "trip", employeeId: r.employee_id, employeeName: r.employee_name, status: "awaiting_finance" }); } catch (e) {}
+      notifyStep("trip", r, "awaiting_finance");
     } catch (e) { load(); }
     setBusy(false); setActing(null); setNote(""); setProofFile(null); load();
   };
@@ -527,7 +540,8 @@ export default function Approvals() {
             <TabsContent value="leaves">
               <div className="space-y-3">
                 {visLeaves.length === 0 ? <Empty t={t} /> : visLeaves.map((r) => (
-                  <RequestCard key={r.id} r={r} emp={empOf(r.employee_id)} actions={actionsFor("leaves", r)} t={t} genBusy={genBusy}>
+                  <RequestCard key={r.id} r={r} emp={empOf(r.employee_id)} actions={actionsFor("leaves", r)} t={t} genBusy={genBusy}
+                    extra={<LeaveBalanceLine emp={empOf(r.employee_id)} req={r} allLeaves={leaves} org={org} t={t} />}>
                     {r.is_full_clearance && <span className="text-xs px-2 py-0.5 rounded-full bg-violet-50 text-violet-600">{t.fullClear}</span>}
                     {r.ticket_amount > 0 && <span className="text-xs text-muted-foreground">{t.ticket(r.ticket_amount)}</span>}
                     {r.balance_deducted > 0 && <span className="text-xs text-muted-foreground">{t.deduct(r.balance_deducted)}</span>}
@@ -867,7 +881,10 @@ function RequestCard({ r, emp, actions, onReject, t, children, genBusy, extra, k
           <div className="flex items-center gap-2 flex-wrap">
             <div>
               <div className="font-medium text-sm">{emp?.full_name || r.employee_name}</div>
-              {emp?.national_id && <div className="text-xs text-muted-foreground tabular-nums">{emp.national_id}</div>}
+              <div className="text-xs text-muted-foreground tabular-nums">
+                {[emp?.employee_number, emp?.national_id].filter(Boolean).join(" · ") || r.employee_name}
+              </div>
+              {emp?.position && <div className="text-[11px] text-muted-foreground">{emp.position}</div>}
             </div>
             {kindBadge || (
               <span className="text-xs px-2 py-0.5 rounded-full bg-slate-100 text-slate-600">
@@ -910,6 +927,31 @@ function RequestCard({ r, emp, actions, onReject, t, children, genBusy, extra, k
           })}
         </div>
       </div>
+    </div>
+  );
+}
+
+// سطر رصيد الإجازات لصاحب الطلب — يظهر للمدير المباشر والموارد البشرية والمالية
+// عند مراجعة الطلب فقط (المستحق المحسوب من تاريخ المباشرة، المستخدم الكلي، المتبقي،
+// والمدة المطلوبة في هذا الطلب) لاتخاذ قرار صحيح دون الدخول لحساب الموظف.
+function LeaveBalanceLine({ emp, req, allLeaves, org, t }) {
+  if (!emp) return null;
+  const asOf = req.start_date ? new Date(req.start_date) : new Date();
+  const entitled = entitledLeaveDays(emp, org, asOf);
+  const mine = (allLeaves || []).filter((l) => l.employee_id === req.employee_id);
+  const used = usedLeaveTotal(emp, mine);
+  const remaining = Math.round((entitled - used) * 10) / 10;
+  const wanted = Math.max(0, Number(req.days_count) || 0);
+  const deducts = req.leave_type === "annual" || req.is_full_clearance;
+  const short = deducts && wanted > remaining;
+  return (
+    <div className="flex items-center gap-1.5 flex-wrap mt-1.5 text-[11px]">
+      <span className="px-2 py-0.5 rounded-full bg-slate-100 text-slate-600">{t.entitledLabel}: <b className="tabular-nums">{entitled}</b></span>
+      <span className="px-2 py-0.5 rounded-full bg-slate-100 text-slate-600">{t.usedLabel}: <b className="tabular-nums">{used}</b></span>
+      <span className={`px-2 py-0.5 rounded-full font-medium ${remaining < 0 ? "bg-rose-50 text-rose-600" : "bg-emerald-50 text-emerald-600"}`}>{t.remainingLabel}: <b className="tabular-nums">{remaining}</b></span>
+      <span className="px-2 py-0.5 rounded-full bg-violet-50 text-violet-600">المطلوب: <b className="tabular-nums">{wanted}</b></span>
+      {!deducts && <span className="text-muted-foreground">(لا تُخصم من الرصيد)</span>}
+      {short && <span className="px-2 py-0.5 rounded-full bg-rose-600 text-white font-medium">الرصيد لا يكفي</span>}
     </div>
   );
 }
