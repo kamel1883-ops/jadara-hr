@@ -41,6 +41,31 @@ export default async function (req) {
     );
     let autoCreated = false;
     if (!t) {
+      // مستخدم إضافي مفوّض مسبقاً من مسؤول المنشأة نفسها (TenantMember):
+      // يُربط حسابه مباشرة ويُمنح صلاحية الإدارة دون انتظار المالك — التفويض صادر
+      // من داخل المنشأة ولنفس رقمها الموحّد فقط (عزل كامل عن المنشآت الأخرى).
+      let members: any[] = [];
+      try {
+        members = await base44.asServiceRole.entities.TenantMember.filter(
+          { unified_number: unified }, undefined, 20
+        );
+      } catch { members = []; }
+      const m = (members || []).find(
+        (mm: any) => String(mm.email || '').trim().toLowerCase() === email && mm.active !== false
+      );
+      if (m) {
+        const activeCount = (members || []).filter((mm: any) => mm.active !== false).length;
+        if (activeCount > 4) {
+          return Response.json({ ok: false, error: 'member_limit' }, { status: 403 });
+        }
+        const host = (tenants || [])[0];
+        if (!host || !['trial', 'active'].includes(host.status)) {
+          return Response.json({ ok: false, error: 'suspended' }, { status: 403 });
+        }
+        try { await base44.asServiceRole.entities.TenantMember.update(m.id, { user_id: me.id }); } catch {}
+        try { await base44.asServiceRole.entities.User.update(me.id, { role: 'admin' }); } catch {}
+        return Response.json({ ok: true, member_approved: true, tenant_name: host.name, status: host.status });
+      }
       // الرقم الموحّد مسجّل لمنشأة أخرى ببريد مختلف — نمنع إنشاء سجل مكرّر لتفادي اندماج
       // بيانات شركتين (وإلا لتمكّن شركة جديدة بنفس الرقم الموحّد من رؤية بيانات الأخرى).
       if (tenants && tenants.length) {

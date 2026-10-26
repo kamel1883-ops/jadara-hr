@@ -9,7 +9,7 @@ import { Label } from "@/components/ui/label";
 import { MobileSelect, MobileSelectItem } from "@/components/ui/mobile-select";
 import { Loader2, Sparkles, Shield } from "lucide-react";
 import { Textarea } from "@/components/ui/textarea";
-import { PERMISSION_MODULES, parsePermissions, togglePermission, allPermissionKeys } from "@/lib/employeePermissions";
+// مصفوفة صلاحيات الموظفين مُعطّلة من ملف الموظف — لا تُمنح أي صلاحية من بوابة الشركات.
 import { useI18n } from "@/lib/i18n";
 import { managerCandidates, ROLE_LABELS, ROLE_ORDER } from "@/lib/orgTree";
 import EmployeeLeaveLoanSummary from "@/components/EmployeeLeaveLoanSummary";
@@ -381,24 +381,7 @@ export default function EmployeeForm({ open, onClose, onSaved, employee, unified
               </div>
               <Textarea value={form.job_description} onChange={(e) => set("job_description", e.target.value)} rows={6} placeholder={t.jobDescHint} />
             </Field>
-            <Field label={`${t.perms} · ${t.permsCount(parsePermissions(form.permissions).length)}`}>
-              <div className="text-[11px] text-muted-foreground mb-1">{t.permsHint}</div>
-              <div className="flex gap-2 mb-2">
-                <Button type="button" variant="outline" size="sm" onClick={() => set("permissions", JSON.stringify(allPermissionKeys()))}>{t.permsAll}</Button>
-                <Button type="button" variant="outline" size="sm" onClick={() => set("permissions", "[]")}>{t.permsNone}</Button>
-              </div>
-              <div className="grid grid-cols-2 sm:grid-cols-3 gap-1.5 max-h-56 overflow-y-auto rounded-xl border border-border p-2 bg-slate-50/40">
-                {PERMISSION_MODULES.map((m) => {
-                  const checked = parsePermissions(form.permissions).includes(m.key);
-                  return (
-                    <label key={m.key} className="flex items-center gap-2 text-xs px-2 py-1.5 rounded-lg hover:bg-white cursor-pointer">
-                      <input type="checkbox" checked={checked} onChange={() => set("permissions", JSON.stringify(togglePermission(form.permissions, m.key)))} className="w-3.5 h-3.5 accent-violet-600 shrink-0" />
-                      <span className="truncate">{isAr ? m.ar : m.en}</span>
-                    </label>
-                  );
-                })}
-              </div>
-            </Field>
+            {/* مصفوفة الصلاحيات مُعطّلة: مسؤول الموارد البشرية لا يمنح صلاحيات من ملف الموظف — القيم المحفوظة سابقاً تُحفظ كما هي دون تعديل. */}
           </div>
 
           <DialogFooter>

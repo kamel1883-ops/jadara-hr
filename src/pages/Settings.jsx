@@ -11,6 +11,7 @@ import Time24Input from "@/components/ui/time24";
 import { Loader2, Building2, Save, Crosshair, Wallet, Upload, UserCircle, Info } from "lucide-react";
 import { useI18n } from "@/lib/i18n";
 import WorkplaceMapPicker from "@/components/settings/WorkplaceMapPicker";
+import CompanyUsers from "@/components/settings/CompanyUsers";
 import NitaqatIsicSelect from "@/components/NitaqatIsicSelect";
 import { cn } from "@/lib/utils";
 
@@ -377,6 +378,8 @@ export default function SettingsPage() {
             </div>
           </div>
         </Section>
+
+        <CompanyUsers unified={tenantUnified} />
 
         <div className="flex justify-end">
           <Button onClick={save} disabled={saving} className="gap-2">

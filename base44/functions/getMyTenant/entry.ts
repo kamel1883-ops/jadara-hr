@@ -26,6 +26,22 @@ export default async function (req) {
       if (emailHits.length === 1) t = emailHits[0];
     }
     if (!t) {
+      // مستخدم إضافي مفوّض (TenantMember): منشأته من الرقم الموحّد المرتبط بعضويته فقط —
+      // لا يرى أي منشأة أخرى مهما تعددت المنشآت على المنصة.
+      try {
+        let mine: any[] = [];
+        try { mine = (await base44.asServiceRole.entities.TenantMember.filter({ user_id: uid })) || []; } catch {}
+        mine = (mine || []).filter((x: any) => x && x.active !== false);
+        if (!mine.length) {
+          let byEmail: any[] = [];
+          try { byEmail = (await base44.asServiceRole.entities.TenantMember.filter({ email })) || []; } catch {}
+          mine = (byEmail || []).filter((x: any) => x && x.active !== false);
+        }
+        const uns = [...new Set(mine.map((x: any) => String(x?.unified_number || '').trim()).filter(Boolean))];
+        if (uns.length === 1) t = tenants.find((x: any) => String(x.unified_number || '').trim() === uns[0]);
+      } catch {}
+    }
+    if (!t) {
       // موظف مسجّل: منشأته من رقمه الموحّد، بشرط ألا تتعدد المنشآت على نفس الحساب.
       const asList = (page: any) => Array.isArray(page) ? page : (Array.isArray(page?.items) ? page.items : []);
       let emps: any[] = [];

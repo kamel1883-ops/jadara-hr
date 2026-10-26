@@ -37,11 +37,26 @@ export default async function (req) {
       50
     );
 
-    const t = (tenants || []).find(
+    let t = (tenants || []).find(
       (tt) => String(tt.contact_email || '').trim().toLowerCase() === email
     );
 
-    if (!t) return Response.json({ valid: false });
+    // مستخدم إضافي مفوّض من المنشأة نفسها (TenantMember): يُقبل بنفس الرقم الموحّد
+    // طالما عضويته نشطة — معزول تماماً عن أي منشأة أخرى.
+    if (!t) {
+      let members: any[] = [];
+      try {
+        members = await base44.asServiceRole.entities.TenantMember.filter(
+          { unified_number: unified }, undefined, 20
+        );
+      } catch { members = []; }
+      const m = (members || []).find(
+        (mm: any) => String(mm.email || '').trim().toLowerCase() === email && mm.active !== false
+      );
+      if (!m) return Response.json({ valid: false });
+      t = (tenants || [])[0] || null;
+      if (!t) return Response.json({ valid: false });
+    }
     if (!["trial", "active"].includes(t.status)) {
       return Response.json({ valid: false, suspended: true });
     }

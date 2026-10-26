@@ -1,0 +1,62 @@
+{
+  "name": "TenantMember",
+  "type": "object",
+  "properties": {
+    "unified_number": {
+      "type": "string",
+      "title": "الرقم الوطني الموحد للمنشأة (10 خانات تبدأ بـ7)"
+    },
+    "email": {
+      "type": "string",
+      "title": "البريد الإلكتروني للمستخدم الإضافي"
+    },
+    "name": {
+      "type": "string",
+      "title": "اسم المستخدم الإضافي"
+    },
+    "user_id": {
+      "type": "string",
+      "title": "معرّف حساب Base44 المرتبط (بعد تسجيله)"
+    },
+    "active": {
+      "type": "boolean",
+      "default": true,
+      "title": "نشط"
+    },
+    "created_by_user_id": {
+      "type": "string",
+      "title": "أُنشئ بواسطة (معرّف الحساب)"
+    },
+    "notes": {
+      "type": "string",
+      "title": "ملاحظات",
+      "maxLength": 1000
+    }
+  },
+  "required": [
+    "unified_number",
+    "email"
+  ],
+  "rls": {
+    "create": {
+      "user_condition": {
+        "role": "admin"
+      }
+    },
+    "read": {
+      "user_condition": {
+        "role": "admin"
+      }
+    },
+    "update": {
+      "user_condition": {
+        "role": "admin"
+      }
+    },
+    "delete": {
+      "user_condition": {
+        "role": "admin"
+      }
+    }
+  }
+}

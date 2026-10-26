@@ -156,6 +156,11 @@ export default function CompanyRegister() {
         setLoading(false);
         return;
       }
+      if (promoteRes?.data?.member_approved || promoteRes?.member_approved) {
+        // مستخدم إضافي مفوّض من المنشأة: اعتُمد مباشرة بكامل الصلاحيات — دخول فوري.
+        window.location.href = "/app";
+        return;
+      }
       if (promoteRes?.data?.pending_approval || promoteRes?.pending_approval) {
         setPending(true);
         setLoading(false);
