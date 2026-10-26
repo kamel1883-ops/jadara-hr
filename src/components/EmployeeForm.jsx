@@ -318,9 +318,7 @@ export default function EmployeeForm({ open, onClose, onSaved, employee, unified
             <Field label={t.approverFinance}>
               <label className="flex items-center gap-2 h-9"><input type="checkbox" checked={!!form.is_approver_finance} onChange={(e) => set("is_approver_finance", e.target.checked)} className="w-4 h-4 accent-violet-600" /> <span className="text-sm">{isAr ? "تفعيل صلاحية الصرف المالي" : "Enable finance payment rights"}</span></label>
             </Field>
-            <Field label={t.approverHr}>
-              <label className="flex items-center gap-2 h-9"><input type="checkbox" checked={!!form.is_approver_hr} onChange={(e) => set("is_approver_hr", e.target.checked)} className="w-4 h-4 accent-violet-600" /> <span className="text-sm">{isAr ? "تفعيل صلاحية اعتماد الموارد البشرية (سلف وانتدابات)" : "Enable HR approval rights (loans & trips)"}</span></label>
-            </Field>
+            {/* صلاحية معتمد الموارد البشرية مُعطّلة: لا تُمنح من ملف الموظف — تُحفظ القيمة السابقة كما هي دون تعديل. */}
             <Field label={t.contract}>
               <MobileSelect value={form.contract_type} onValueChange={(v) => set("contract_type", v)}>
                 
