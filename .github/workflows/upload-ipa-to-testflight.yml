@@ -1,0 +1,61 @@
+name: Upload IPA to App Store Connect (TestFlight)
+
+# يرفع ملف IPA الجاهز (اللي يعطيك إياه Base44) إلى أبل بدون ما تستأجر Mac.
+# الطريقة: ضع ملف الـ IPA في مجلد ios-upload/ وادفعه إلى GitHub،
+# الـ Runner (macos-latest) هو اللي ينفذ أمر الرفع إلى App Store Connect.
+
+on:
+  workflow_dispatch:
+    inputs:
+      ipa_path:
+        description: "مسار ملف IPA داخل الريبو"
+        required: false
+        default: "ios-upload/app.ipa"
+  push:
+    paths:
+      - "ios-upload/*.ipa"
+
+jobs:
+  upload:
+    runs-on: macos-latest
+    timeout-minutes: 30
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Validate IPA
+        run: |
+          if [ -n "${{ inputs.ipa_path }}" ]; then
+            IPA="${{ inputs.ipa_path }}"
+          else
+            IPA=$(ls ios-upload/*.ipa 2>/dev/null | head -1)
+          fi
+          if [ -z "$IPA" ] || [ ! -f "$IPA" ]; then
+            echo "::error::لم يتم العثور على ملف IPA. ضع الملف في ios-upload/ ثم ادفع إلى GitHub."
+            exit 1
+          fi
+          echo "IPA=$IPA" >> $GITHUB_ENV
+          ls -lh "$IPA"
+
+      - name: Setup App Store Connect API key
+        env:
+          P8_BASE64: ${{ secrets.APP_STORE_P8_BASE64 }}
+        run: |
+          if [ -z "$P8_BASE64" ]; then
+            echo "::error::السر APP_STORE_P8_BASE64 غير موجود. أضفه من Settings > Secrets and variables > Actions."
+            exit 1
+          fi
+          mkdir -p ~/private_keys
+          echo "$P8_BASE64" | base64 --decode > ~/private_keys/AuthKey_${{ secrets.APP_STORE_KEY_ID }}.p8
+          chmod 600 ~/private_keys/AuthKey_${{ secrets.APP_STORE_KEY_ID }}.p8
+          ls -l ~/private_keys/
+
+      - name: Upload to App Store Connect
+        run: |
+          echo "Uploading $IPA ..."
+          xcrun altool --upload-app \
+            -f "$IPA" \
+            -t ios \
+            --apiKey "${{ secrets.APP_STORE_KEY_ID }}" \
+            --apiIssuer "${{ secrets.APP_STORE_ISSUER_ID }}" \
+            --verbose --show-progress
