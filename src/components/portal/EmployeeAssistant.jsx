@@ -3,6 +3,7 @@ import { base44 } from "@/api/base44Client";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { X, Send, Sparkles, Mic, MicOff, Volume2, Loader2 } from "lucide-react";
+import DraggableFab from "@/components/DraggableFab";
 import ReactMarkdown from "react-markdown";
 import { useSpeechInput, useSpeechOutput } from "@/hooks/useSpeech";
 
@@ -70,13 +71,14 @@ export default function EmployeeAssistant({ session }) {
 
   return (
     <>
-      <button
+      <DraggableFab
+        storageKey="jadara_employee_assistant_pos"
         onClick={() => setOpen(true)}
-        className="fixed bottom-5 left-5 z-40 h-14 w-14 rounded-full bg-violet-600 hover:bg-violet-700 text-white shadow-lg shadow-violet-600/30 flex items-center justify-center transition active:scale-95"
-        title="مساعد الموظف"
+        className="h-14 w-14 rounded-full bg-violet-600 hover:bg-violet-700 text-white shadow-lg shadow-violet-600/30 flex items-center justify-center active:scale-95"
+        title="مساعد الموظف — اسحبني لأي مكان"
       >
         <Sparkles size={24} />
-      </button>
+      </DraggableFab>
       {open && (
         <div className="fixed inset-0 z-50 flex justify-start">
           <div className="absolute inset-0 bg-black/30" onClick={() => setOpen(false)} />

@@ -15,6 +15,7 @@ import { useI18n } from "@/lib/i18n";
 import { getActiveSeason } from "@/lib/seasonalVideo";
 import SeasonalHero from "@/components/landing/SeasonalHero";
 import NitaqatSection from "@/components/landing/NitaqatSection";
+import PortalEntryCard from "@/components/landing/PortalEntryCard";
 
 import { PRICING_TIERS_AR, PRICING_TIERS_EN } from "@/lib/pricing";
 import AssistantAvatar from "@/components/AssistantAvatar";
@@ -172,6 +173,11 @@ export default function Landing() {
     portalTitle: "بوابة الموظف الذاتية",
     portalDesc: "دخول خاص بالموظفين فقط — بصمة الحضور والانصراف من الجوال ضمن 50 متراً من مقر العمل (بدون أجهزة)، وعرض الراتب ورصيد الإجازات، ورفع طلبات السلف والإجازات ورحلات العمل مباشرة. تدعم البوابة 7 لغات (العربية، الإنجليزية، الهندية، البنغالية، النيبالية، الفلبينية، الأردية) ليستخدمها كل موظف بلغته، وتُحفظ الطلبات مشتركة بين الموظف والإدارة وتظهر للطرفين في أي لحظة.",
     portalCta: "دخول البوابة",
+    subTitle: "بوابة الاشتراكات",
+    subDesc: "دخول خاص بالمنشآت المشتركة في جدارة — تابع اشتراكك السنوي وتاريخ تجديده، وحمّل عقد الاشتراك والفواتير، ثم ادخل مساحة العمل لإدارة الموظفين والحضور والرواتب والموافقات بكل صلاحياتك. الدخول بالبريد الإلكتروني وكلمة المرور والرقم الوطني الموحد للمنشأة.",
+    subCta: "دخول بوابة الاشتراكات",
+    subShort: "بوابة الاشتراكات",
+    portalShort: "بوابة الموظفين",
     approvers: "بوابة المعتمدين",
     approversTitle: "بوابة المعتمدين",
     approversDesc: "دخول مخصّص للمديرين المباشرين والمديرين الماليين لاعتماد طلبات الإجازات والسلف ورحلات العمل ونهاية الخدمة — عبر البريد الإلكتروني وكلمة المرور فقط. ليست بوابة الموظف (إقامة) ولا بوابة الشركات (رقم موحّد).",
@@ -221,6 +227,11 @@ export default function Landing() {
     portalTitle: "Employee Self‑Service Portal",
     portalDesc: "Employees only — clock in/out from the phone within 50 meters of the workplace (no devices), view salary and leave balance, and submit loan, leave, and business‑trip requests directly. The portal supports 7 languages (Arabic, English, Hindi, Bengali, Nepali, Tagalog, Urdu) so every employee uses it in their own language; requests are saved shared between employee and management and visible to both at any moment.",
     portalCta: "Enter Portal",
+    subTitle: "Subscriptions Portal",
+    subDesc: "For subscribed organizations — track your annual subscription and its renewal date, download your subscription contract and invoices, then enter the workspace to manage employees, attendance, payroll and approvals with your full permissions. Sign in with your email, password and the organization's unified number.",
+    subCta: "Enter Subscriptions Portal",
+    subShort: "Subscriptions Portal",
+    portalShort: "Employee Portal",
     approvers: "Approvers Portal",
     approversTitle: "Approvers Portal",
     approversDesc: "Sign-in for direct managers and finance managers to approve leave, loan, business-trip and end-of-service requests — email and password only. Not the employee portal (Iqama) nor the company portal (unified number).",
@@ -295,6 +306,17 @@ export default function Landing() {
             <button onClick={() => gate(() => navigate("/quote"))} className="text-base bg-violet-600 hover:bg-violet-700 px-5 py-2.5 rounded-xl font-semibold text-white shadow-lg shadow-violet-600/30 transition">{t.start}</button>
           </div>
         </div>
+        {/* أزرار البوابات على الجوال — تظهر فوراً في الأعلى حتى لا يبحث العميل عنها أسفل الصفحة */}
+        <div className="md:hidden border-t border-violet-100 bg-white/70">
+          <div className="px-4 py-2 flex items-center gap-2 overflow-x-auto">
+            <Link to="/company-login?returnTo=/app" className="shrink-0 inline-flex items-center gap-1.5 rounded-full bg-violet-600 text-white px-3.5 py-2 text-xs font-semibold shadow-sm">
+              <CreditCard size={14} /> {t.subShort}
+            </Link>
+            <Link to="/portal" className="shrink-0 inline-flex items-center gap-1.5 rounded-full border border-violet-200 bg-white text-violet-700 px-3.5 py-2 text-xs font-semibold">
+              <Users size={14} /> {t.portalShort}
+            </Link>
+          </div>
+        </div>
       </header>
 
       {/* Hero — فيديو سينمائي يغطي الشاشة بالكامل بخلفية الكرة، مع عنوان وأزرار فوقه */}
@@ -367,24 +389,13 @@ export default function Landing() {
       </section>
 
       {/* بوابة الموظف الذاتية — مكوّن مستقل */}
-      <section className="max-w-[1600px] mx-auto px-6 lg:px-14 pb-10">
-        <div className="relative overflow-hidden rounded-[2rem] border border-violet-200 bg-gradient-to-l from-violet-50 via-violet-100/60 to-fuchsia-50 p-8 sm:p-10">
-          <div className="absolute -top-12 -left-12 w-60 h-60 rounded-full bg-violet-300/30 blur-3xl" />
-          <div className="relative flex flex-col gap-6">
-            <div className="flex items-start gap-4">
-              <div className="w-14 h-14 rounded-2xl bg-violet-100 border border-violet-200 flex items-center justify-center shrink-0">
-                <Users size={26} className="text-violet-600" />
-              </div>
-              <div>
-                <h3 className="text-2xl font-bold text-foreground">{t.portalTitle}</h3>
-                <p className="text-muted-foreground mt-2 leading-relaxed">{t.portalDesc}</p>
-              </div>
-            </div>
-            <Link to="/portal" className="self-start inline-flex items-center gap-2 bg-violet-600 text-white hover:bg-violet-700 px-6 py-3.5 rounded-2xl font-semibold shadow-xl shadow-violet-600/30 transition">
-              {t.portalCta} <ArrowLeft size={18} style={{ transform: isAr ? "none" : "scaleX(-1)" }} />
-            </Link>
-          </div>
-        </div>
+      <section className="max-w-[1600px] mx-auto px-6 lg:px-14 pb-6">
+        <PortalEntryCard icon={Users} title={t.portalTitle} desc={t.portalDesc} cta={t.portalCta} to="/portal" isAr={isAr} />
+      </section>
+
+      {/* بوابة الاشتراكات — للمنشآت المشتركة */}
+      <section id="subscriptions-portal" className="max-w-[1600px] mx-auto px-6 lg:px-14 pb-10">
+        <PortalEntryCard icon={CreditCard} title={t.subTitle} desc={t.subDesc} cta={t.subCta} to="/company-login?returnTo=/app" isAr={isAr} />
       </section>
 
       {/* مزوّدو حجوزات الطيران */}
