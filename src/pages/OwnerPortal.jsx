@@ -7,6 +7,7 @@ import SurveysManager from "@/components/portal/SurveysManager";
 import FinanceManager from "@/components/portal/FinanceManager";
 import AffiliatesManager from "@/components/portal/AffiliatesManager";
 import SupportTicketsManager from "@/components/portal/SupportTicketsManager";
+import DeletionRequestsManager from "@/components/portal/DeletionRequestsManager";
 import StrategicPlan from "@/pages/StrategicPlan";
 import Logo from "@/components/Logo";
 import LanguageToggle from "@/components/LanguageToggle";
@@ -376,6 +377,7 @@ export default function OwnerPortal() {
           <button onClick={() => setTab("affiliates")} className={tabCls("affiliates")}>{isAr ? "شركاء التسويق" : "Affiliates"}</button>
           <button onClick={() => setTab("discounts")} className={tabCls("discounts")}>{isAr ? "كودات الخصم" : "Discount Codes"}</button>
           <button onClick={() => setTab("support")} className={tabCls("support")}>{isAr ? "الدعم الفني" : "Tech Support"}</button>
+          <button onClick={() => setTab("deletion")} className={tabCls("deletion")}>{isAr ? "طلبات حذف المنشآت" : "Deletion Requests"}</button>
           <button onClick={() => setTab("strategy")} className={tabCls("strategy")}>{isAr ? "الخطة الاستراتيجية" : "Strategic Plan"}</button>
         </div>
         {tab === "clients" ? <ClientsManager session={session} />
@@ -384,6 +386,7 @@ export default function OwnerPortal() {
           : tab === "finance" ? <FinanceManager session={session} isAr={isAr} />
           : tab === "strategy" ? <StrategicPlan session={session} />
           : tab === "support" ? <SupportTicketsManager session={session} isAr={isAr} />
+          : tab === "deletion" ? <DeletionRequestsManager session={session} isAr={isAr} />
           : <DiscountManager session={session} />}
       </div>
     </div>

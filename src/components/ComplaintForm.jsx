@@ -4,7 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from "@/components/ui/select";
+import { MobileSelect, MobileSelectItem } from "@/components/ui/mobile-select";
 import { Loader2 } from "lucide-react";
 import { base44 } from "@/api/base44Client";
 import { usePortalI18n } from "@/lib/portalI18n";
@@ -92,14 +92,11 @@ export default function ComplaintForm({ open, onClose, onSaved, employee, portal
           </div>
           <div className="space-y-1.5">
             <Label className="text-xs font-medium text-muted-foreground">{t.typeL}</Label>
-            <Select value={form.complaint_type} onValueChange={(v) => set("complaint_type", v)}>
-              <SelectTrigger className="w-full"><SelectValue /></SelectTrigger>
-              <SelectContent>
-                {TYPES.map((it) => (
-                  <SelectItem key={it.value} value={it.value}>{isAr ? it.ar : it.en}</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+            <MobileSelect value={form.complaint_type} onValueChange={(v) => set("complaint_type", v)} placeholder={t.typeL} className="w-full">
+              {TYPES.map((it) => (
+                <MobileSelectItem key={it.value} value={it.value}>{isAr ? it.ar : it.en}</MobileSelectItem>
+              ))}
+            </MobileSelect>
           </div>
           {form.complaint_type === "other" && (
             <div className="space-y-1.5">

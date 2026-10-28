@@ -7,6 +7,7 @@ import { Bell, Check } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useI18n } from "@/lib/i18n";
 import { loadMyRole, visibleInCompanyPortal } from "@/lib/roleNotifications";
+import PullToRefresh from "@/components/PullToRefresh";
 
 const TYPE_LABEL = {
   attendance: { ar: "حضور", en: "Attendance" },
@@ -73,6 +74,7 @@ export default function Notifications() {
     });
 
   return (
+    <PullToRefresh onRefresh={load}>
     <div dir={isAr ? "rtl" : "ltr"}>
       <PageHeader
         title={t.title}
@@ -143,5 +145,6 @@ export default function Notifications() {
         )}
       </div>
     </div>
+    </PullToRefresh>
   );
 }

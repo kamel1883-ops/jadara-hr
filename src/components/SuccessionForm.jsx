@@ -6,9 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import {
-  Select, SelectContent, SelectItem, SelectTrigger, SelectValue
-} from "@/components/ui/select";
+import { MobileSelect, MobileSelectItem } from "@/components/ui/mobile-select";
 import { base44 } from "@/api/base44Client";
 import { todayISO } from "@/lib/hr";
 import { useI18n } from "@/lib/i18n";
@@ -83,40 +81,34 @@ export default function SuccessionForm({ open, employees, editing, onClose, onSa
             <Field label={t.title}><Input value={form.position_title} onChange={(e) => set("position_title", e.target.value)} required /></Field>
             <Field label={t.dept}><Input value={form.department} onChange={(e) => set("department", e.target.value)} /></Field>
             <Field label={t.holder}>
-              <Select value={form.current_holder_id} onValueChange={(v) => set("current_holder_id", v)}>
-                <SelectTrigger><SelectValue placeholder={t.chooseEmp} /></SelectTrigger>
-                <SelectContent>{employees.map((e) => <SelectItem key={e.id} value={e.id}>{e.employee_number} - {e.position}</SelectItem>)}</SelectContent>
-              </Select>
+              <MobileSelect value={form.current_holder_id} onValueChange={(v) => set("current_holder_id", v)} placeholder={t.chooseEmp}>
+                {employees.map((e) => <MobileSelectItem key={e.id} value={e.id}>{e.employee_number} - {e.position}</MobileSelectItem>)}
+              </MobileSelect>
             </Field>
             <Field label={t.posStatus}>
-              <Select value={form.position_status} onValueChange={(v) => set("position_status", v)}>
-                <SelectTrigger><SelectValue /></SelectTrigger>
-                <SelectContent><SelectItem value="active">{t.active}</SelectItem><SelectItem value="at_risk">{t.atRisk}</SelectItem><SelectItem value="leaving">{t.leaving}</SelectItem><SelectItem value="vacant">{t.vacant}</SelectItem></SelectContent>
-              </Select>
+              <MobileSelect value={form.position_status} onValueChange={(v) => set("position_status", v)}>
+                <MobileSelectItem value="active">{t.active}</MobileSelectItem><MobileSelectItem value="at_risk">{t.atRisk}</MobileSelectItem><MobileSelectItem value="leaving">{t.leaving}</MobileSelectItem><MobileSelectItem value="vacant">{t.vacant}</MobileSelectItem>
+              </MobileSelect>
             </Field>
             <Field label={t.successor}>
-              <Select value={form.successor_id} onValueChange={(v) => set("successor_id", v)}>
-                <SelectTrigger><SelectValue placeholder={t.chooseSucc} /></SelectTrigger>
-                <SelectContent>{employees.map((e) => <SelectItem key={e.id} value={e.id}>{e.employee_number} - {e.position}</SelectItem>)}</SelectContent>
-              </Select>
+              <MobileSelect value={form.successor_id} onValueChange={(v) => set("successor_id", v)} placeholder={t.chooseSucc}>
+                {employees.map((e) => <MobileSelectItem key={e.id} value={e.id}>{e.employee_number} - {e.position}</MobileSelectItem>)}
+              </MobileSelect>
             </Field>
             <Field label={t.readiness}>
-              <Select value={form.readiness_level} onValueChange={(v) => set("readiness_level", v)}>
-                <SelectTrigger><SelectValue /></SelectTrigger>
-                <SelectContent><SelectItem value="ready_now">{t.readyNow}</SelectItem><SelectItem value="ready_1_2_years">{t.ready12}</SelectItem><SelectItem value="ready_3_5_years">{t.ready35}</SelectItem><SelectItem value="development_needed">{t.devNeeded}</SelectItem></SelectContent>
-              </Select>
+              <MobileSelect value={form.readiness_level} onValueChange={(v) => set("readiness_level", v)}>
+                <MobileSelectItem value="ready_now">{t.readyNow}</MobileSelectItem><MobileSelectItem value="ready_1_2_years">{t.ready12}</MobileSelectItem><MobileSelectItem value="ready_3_5_years">{t.ready35}</MobileSelectItem><MobileSelectItem value="development_needed">{t.devNeeded}</MobileSelectItem>
+              </MobileSelect>
             </Field>
             <Field label={t.risk}>
-              <Select value={form.risk_of_loss} onValueChange={(v) => set("risk_of_loss", v)}>
-                <SelectTrigger><SelectValue /></SelectTrigger>
-                <SelectContent><SelectItem value="low">{t.low}</SelectItem><SelectItem value="medium">{t.med}</SelectItem><SelectItem value="high">{t.high}</SelectItem></SelectContent>
-              </Select>
+              <MobileSelect value={form.risk_of_loss} onValueChange={(v) => set("risk_of_loss", v)}>
+                <MobileSelectItem value="low">{t.low}</MobileSelectItem><MobileSelectItem value="medium">{t.med}</MobileSelectItem><MobileSelectItem value="high">{t.high}</MobileSelectItem>
+              </MobileSelect>
             </Field>
             <Field label={t.impact}>
-              <Select value={form.impact_of_loss} onValueChange={(v) => set("impact_of_loss", v)}>
-                <SelectTrigger><SelectValue /></SelectTrigger>
-                <SelectContent><SelectItem value="low">{t.low}</SelectItem><SelectItem value="medium">{t.med}</SelectItem><SelectItem value="high">{t.high}</SelectItem></SelectContent>
-              </Select>
+              <MobileSelect value={form.impact_of_loss} onValueChange={(v) => set("impact_of_loss", v)}>
+                <MobileSelectItem value="low">{t.low}</MobileSelectItem><MobileSelectItem value="medium">{t.med}</MobileSelectItem><MobileSelectItem value="high">{t.high}</MobileSelectItem>
+              </MobileSelect>
             </Field>
           </div>
           <Field label={t.devPlan}><Textarea value={form.development_plan} onChange={(e) => set("development_plan", e.target.value)} rows={3} /></Field>

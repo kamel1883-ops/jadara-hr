@@ -12,6 +12,7 @@ import { Loader2, Building2, Save, Crosshair, Wallet, Upload, UserCircle, Info }
 import { useI18n } from "@/lib/i18n";
 import WorkplaceMapPicker from "@/components/settings/WorkplaceMapPicker";
 import CompanyUsers from "@/components/settings/CompanyUsers";
+import CompanyDeletionRequest from "@/components/settings/CompanyDeletionRequest";
 import NitaqatIsicSelect from "@/components/NitaqatIsicSelect";
 import { cn } from "@/lib/utils";
 
@@ -380,6 +381,8 @@ export default function SettingsPage() {
         </Section>
 
         <CompanyUsers unified={tenantUnified} />
+
+        <CompanyDeletionRequest />
 
         <div className="flex justify-end">
           <Button onClick={save} disabled={saving} className="gap-2">

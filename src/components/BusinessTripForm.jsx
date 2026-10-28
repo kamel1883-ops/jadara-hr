@@ -7,9 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import {
-  Select, SelectContent, SelectItem, SelectTrigger, SelectValue
-} from "@/components/ui/select";
+import { MobileSelect, MobileSelectItem } from "@/components/ui/mobile-select";
 import { Loader2 } from "lucide-react";
 import { differenceInDays, parseISO } from "date-fns";
 import { usePortalI18n, usePortalT } from "@/lib/portalI18n";
@@ -115,24 +113,18 @@ export default function BusinessTripForm({ open, onClose, onSaved, employees, ed
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div className="space-y-1.5">
               <Label className="text-xs font-medium text-muted-foreground">{t.emp}</Label>
-              <Select value={form.employee_id} onValueChange={(v) => set("employee_id", v)} disabled={!!currentUserEmployee || !!editing}>
-                <SelectTrigger><SelectValue placeholder={t.choose} /></SelectTrigger>
-                <SelectContent>
-                  {(employees || []).map((emp) => (
-                    <SelectItem key={emp.id} value={emp.id}>{emp.full_name} — {emp.national_id || "—"} {emp.department ? `· ${emp.department}` : ""}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+              <MobileSelect value={form.employee_id} onValueChange={(v) => set("employee_id", v)} disabled={!!currentUserEmployee || !!editing} placeholder={t.choose}>
+                {(employees || []).map((emp) => (
+                  <MobileSelectItem key={emp.id} value={emp.id}>{emp.full_name} — {emp.national_id || "—"} {emp.department ? `· ${emp.department}` : ""}</MobileSelectItem>
+                ))}
+              </MobileSelect>
             </div>
             <div className="space-y-1.5">
               <Label className="text-xs font-medium text-muted-foreground">{t.tripType}</Label>
-              <Select value={form.trip_type} onValueChange={(v) => set("trip_type", v)}>
-                <SelectTrigger><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="internal">{t.internal}</SelectItem>
-                  <SelectItem value="external">{t.external}</SelectItem>
-                </SelectContent>
-              </Select>
+              <MobileSelect value={form.trip_type} onValueChange={(v) => set("trip_type", v)} placeholder={t.tripType}>
+                <MobileSelectItem value="internal">{t.internal}</MobileSelectItem>
+                <MobileSelectItem value="external">{t.external}</MobileSelectItem>
+              </MobileSelect>
             </div>
             <div className="space-y-1.5">
               <Label className="text-xs font-medium text-muted-foreground">{t.dest}</Label>
@@ -140,16 +132,13 @@ export default function BusinessTripForm({ open, onClose, onSaved, employees, ed
             </div>
             <div className="space-y-1.5">
               <Label className="text-xs font-medium text-muted-foreground">{t.transport}</Label>
-              <Select value={form.transport_mode} onValueChange={(v) => set("transport_mode", v)}>
-                <SelectTrigger><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="plane">{t.plane}</SelectItem>
-                  <SelectItem value="car">{t.car}</SelectItem>
-                  <SelectItem value="bus">{t.bus}</SelectItem>
-                  <SelectItem value="train">{t.train}</SelectItem>
-                  <SelectItem value="none">{t.none}</SelectItem>
-                </SelectContent>
-              </Select>
+              <MobileSelect value={form.transport_mode} onValueChange={(v) => set("transport_mode", v)} placeholder={t.transport}>
+                <MobileSelectItem value="plane">{t.plane}</MobileSelectItem>
+                <MobileSelectItem value="car">{t.car}</MobileSelectItem>
+                <MobileSelectItem value="bus">{t.bus}</MobileSelectItem>
+                <MobileSelectItem value="train">{t.train}</MobileSelectItem>
+                <MobileSelectItem value="none">{t.none}</MobileSelectItem>
+              </MobileSelect>
             </div>
             <div className="space-y-1.5">
               <Label className="text-xs font-medium text-muted-foreground">{t.start}</Label>

@@ -176,6 +176,8 @@ export default function MyRequests() {
     });
     const data = res?.data || res;
     if (!data?.ok) throw new Error(data?.error || "fail");
+    // يظهر الطلب فوراً في سجل الموظف قبل انتهاء إعادة التحميل
+    if (data.leave) setLeaves((prev) => [data.leave, ...prev]);
     return data.leave;
   };
   const portalCreateLoan = async (payload) => {
@@ -184,6 +186,7 @@ export default function MyRequests() {
     });
     const data = res?.data || res;
     if (!data?.ok) throw new Error(data?.error || "fail");
+    if (data.loan) setLoans((prev) => [data.loan, ...prev]);
     return data.loan;
   };
   const portalCreateTrip = async (payload) => {
@@ -192,6 +195,7 @@ export default function MyRequests() {
     });
     const data = res?.data || res;
     if (!data?.ok) throw new Error(data?.error || "fail");
+    if (data.trip) setTrips((prev) => [data.trip, ...prev]);
     return data.trip;
   };
   const portalCreateEquipment = async (payload) => {
@@ -200,6 +204,7 @@ export default function MyRequests() {
     });
     const data = res?.data || res;
     if (!data?.ok) throw new Error(data?.error || "fail");
+    if (data.equipment) setEquipmentReqs((prev) => [data.equipment, ...prev]);
     return data.equipment;
   };
   const portalCreateComplaint = async (payload) => {
@@ -208,6 +213,7 @@ export default function MyRequests() {
     });
     const data = res?.data || res;
     if (!data?.ok) throw new Error(data?.error || "fail");
+    if (data.complaint) setComplaints((prev) => [data.complaint, ...prev]);
     return data.complaint;
   };
 
