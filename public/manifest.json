@@ -1,15 +1,32 @@
 {
-  "name": "جداره — منصة الموارد البشرية والرواتب والحضور",
-  "short_name": "جداره",
+  "name": "جداره HR",
+  "short_name": "جداره HR",
   "description": "منصة سحابية سعودية متكاملة لإدارة الموارد البشرية والرواتب والحضور والانصراف للمنشآت في السعودية والخليج.",
   "start_url": "/",
   "scope": "/",
   "display": "standalone",
   "orientation": "portrait-primary",
-  "background_color": "#0b0f19",
-  "theme_color": "#0b0f19",
+  "background_color": "#ffffff",
+  "theme_color": "#7351d6",
   "lang": "ar",
   "dir": "rtl",
   "categories": ["business", "productivity"],
-  "icons": []
+  "icons": [
+    {
+      "src": "https://media.base44.com/images/public/6a74edc8f347046365c2e1a4/a1b571c92_generated_image.png",
+      "sizes": "1024x1024",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "https://media.base44.com/images/public/6a74edc8f347046365c2e1a4/a1b571c92_generated_image.png",
+      "sizes": "512x512",
+      "type": "image/png"
+    },
+    {
+      "src": "https://media.base44.com/images/public/6a74edc8f347046365c2e1a4/a1b571c92_generated_image.png",
+      "sizes": "192x192",
+      "type": "image/png"
+    }
+  ]
 }
