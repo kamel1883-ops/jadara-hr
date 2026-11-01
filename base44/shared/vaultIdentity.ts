@@ -47,7 +47,37 @@ export async function resolveCompanyContext(base44, user) {
     tenant = candidate;
   }
   let unified = String(tenant?.unified_number || '').trim();
-  if (!tenant) {
+  // مستخدم إضافي مفوّض (TenantMember): منشأته من عضويته النشطة فقط —
+  // لا يرى أي منشأة أخرى، ويشترك مع المدير الرئيسي بنفس مفتاح الخزنة (الرقم الموحّد).
+  // بدون هذا المسار كان unified فارغاً فيرجع المفتاح إلى user.id الخاص به،
+  // فيكتب في silo معزول ويفشل في قراءة مستندات/رواتب/هويات المنشأة (404).
+  if (!unified) {
+    try {
+      let mine: any[] = [];
+      try { mine = asList(await base44.asServiceRole.entities.TenantMember.filter({ user_id: uid }, { limit: 10 })); } catch { mine = []; }
+      mine = (mine || []).filter((x: any) => x && x.active !== false);
+      if (!mine.length && email) {
+        let byEmail: any[] = [];
+        try { byEmail = asList(await base44.asServiceRole.entities.TenantMember.filter({ email }, { limit: 10 })); } catch { byEmail = []; }
+        // قارن البريد بلا حساسية لحالة الأحرف — التخزين قد يختلف في الحالة.
+        mine = (byEmail || []).filter((x: any) =>
+          x && x.active !== false &&
+          String(x.email || '').trim().toLowerCase() === email
+        );
+      }
+      const uns = [...new Set(mine.map((x: any) => String(x?.unified_number || '').trim()).filter(Boolean))];
+      if (uns.length > 1) scopeDenied();
+      if (uns.length === 1) {
+        unified = uns[0];
+        try {
+          const matches = asList(await base44.asServiceRole.entities.Tenant.filter({ unified_number: unified }, { limit: 2 }));
+          if (matches.length > 1) scopeDenied();
+          if (matches[0]) tenant = matches[0];
+        } catch { /* يُكتفى بالرقم الموحّد كمفتاح خزنة */ }
+      }
+    } catch { /* أكمل إلى مسار الموظف */ }
+  }
+  if (!tenant && !unified) {
     const employees = base44.asServiceRole.entities.Employee;
     const query = { unified_number: { $nin: ['', null] } };
     let distinct = asList(await employees.filter({ ...query, user_id: uid }, { distinct: 'unified_number', limit: 2 }));
