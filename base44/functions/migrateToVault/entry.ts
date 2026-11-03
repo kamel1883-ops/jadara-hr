@@ -10,6 +10,7 @@ import { createClientFromRequest } from "npm:@base44/sdk@0.8.44";
 import {
   storeRecord, updateRecord, storeEmployee,
 } from "../../shared/vaultClient.ts";
+import { companyVaultKey } from "../../shared/vaultIdentity.ts";
 
 export default async function (req: Request): Promise<Response> {
   try {
@@ -18,7 +19,10 @@ export default async function (req: Request): Promise<Response> {
     if (!user || user.role !== "admin") {
       return Response.json({ error: "admin_required" }, { status: 403 });
     }
-    const tenant = user.id;
+    // الترحيل يكتب تحت مفتاح المنشأة (الرقم الموحّد) لا حساب المشغّل، فتُقرأ السجلات
+    // المرحّلة من كل حسابات المنشأة — الرئيسي والفرعي — وبلا أي وصول لمنشأة أخرى.
+    let tenant = user.id;
+    try { tenant = await companyVaultKey(base44, user); } catch { tenant = user.id; }
     const body = await req.json().catch(() => ({}));
     const dryRun = !!body.dry_run;
 

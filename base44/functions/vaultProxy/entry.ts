@@ -26,11 +26,11 @@ import { createClientFromRequest } from "npm:@base44/sdk@0.8.54";
 import {
   storeEmployee, storeEmployeesBulk, getEmployeesBatch, updateEmployeeInCompany, deleteEmployeeInCompany,
   storePayroll, getPayrollInCompany, storeDocument, getDocumentLinkInCompany, buildDownloadUrl,
-  storeRecord, storeRecordsBulk, getRecord, getRecordsBatch, updateRecord, deleteRecord,
+  storeRecord, storeRecordsBulk, getRecordInCompany, getRecordsBatch, updateRecordInCompany, deleteRecordInCompany,
   getNitaqatCatalog, syncNitaqatCatalog,
   vaultConfigured, vaultHealth,
 } from "../../shared/vaultClient.ts";
-import { tenantKeysForRead, resolveCompanyContext } from "../../shared/vaultIdentity.ts";
+import { tenantKeysForRead, companyVaultAccess } from "../../shared/vaultIdentity.ts";
 import { validVaultRef, employeeRefsInCompany } from "../../shared/vaultAuthorization.ts";
 import { vaultErrorCode, vaultErrorStatus } from "../../shared/vaultErrors.ts";
 import { saveLeaveDocument } from "../../shared/leaveDocuments.ts";
@@ -40,8 +40,9 @@ export default async function (req: Request): Promise<Response> {
     const base44 = createClientFromRequest(req);
     const user = await base44.auth.me();
     if (!user) return Response.json({ error: "unauthorized" }, { status: 401 });
+    // صلاحية الخزنة تُحدَّد بعضوية المنشأة لا بدور الحساب العام: الحساب الرئيسي (الأب)
+    // والمستخدمون الفرعيون الذين أنشأهم (الأبناء) على نفس الرقم الموحّد — لا أحد غيرهم.
     // Employee and delegated portal access uses its own signed, restricted portalData flow.
-    if (user.role !== 'admin') return Response.json({ error: 'unauthorized' }, { status: 403 });
 
     const body = await req.json();
     if (!body || Array.isArray(body) || typeof body !== 'object') return Response.json({ error: 'invalid' }, { status: 400 });
@@ -57,7 +58,17 @@ export default async function (req: Request): Promise<Response> {
     }
     if (rest.rows !== undefined && (!Array.isArray(rest.rows) || rest.rows.length > 500 || rest.rows.some(row => !row || typeof row !== 'object' || Array.isArray(row)))) return Response.json({ error: 'invalid' }, { status: 400 });
     if (rest.fileBase64 !== undefined && (typeof rest.fileBase64 !== 'string' || rest.fileBase64.length > 35000000)) return Response.json({ error: 'invalid' }, { status: 400 });
-    const context = action === 'health' ? { unified: '', keys: [user.id] } : await resolveCompanyContext(base44, user);
+    let context: any;
+    try {
+      context = await companyVaultAccess(base44, user);
+    } catch (error) {
+      // التشخيص يبقى متاحاً حتى لو تعذّر تحديد المنشأة، ليُعرَض سبب واضح بدل خطأ عام.
+      if (action !== 'health') throw error;
+      context = { unified: '', keys: [user.id], owner: false, member: false };
+    }
+    if (user.role !== 'admin' && !(context.owner || context.member)) {
+      return Response.json({ error: 'unauthorized' }, { status: 403 });
+    }
     const empRefs = [...new Set([rest.empRef, ...(rest.empRefs || []), ...(rest.rows || []).map(row => row.emp_ref)].filter(Boolean))];
     if (!empRefs.every(validVaultRef) || !(await employeeRefsInCompany(base44, context, user, empRefs))) return Response.json({ error: 'unauthorized' }, { status: 403 });
 
@@ -154,7 +165,7 @@ export default async function (req: Request): Promise<Response> {
         break;
       case "getRecord":
         if (!rest.module || !rest.ref) return Response.json({ error: "module_and_ref_required" }, { status: 400 });
-        result = await getRecord(tenant, rest.module, rest.ref);
+        result = await getRecordInCompany(await tenantKeysForRead(base44, user), rest.module, rest.ref);
         break;
       case "getRecords":
         if (!rest.module || !Array.isArray(rest.refs)) return Response.json({ error: "module_and_refs_required" }, { status: 400 });
@@ -162,11 +173,11 @@ export default async function (req: Request): Promise<Response> {
         break;
       case "updateRecord":
         if (!rest.module || !rest.ref) return Response.json({ error: "module_and_ref_required" }, { status: 400 });
-        result = await updateRecord(tenant, rest.module, rest.ref, rest.data || {}, rest.empRef ?? null);
+        result = await updateRecordInCompany(await tenantKeysForRead(base44, user), rest.module, rest.ref, rest.data || {}, rest.empRef ?? null);
         break;
       case "deleteRecord":
         if (!rest.module || !rest.ref) return Response.json({ error: "module_and_ref_required" }, { status: 400 });
-        result = await deleteRecord(tenant, rest.module, rest.ref);
+        result = await deleteRecordInCompany(await tenantKeysForRead(base44, user), rest.module, rest.ref);
         break;
       // كتالوج نطاقات قوى — يُجلب من السيرفر السعودي (محدَّث تلقائياً من المصدر الوزاري)
       case "nitaqatCatalog":

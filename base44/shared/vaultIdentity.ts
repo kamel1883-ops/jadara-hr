@@ -35,9 +35,13 @@ export async function resolveCompanyContext(base44, user) {
   const uid = String(user?.id || '').trim();
   if (!uid) scopeDenied();
   const tenants = base44.asServiceRole.entities.Tenant;
+  // مصدر الربط: owner = حساب المنشأة الرئيسي، member = مستخدم فرعي مفوّض،
+  // tenant_email = بريد المنشأة، employee = موظف مسجّل. يُستخدم لتحديد صلاحية الخزنة.
+  let source = 'none';
   const owned = asList(await tenants.filter({ admin_user_id: uid }, { limit: 2 }));
   if (owned.length > 1) scopeDenied();
   let tenant = owned[0];
+  if (tenant) source = 'owner';
   const email = String(user.email || '').trim().toLowerCase();
   if (!tenant && email) {
     const matches = asList(await tenants.filter({ $or: [{ contact_email: email }, { admin_email: email }] }, { limit: 2 }));
@@ -45,6 +49,7 @@ export async function resolveCompanyContext(base44, user) {
     const candidate = matches[0];
     if (candidate && candidate.admin_user_id && candidate.admin_user_id !== uid) scopeDenied();
     tenant = candidate;
+    if (tenant) source = 'tenant_email';
   }
   let unified = String(tenant?.unified_number || '').trim();
   // مستخدم إضافي مفوّض (TenantMember): منشأته من عضويته النشطة فقط —
@@ -69,6 +74,13 @@ export async function resolveCompanyContext(base44, user) {
       if (uns.length > 1) scopeDenied();
       if (uns.length === 1) {
         unified = uns[0];
+        source = 'member';
+        // ربط العضوية بحساب المفوّض عند أول دخول: يصبح «مسجّلاً» في شاشة المستخدمين،
+        // ويبقى الربط ثابتاً لو تغيّر بريده لاحقاً.
+        const unlinked = mine.find((x: any) => !String(x?.user_id || '').trim());
+        if (unlinked?.id) {
+          try { await base44.asServiceRole.entities.TenantMember.update(unlinked.id, { user_id: uid }); } catch { /* القراءة بالبريد تكفي */ }
+        }
         try {
           const matches = asList(await base44.asServiceRole.entities.Tenant.filter({ unified_number: unified }, { limit: 2 }));
           if (matches.length > 1) scopeDenied();
@@ -84,16 +96,48 @@ export async function resolveCompanyContext(base44, user) {
     if (!distinct.length && email) distinct = asList(await employees.filter({ ...query, email }, { distinct: 'unified_number', limit: 2 }));
     if (distinct.length > 1) scopeDenied();
     unified = String(distinct[0] || '').trim();
+    if (unified) source = 'employee';
     if (unified) {
       const matches = asList(await tenants.filter({ unified_number: unified }, { limit: 2 }));
       if (matches.length > 1) scopeDenied();
       tenant = matches[0];
     }
   }
-  if (!unified) return { keys: [uid], unified: '' };
+  if (!unified) return { keys: [uid], unified: '', tenant: null, source: 'none' };
   const legacy = await companyLegacyKeys(base44, unified, [uid, tenant?.admin_user_id]);
   const keys = [...new Set([unified, tenant?.id, ...legacy].filter(Boolean))];
-  return { keys, unified };
+  return { keys, unified, tenant: tenant || null, source };
+}
+
+/**
+ * صلاحية خزنة المنشأة: الحساب الرئيسي (صاحب المنشأة) أو مستخدم فرعي مفوّض نشط
+ * على نفس الرقم الموحّد. أي حساب آخر — ولو كان موظفاً في المنشأة — لا يدخل الخزنة.
+ * العزل ثابت: الرقم الموحّد هو الحد، فلا تُقرأ منشأة أخرى ولا يُمنح وصول منشأة أخرى.
+ */
+export async function companyVaultAccess(base44, user) {
+  const ctx = await resolveCompanyContext(base44, user);
+  const uid = String(user?.id || '').trim();
+  const email = String(user?.email || '').trim().toLowerCase();
+  if (!ctx.unified) return { ...ctx, owner: false, member: false, member_row: null };
+  const t = ctx.tenant;
+  const owner = !!t && (
+    (!!uid && String(t.admin_user_id || '') === uid) ||
+    (!!email && (
+      String(t.admin_email || '').trim().toLowerCase() === email ||
+      String(t.contact_email || '').trim().toLowerCase() === email
+    ))
+  );
+  let member_row: any = null;
+  try {
+    const rows = asList(await base44.asServiceRole.entities.TenantMember.filter(
+      { unified_number: ctx.unified }, { limit: 50 }
+    ));
+    member_row = rows.find((x: any) => x && x.active !== false && (
+      (!!uid && String(x.user_id || '') === uid) ||
+      (!!email && String(x.email || '').trim().toLowerCase() === email)
+    )) || null;
+  } catch { member_row = ctx.source === 'member' ? { unified_number: ctx.unified } : null; }
+  return { ...ctx, owner, member: !!member_row, member_row };
 }
 
 /**

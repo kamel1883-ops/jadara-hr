@@ -1,5 +1,6 @@
 import { createClientFromRequest } from 'npm:@base44/sdk@0.8.40';
 import { storeEmployeesBulk } from '../../shared/vaultClient.ts';
+import { resolveCompanyContext, companyVaultKey } from '../../shared/vaultIdentity.ts';
 
 const pad = (n) => String(n).padStart(2, '0');
 
@@ -144,7 +145,11 @@ export default async function (req) {
       (tt) => String(tt.admin_email || '').trim().toLowerCase() === meEmail
         || String(tt.contact_email || '').trim().toLowerCase() === meEmail
     );
-    const myUnified = String(myTenant?.unified_number || '').trim();
+    // الرقم الموحّد من سياق الحساب (المدير الرئيسي أو مستخدم فرعي مفوّض عليه)،
+    // ثم بريد المنشأة كاحتياط — فلا يتعطّل الاستيراد لحساب فرعي مفوّض.
+    let myUnified = '';
+    try { myUnified = String((await resolveCompanyContext(base44, user)).unified || '').trim(); } catch { myUnified = ''; }
+    if (!myUnified) myUnified = String(myTenant?.unified_number || '').trim();
     if (!myUnified) return Response.json({ error: 'الحساب غير مرتبط بمنشأة' }, { status: 400 });
 
     const body = await req.json().catch(() => ({}));
@@ -291,10 +296,10 @@ export default async function (req) {
         'national_id', 'birth_date', 'phone', 'address', 'emergency_contact',
         'passport_number', 'passport_expiry', 'bank_account', 'health_insurance_number',
       ];
-      // يجب استخدام user.id كمفتاح مستأجر للخزنة — مطابقةً لما يستخدمه vaultProxy
-      // عند الاسترجاع (getEmployee عبر enrichEmployee في الواجهة). استخدام myTenant.id
-      // يُخزّن تحت مفتاح مختلف ويؤدي إلى 404 عند فتح ملف الموظف لاحقاً.
-      const vaultTenantId = user.id;
+      // مفتاح الخزنة هو رقم المنشأة الموحّد (لا حساب من استورد)، حتى تقرأ الهوياتَ كلُّ
+      // حسابات المنشأة: الحساب الرئيسي والمستخدمون الفرعيون المفوّضون عليه.
+      let vaultTenantId = myUnified;
+      try { vaultTenantId = await companyVaultKey(base44, user); } catch { vaultTenantId = myUnified; }
       const vaultRows = toCreate.map((r) => {
         const o = { employee_number: r.employee_number };
         for (const k of SENSITIVE_KEYS) {

@@ -361,6 +361,33 @@ export async function getRecord(tenantId, module, ref) {
   return callVault(`/api/vault/modules/${module}/${ref}`, tenantId, { method: "GET" });
 }
 
+// سجلات الوحدات تُقرأ/تُحدّث/تُحذف عبر كل مفاتيح منشأة المستخدم (الرقم الموحّد، سجل
+// المنشأة، وحساب من أنشأ السجل). بلا ذلك يكتب المستخدم الفرعي السجل تحت مفتاح المنشأة
+// ثم يبحث عنه تحت مفتاح واحد فقط فيعود 404 — «تعذّر فتح المستند» بعد إنشائه مباشرة.
+const companyKeys = (tenantIds) => [...new Set((tenantIds || []).map((t) => String(t || '').trim()).filter(Boolean))].slice(0, 24);
+
+/** يقرأ سجلاً من أول مفتاح منشأة يملكه، ويُعيد أيضاً المفتاح الذي وُجد تحته */
+export async function locateRecordInCompany(tenantIds, module, ref) {
+  const ids = companyKeys(tenantIds);
+  if (!module || !ref || !ids.length) throw vaultFail(404, "/modules");
+  let lastError: any = null;
+  for (const tenant of ids) {
+    try {
+      return { tenant, record: await getRecord(tenant, module, ref) };
+    } catch (e: any) {
+      lastError = e;
+      if (!String(e?.message || "").includes("404")) throw e;
+    }
+  }
+  throw lastError || vaultFail(404, "/modules");
+}
+
+/** يقرأ سجلاً حساساً بمفاتيح منشأة المستخدم — لا يرى سجلات منشأة أخرى */
+export async function getRecordInCompany(tenantIds, module, ref) {
+  const found = await locateRecordInCompany(tenantIds, module, ref);
+  return found.record;
+}
+
 /**
  * كتالوج نطاقات قوى — بيانات مرجعية عامة تُحدَّث تلقائياً على السيرفر السعودي
  * من المصدر الوزاري، فلا يعتمد النظام على نسخة ثابتة عندنا.
@@ -409,9 +436,21 @@ export async function updateRecord(tenantId, module, ref, data, empRef = null) {
   });
 }
 
+/** يحدّث سجلاً تحت المفتاح الذي يملكه فعلاً، لا تحت مفتاح الفاتح فقط */
+export async function updateRecordInCompany(tenantIds, module, ref, data, empRef = null) {
+  const found = await locateRecordInCompany(tenantIds, module, ref);
+  return updateRecord(found.tenant, module, ref, data, empRef);
+}
+
 /** يحذف سجلاً من وحدة حساسة */
 export async function deleteRecord(tenantId, module, ref) {
   return callVault(`/api/vault/modules/${module}/${ref}`, tenantId, { method: "DELETE" });
+}
+
+/** يحذف سجلاً تحت المفتاح الذي يملكه فعلاً */
+export async function deleteRecordInCompany(tenantIds, module, ref) {
+  const found = await locateRecordInCompany(tenantIds, module, ref);
+  return deleteRecord(found.tenant, module, ref);
 }
 
 // ============================================================
