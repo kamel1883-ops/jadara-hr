@@ -86,7 +86,12 @@ export default function AssistantAvatar({ mode = "public", session = null, tone 
     try { const p = JSON.parse(localStorage.getItem(POS_KEY) || "null"); if (p && typeof p.x === "number") return p; } catch (_e) {}
     return null;
   };
-  const [pos, setPos] = useState(() => readPos() || { x: 20, y: 96 });
+  // الموضع الافتراضي أسفل الشاشة — لا يغطي عنوان الصفحة أو نص الوصف (خاصةً على الجوال)
+  const defaultPos = () => {
+    const h = typeof window !== "undefined" ? window.innerHeight : 640;
+    return { x: 20, y: Math.max(120, h - 140) };
+  };
+  const [pos, setPos] = useState(() => readPos() || defaultPos());
   const dragRef = useRef(null);
   const dragging = useRef(false);
   const movedRef = useRef(false);

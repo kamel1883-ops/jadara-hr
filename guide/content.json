@@ -1,0 +1,628 @@
+{
+  "ar": {
+    "title": "دليل بوابة الموظف الذاتية",
+    "lead": "كل خطوة في البوابة، بصورة حقيقية من النظام نفسه — من الدخول الأول حتى آخر مستند في ملفك.",
+    "cover_note": "هذا الدليل مأخوذ من بوابة الموظف الذاتية في جداره كما تظهر فعلياً على الجوال. التقط الصور من النظام مباشرة، ولم يُضَف أي رسم توضيحي أو نموذج من خارج البوابة.",
+    "chapters": [
+      {
+        "n": "01",
+        "title": "تسجيل الدخول إلى البوابة",
+        "ar": {
+          "shot": "01_login_ar.png",
+          "cap": "أدخل رقم الهوية أو الإقامة وكلمة المرور، ثم اضغط «تسجيل الدخول».",
+          "note": "أول مرة؟ لا تملك كلمة مرور بعد — انتقل إلى تبويب «إنشاء حساب» (الخطوة 02)."
+        },
+        "en": {
+          "shot": "01_login_en.png",
+          "cap": "Enter your National ID / Iqama and password, then tap “Sign in”.",
+          "note": "First time? You have no password yet — use the “Create account” tab (step 02)."
+        }
+      },
+      {
+        "n": "02",
+        "title": "إنشاء كلمة المرور أول مرة",
+        "ar": {
+          "shot": "02_register_ar.png",
+          "cap": "أدخل رقم الإقامة وتاريخ الميلاد كما هما في سجل الموارد البشرية، ثم اختر كلمة مرور وأكّدها."
+        },
+        "en": {
+          "shot": "02_register_en.png",
+          "cap": "Enter your Iqama and date of birth as recorded in HR, then choose and confirm a password."
+        }
+      },
+      {
+        "n": "03",
+        "title": "نسيت كلمة المرور",
+        "ar": {
+          "shot": "03_forgot_ar.png",
+          "cap": "أدخل رقم إقامتك ليصلك رمز تحقق على بريدك المسجّل لدى المنشأة، ثم اضبط كلمة مرور جديدة.",
+          "note": "لا يوجد بريد مسجّل؟ تواصل مع الموارد البشرية لاستعادة الدخول."
+        },
+        "en": {
+          "shot": "03_forgot_en.png",
+          "cap": "Enter your Iqama to receive a code at the email registered with your organization, then set a new password.",
+          "note": "No email on file? Contact HR to restore access."
+        }
+      },
+      {
+        "n": "04",
+        "title": "تغيير لغة البوابة",
+        "ar": {
+          "shot": "04_lang_ar.png",
+          "cap": "اضغط أيقونة الكرة الأرضية أعلى الصفحة واختر لغتك — البوابة تدعم ٧ لغات وتُحفظ لغتك للزيارة القادمة."
+        },
+        "en": {
+          "shot": "04_lang_en.png",
+          "cap": "Tap the globe icon at the top and pick your language — the portal supports 7 languages and remembers your choice."
+        }
+      },
+      {
+        "n": "05",
+        "title": "الشاشة الرئيسية: ملخصك",
+        "ar": {
+          "shot": "05_home_ar.png",
+          "cap": "أعلى الصفحة أربع بطاقات: مدة خدمتك، ورصيد إجازاتك، وإجمالي راتبك، وحالة تذكرة السفر — وبجانبها أزرار الطلبات السريعة."
+        },
+        "en": {
+          "shot": "05_home_en.png",
+          "cap": "Service length, leave balance, gross salary and ticket entitlement at the top — with the quick-request buttons just above them."
+        }
+      },
+      {
+        "n": "06",
+        "title": "تسجيل الحضور والانصراف",
+        "ar": {
+          "shot": "06_clock_ar.png",
+          "cap": "سجّل حضورك من جوالك داخل نطاق الموقع، وتظهر لك آخر بصمة ووقت الدوام اليومي."
+        },
+        "en": {
+          "shot": "06_clock_en.png",
+          "cap": "Clock in from your phone inside the site range; your last punch and today's hours appear right there."
+        }
+      },
+      {
+        "n": "07",
+        "title": "بياناتي الوظيفية والراتب",
+        "ar": {
+          "shot": "07_details_ar.png",
+          "cap": "بطاقة تفاصيلك: المسمى والإدارة وتاريخ التعيين ونوع العقد، ثم الراتب الأساسي والبدلات والإجمالي."
+        },
+        "en": {
+          "shot": "07_details_en.png",
+          "cap": "Your details card: position, department, hire date and contract type, then base salary, allowances and the total."
+        }
+      },
+      {
+        "n": "08",
+        "title": "سجل الحضور",
+        "ar": {
+          "shot": "08_attendance_ar.png",
+          "cap": "جدول بأيام حضورك: الدخول والخروج وعدد الساعات وحالة كل يوم."
+        },
+        "en": {
+          "shot": "08_attendance_en.png",
+          "cap": "A table of your attendance days: check-in, check-out, hours and each day's status."
+        }
+      },
+      {
+        "n": "09",
+        "title": "رصيد الإجازات وطلباتك",
+        "ar": {
+          "shot": "09_leaves_ar.png",
+          "cap": "قسم الإجازات يعرض كل طلب ونوعه ومدته وحالته: قيد الاعتماد، معتمدة، أو مرفوضة مع سبب الرفض."
+        },
+        "en": {
+          "shot": "09_leaves_en.png",
+          "cap": "The leaves section lists each request with its type, dates and status: pending, approved, or rejected with the reason."
+        }
+      },
+      {
+        "n": "10",
+        "title": "طلب إجازة جديد",
+        "ar": {
+          "shot": "10_leave_form_ar.png",
+          "cap": "اضغط «طلب إجازة» أعلى الصفحة، وحدّد النوع والتواريخ والسبب وأرفق التقرير الطبي إن كانت إجازة مرضية، ثم أرسل."
+        },
+        "en": {
+          "shot": "10_leave_form_en.png",
+          "cap": "Tap “Request leave” at the top, choose the type and dates, add a reason and attach the medical report for sick leave, then submit."
+        }
+      },
+      {
+        "n": "11",
+        "title": "السلف",
+        "ar": {
+          "shot": "11_loans_ar.png",
+          "cap": "قسم السلف يعرض المبلغ وعدد الأقساط والقسط الشهري وحالة الطلب، مع المسدد والمتبقي بعد الصرف."
+        },
+        "en": {
+          "shot": "11_loans_en.png",
+          "cap": "The loans section shows the amount, instalment count, monthly instalment and status — with paid and remaining amounts after disbursement."
+        }
+      },
+      {
+        "n": "12",
+        "title": "طلب سلفة",
+        "ar": {
+          "shot": "12_loan_form_ar.png",
+          "cap": "اضغط «طلب سلفة» وحدّد المبلغ وعدد الأقساط، ثم أرسل الطلب لمسار الاعتماد."
+        },
+        "en": {
+          "shot": "12_loan_form_en.png",
+          "cap": "Tap “Request loan”, set the amount and number of instalments, then submit it to the approval flow."
+        }
+      },
+      {
+        "n": "13",
+        "title": "رحلات العمل والانتداب",
+        "ar": {
+          "shot": "13_trips_ar.png",
+          "cap": "كل انتداب أو رحلة عمل مع الوجهة والمدة والحالة — وتُنشأ من زر «رحلة عمل» أعلى الصفحة."
+        },
+        "en": {
+          "shot": "13_trips_en.png",
+          "cap": "Every trip with its destination, dates and status — created from the “Business trip” button at the top."
+        }
+      },
+      {
+        "n": "14",
+        "title": "طلبات العهد",
+        "ar": {
+          "shot": "14_equipment_ar.png",
+          "cap": "اطلب عهدة (جهاز، جوال، شريحة، ملابس عمل) وتابع حالتها حتى التسليم."
+        },
+        "en": {
+          "shot": "14_equipment_en.png",
+          "cap": "Request equipment (device, phone, SIM, work clothes) and follow it through to delivery."
+        }
+      },
+      {
+        "n": "15",
+        "title": "الشكاوى",
+        "ar": {
+          "shot": "15_complaints_ar.png",
+          "cap": "ارفع شكواك من البوابة وتابع حالتها — والشكوى السرّية تُحال مباشرة إلى الموارد البشرية."
+        },
+        "en": {
+          "shot": "15_complaints_en.png",
+          "cap": "File a complaint from the portal and track it — a confidential complaint goes straight to HR."
+        }
+      },
+      {
+        "n": "16",
+        "title": "تقييمات الأداء",
+        "ar": {
+          "shot": "16_performance_ar.png",
+          "cap": "آخر تقييماتك ودرجاتها وملاحظات المدير، محفوظة في مكان واحد."
+        },
+        "en": {
+          "shot": "16_performance_en.png",
+          "cap": "Your latest reviews, scores and manager notes, kept in one place."
+        }
+      },
+      {
+        "n": "17",
+        "title": "خطط التدريب",
+        "ar": {
+          "shot": "17_training_ar.png",
+          "cap": "الخطط التدريبية المخصصة لك وهدفها وآلية تنفيذها وتواريخها وحالتها."
+        },
+        "en": {
+          "shot": "17_training_en.png",
+          "cap": "The training plans assigned to you: goal, delivery, dates and status."
+        }
+      },
+      {
+        "n": "18",
+        "title": "المستندات والمخالصات",
+        "ar": {
+          "shot": "18_documents_ar.png",
+          "cap": "مخالصات السلف والإجازات ونهاية الخدمة متاحة للعرض والطباعة بعد اعتمادها."
+        },
+        "en": {
+          "shot": "18_documents_en.png",
+          "cap": "Loan, leave and end-of-service settlements are available to view and print once approved."
+        }
+      },
+      {
+        "n": "19",
+        "title": "الإنذارات",
+        "ar": {
+          "shot": "19_warnings_ar.png",
+          "cap": "عدد إنذاراتك ودرجاتها والمادة النظامية المرتبطة بكل إنذار."
+        },
+        "en": {
+          "shot": "19_warnings_en.png",
+          "cap": "Your warning count and level, with the labour-law article behind each one."
+        }
+      },
+      {
+        "n": "20",
+        "title": "الوصف الوظيفي",
+        "ar": {
+          "shot": "20_jobdesc_ar.png",
+          "cap": "وصف وظيفتك كما هو معتمد، مع إمكانية طباعته أو تصديره."
+        },
+        "en": {
+          "shot": "20_jobdesc_en.png",
+          "cap": "Your approved job description, ready to print or export."
+        }
+      },
+      {
+        "n": "21",
+        "title": "تقدير مكافأة نهاية الخدمة",
+        "ar": {
+          "shot": "21_eos_ar.png",
+          "cap": "تقدير مكافأة نهاية خدمتك وفق نظام العمل السعودي، يُحسب تلقائياً من راتبك ومدة خدمتك.",
+          "note": "المبلغ استرشادي — التسوية النهائية تصدرها الموارد البشرية عند انتهاء الخدمة."
+        },
+        "en": {
+          "shot": "21_eos_en.png",
+          "cap": "An estimate of your end-of-service award under the Saudi Labor Law, computed automatically from your salary and service length.",
+          "note": "Indicative only — HR issues the final settlement when service ends."
+        }
+      },
+      {
+        "n": "22",
+        "title": "القرارات الإدارية",
+        "ar": {
+          "shot": "22_decisions_ar.png",
+          "cap": "القرارات الصادرة بحقك — ترقية أو نقل أو تكليف — مع رقم كل قرار وتاريخه."
+        },
+        "en": {
+          "shot": "22_decisions_en.png",
+          "cap": "Decisions issued for you — promotion, transfer or assignment — each with its number and date."
+        }
+      },
+      {
+        "n": "23",
+        "title": "الحوافز والمكافآت",
+        "ar": {
+          "shot": "23_incentives_ar.png",
+          "cap": "حوافزك ومكافآتك المعتمدة: النوع والمبلغ وتاريخ الاستحقاق."
+        },
+        "en": {
+          "shot": "23_incentives_en.png",
+          "cap": "Your approved incentives and bonuses: type, amount and due date."
+        }
+      },
+      {
+        "n": "24",
+        "title": "الإشعارات",
+        "ar": {
+          "shot": "24_notifications_ar.png",
+          "cap": "تبويب الإشعارات يجمع كل ما وصلك: اعتماد، رفض، مستند جديد — ويُحفظ سجله دائماً."
+        },
+        "en": {
+          "shot": "24_notifications_en.png",
+          "cap": "The notifications tab collects everything: approvals, rejections, new documents — with a permanent history."
+        }
+      },
+      {
+        "n": "25",
+        "title": "مساعد جداره",
+        "ar": {
+          "shot": "25_assistant_ar.png",
+          "cap": "مساعد ذكي داخل البوابة يشرح لك خطوات أي خدمة بلغتك، ولا ينفّذ عنك أي إجراء."
+        },
+        "en": {
+          "shot": "25_assistant_en.png",
+          "cap": "A smart in-portal assistant that explains any service in your language and never acts on your behalf."
+        }
+      }
+    ]
+  },
+  "en": {
+    "title": "Employee Self-Service Portal Guide",
+    "lead": "Every step of the portal, with a real picture from the system itself — from first sign-in to the last document in your file.",
+    "cover_note": "This guide is taken from Jadara's Employee Self-Service Portal exactly as it appears on phones. All screenshots are captured directly from the live system — no mock-ups, no illustrations.",
+    "chapters": [
+      {
+        "n": "01",
+        "title": "Sign in to the portal",
+        "ar": {
+          "shot": "01_login_ar.png",
+          "cap": "أدخل رقم الهوية أو الإقامة وكلمة المرور، ثم اضغط «تسجيل الدخول».",
+          "note": "أول مرة؟ لا تملك كلمة مرور بعد — انتقل إلى تبويب «إنشاء حساب» (الخطوة 02)."
+        },
+        "en": {
+          "shot": "01_login_en.png",
+          "cap": "Enter your National ID / Iqama and password, then tap “Sign in”.",
+          "note": "First time? You have no password yet — use the “Create account” tab (step 02)."
+        }
+      },
+      {
+        "n": "02",
+        "title": "Create your password (first time)",
+        "ar": {
+          "shot": "02_register_ar.png",
+          "cap": "أدخل رقم الإقامة وتاريخ الميلاد كما هما في سجل الموارد البشرية، ثم اختر كلمة مرور وأكّدها."
+        },
+        "en": {
+          "shot": "02_register_en.png",
+          "cap": "Enter your Iqama and date of birth as recorded in HR, then choose and confirm a password."
+        }
+      },
+      {
+        "n": "03",
+        "title": "Forgot your password",
+        "ar": {
+          "shot": "03_forgot_ar.png",
+          "cap": "أدخل رقم إقامتك ليصلك رمز تحقق على بريدك المسجّل لدى المنشأة، ثم اضبط كلمة مرور جديدة.",
+          "note": "لا يوجد بريد مسجّل؟ تواصل مع الموارد البشرية لاستعادة الدخول."
+        },
+        "en": {
+          "shot": "03_forgot_en.png",
+          "cap": "Enter your Iqama to receive a code at the email registered with your organization, then set a new password.",
+          "note": "No email on file? Contact HR to restore access."
+        }
+      },
+      {
+        "n": "04",
+        "title": "Change the portal language",
+        "ar": {
+          "shot": "04_lang_ar.png",
+          "cap": "اضغط أيقونة الكرة الأرضية أعلى الصفحة واختر لغتك — البوابة تدعم ٧ لغات وتُحفظ لغتك للزيارة القادمة."
+        },
+        "en": {
+          "shot": "04_lang_en.png",
+          "cap": "Tap the globe icon at the top and pick your language — the portal supports 7 languages and remembers your choice."
+        }
+      },
+      {
+        "n": "05",
+        "title": "Home: your summary",
+        "ar": {
+          "shot": "05_home_ar.png",
+          "cap": "أعلى الصفحة أربع بطاقات: مدة خدمتك، ورصيد إجازاتك، وإجمالي راتبك، وحالة تذكرة السفر — وبجانبها أزرار الطلبات السريعة."
+        },
+        "en": {
+          "shot": "05_home_en.png",
+          "cap": "Service length, leave balance, gross salary and ticket entitlement at the top — with the quick-request buttons just above them."
+        }
+      },
+      {
+        "n": "06",
+        "title": "Clock in and out",
+        "ar": {
+          "shot": "06_clock_ar.png",
+          "cap": "سجّل حضورك من جوالك داخل نطاق الموقع، وتظهر لك آخر بصمة ووقت الدوام اليومي."
+        },
+        "en": {
+          "shot": "06_clock_en.png",
+          "cap": "Clock in from your phone inside the site range; your last punch and today's hours appear right there."
+        }
+      },
+      {
+        "n": "07",
+        "title": "My job details and salary",
+        "ar": {
+          "shot": "07_details_ar.png",
+          "cap": "بطاقة تفاصيلك: المسمى والإدارة وتاريخ التعيين ونوع العقد، ثم الراتب الأساسي والبدلات والإجمالي."
+        },
+        "en": {
+          "shot": "07_details_en.png",
+          "cap": "Your details card: position, department, hire date and contract type, then base salary, allowances and the total."
+        }
+      },
+      {
+        "n": "08",
+        "title": "Attendance record",
+        "ar": {
+          "shot": "08_attendance_ar.png",
+          "cap": "جدول بأيام حضورك: الدخول والخروج وعدد الساعات وحالة كل يوم."
+        },
+        "en": {
+          "shot": "08_attendance_en.png",
+          "cap": "A table of your attendance days: check-in, check-out, hours and each day's status."
+        }
+      },
+      {
+        "n": "09",
+        "title": "Leave balance and requests",
+        "ar": {
+          "shot": "09_leaves_ar.png",
+          "cap": "قسم الإجازات يعرض كل طلب ونوعه ومدته وحالته: قيد الاعتماد، معتمدة، أو مرفوضة مع سبب الرفض."
+        },
+        "en": {
+          "shot": "09_leaves_en.png",
+          "cap": "The leaves section lists each request with its type, dates and status: pending, approved, or rejected with the reason."
+        }
+      },
+      {
+        "n": "10",
+        "title": "New leave request",
+        "ar": {
+          "shot": "10_leave_form_ar.png",
+          "cap": "اضغط «طلب إجازة» أعلى الصفحة، وحدّد النوع والتواريخ والسبب وأرفق التقرير الطبي إن كانت إجازة مرضية، ثم أرسل."
+        },
+        "en": {
+          "shot": "10_leave_form_en.png",
+          "cap": "Tap “Request leave” at the top, choose the type and dates, add a reason and attach the medical report for sick leave, then submit."
+        }
+      },
+      {
+        "n": "11",
+        "title": "Loans",
+        "ar": {
+          "shot": "11_loans_ar.png",
+          "cap": "قسم السلف يعرض المبلغ وعدد الأقساط والقسط الشهري وحالة الطلب، مع المسدد والمتبقي بعد الصرف."
+        },
+        "en": {
+          "shot": "11_loans_en.png",
+          "cap": "The loans section shows the amount, instalment count, monthly instalment and status — with paid and remaining amounts after disbursement."
+        }
+      },
+      {
+        "n": "12",
+        "title": "Request a loan",
+        "ar": {
+          "shot": "12_loan_form_ar.png",
+          "cap": "اضغط «طلب سلفة» وحدّد المبلغ وعدد الأقساط، ثم أرسل الطلب لمسار الاعتماد."
+        },
+        "en": {
+          "shot": "12_loan_form_en.png",
+          "cap": "Tap “Request loan”, set the amount and number of instalments, then submit it to the approval flow."
+        }
+      },
+      {
+        "n": "13",
+        "title": "Business trips and travel",
+        "ar": {
+          "shot": "13_trips_ar.png",
+          "cap": "كل انتداب أو رحلة عمل مع الوجهة والمدة والحالة — وتُنشأ من زر «رحلة عمل» أعلى الصفحة."
+        },
+        "en": {
+          "shot": "13_trips_en.png",
+          "cap": "Every trip with its destination, dates and status — created from the “Business trip” button at the top."
+        }
+      },
+      {
+        "n": "14",
+        "title": "Equipment requests",
+        "ar": {
+          "shot": "14_equipment_ar.png",
+          "cap": "اطلب عهدة (جهاز، جوال، شريحة، ملابس عمل) وتابع حالتها حتى التسليم."
+        },
+        "en": {
+          "shot": "14_equipment_en.png",
+          "cap": "Request equipment (device, phone, SIM, work clothes) and follow it through to delivery."
+        }
+      },
+      {
+        "n": "15",
+        "title": "Complaints",
+        "ar": {
+          "shot": "15_complaints_ar.png",
+          "cap": "ارفع شكواك من البوابة وتابع حالتها — والشكوى السرّية تُحال مباشرة إلى الموارد البشرية."
+        },
+        "en": {
+          "shot": "15_complaints_en.png",
+          "cap": "File a complaint from the portal and track it — a confidential complaint goes straight to HR."
+        }
+      },
+      {
+        "n": "16",
+        "title": "Performance reviews",
+        "ar": {
+          "shot": "16_performance_ar.png",
+          "cap": "آخر تقييماتك ودرجاتها وملاحظات المدير، محفوظة في مكان واحد."
+        },
+        "en": {
+          "shot": "16_performance_en.png",
+          "cap": "Your latest reviews, scores and manager notes, kept in one place."
+        }
+      },
+      {
+        "n": "17",
+        "title": "Training plans",
+        "ar": {
+          "shot": "17_training_ar.png",
+          "cap": "الخطط التدريبية المخصصة لك وهدفها وآلية تنفيذها وتواريخها وحالتها."
+        },
+        "en": {
+          "shot": "17_training_en.png",
+          "cap": "The training plans assigned to you: goal, delivery, dates and status."
+        }
+      },
+      {
+        "n": "18",
+        "title": "Documents and settlements",
+        "ar": {
+          "shot": "18_documents_ar.png",
+          "cap": "مخالصات السلف والإجازات ونهاية الخدمة متاحة للعرض والطباعة بعد اعتمادها."
+        },
+        "en": {
+          "shot": "18_documents_en.png",
+          "cap": "Loan, leave and end-of-service settlements are available to view and print once approved."
+        }
+      },
+      {
+        "n": "19",
+        "title": "Warnings",
+        "ar": {
+          "shot": "19_warnings_ar.png",
+          "cap": "عدد إنذاراتك ودرجاتها والمادة النظامية المرتبطة بكل إنذار."
+        },
+        "en": {
+          "shot": "19_warnings_en.png",
+          "cap": "Your warning count and level, with the labour-law article behind each one."
+        }
+      },
+      {
+        "n": "20",
+        "title": "Job description",
+        "ar": {
+          "shot": "20_jobdesc_ar.png",
+          "cap": "وصف وظيفتك كما هو معتمد، مع إمكانية طباعته أو تصديره."
+        },
+        "en": {
+          "shot": "20_jobdesc_en.png",
+          "cap": "Your approved job description, ready to print or export."
+        }
+      },
+      {
+        "n": "21",
+        "title": "End-of-service estimate",
+        "ar": {
+          "shot": "21_eos_ar.png",
+          "cap": "تقدير مكافأة نهاية خدمتك وفق نظام العمل السعودي، يُحسب تلقائياً من راتبك ومدة خدمتك.",
+          "note": "المبلغ استرشادي — التسوية النهائية تصدرها الموارد البشرية عند انتهاء الخدمة."
+        },
+        "en": {
+          "shot": "21_eos_en.png",
+          "cap": "An estimate of your end-of-service award under the Saudi Labor Law, computed automatically from your salary and service length.",
+          "note": "Indicative only — HR issues the final settlement when service ends."
+        }
+      },
+      {
+        "n": "22",
+        "title": "Administrative decisions",
+        "ar": {
+          "shot": "22_decisions_ar.png",
+          "cap": "القرارات الصادرة بحقك — ترقية أو نقل أو تكليف — مع رقم كل قرار وتاريخه."
+        },
+        "en": {
+          "shot": "22_decisions_en.png",
+          "cap": "Decisions issued for you — promotion, transfer or assignment — each with its number and date."
+        }
+      },
+      {
+        "n": "23",
+        "title": "Incentives and bonuses",
+        "ar": {
+          "shot": "23_incentives_ar.png",
+          "cap": "حوافزك ومكافآتك المعتمدة: النوع والمبلغ وتاريخ الاستحقاق."
+        },
+        "en": {
+          "shot": "23_incentives_en.png",
+          "cap": "Your approved incentives and bonuses: type, amount and due date."
+        }
+      },
+      {
+        "n": "24",
+        "title": "Notifications",
+        "ar": {
+          "shot": "24_notifications_ar.png",
+          "cap": "تبويب الإشعارات يجمع كل ما وصلك: اعتماد، رفض، مستند جديد — ويُحفظ سجله دائماً."
+        },
+        "en": {
+          "shot": "24_notifications_en.png",
+          "cap": "The notifications tab collects everything: approvals, rejections, new documents — with a permanent history."
+        }
+      },
+      {
+        "n": "25",
+        "title": "Jadara Assistant",
+        "ar": {
+          "shot": "25_assistant_ar.png",
+          "cap": "مساعد ذكي داخل البوابة يشرح لك خطوات أي خدمة بلغتك، ولا ينفّذ عنك أي إجراء."
+        },
+        "en": {
+          "shot": "25_assistant_en.png",
+          "cap": "A smart in-portal assistant that explains any service in your language and never acts on your behalf."
+        }
+      }
+    ]
+  }
+}
