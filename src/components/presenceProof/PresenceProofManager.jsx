@@ -37,7 +37,7 @@ export default function PresenceProofManager({ org }) {
   const isAr = lang === "ar";
   const t = isAr ? {
     title: "إثبات الحضور الفوري",
-    desc: "تنبيه عاجل للموجودين في الدوام حالياً فقط — للتأكيد خلال 5 دقائق. يصل لحساب التطبيق المرتبط بهوية الموظف في نفس المنشأة فقط، ويظهر أعلى بوابة الموظف عند فتحها. عدم التأكيد يظهر في تقرير المتابعة فقط ولا يُحتسب غياباً أو خصماً.",
+    desc: "تنبيه عاجل للموجودين في الدوام حالياً فقط — للتأكيد خلال 5 دقائق. يصل لحساب التطبيق المرتبط بهوية الموظف في نفس المنشأة فقط، ويظهر أعلى بوابة الموظف عند فتحها. وليصلك الصوت والتطبيق مغلق: ثبّت نسخة المتجر وحدّثها، وفعّل الإشعارات مع الصوت، وأوقف الكتم وعدم الإزعاج. عدم التأكيد يظهر في تقرير المتابعة فقط ولا يُحتسب غياباً أو خصماً.",
     request: "طلب إثبات الحضور الآن",
     requesting: "جارٍ إرسال التنبيه...",
     active: "طلب نشط الآن",
@@ -65,12 +65,12 @@ export default function PresenceProofManager({ org }) {
     loading: "جارٍ التحميل...",
     payrollNote: "تنبيه: هذا الإجراء لا يغيّر سجلات الحضور ولا مسير الرواتب.",
     pushSent: (sent, total) => `تم إرسال تنبيه التطبيق إلى ${sent} من ${total} موظفاً مستهدفاً.`,
-    pushPartial: (sent, failed, skipped) => `تم إرسال تنبيه التطبيق إلى ${sent} وتعذّر ${failed}${skipped ? ` — ${skipped} بلا حساب تطبيق مرتبط بهويته` : ""}. من لا يملك حساباً مرتبطاً يرى التنبيه أعلى بوابة الموظف عند فتحها.`,
-    pushFailed: "تعذّر إرسال تنبيه التطبيق للموظفين — تحقق من نسخة المتجر وتفعيل الإشعارات وربط حسابات التطبيق بالهويات.",
+    pushPartial: (sent, failed, skipped, firstError) => `تم إرسال تنبيه التطبيق إلى ${sent} وتعذّر ${failed}${skipped ? ` — ${skipped} بلا حساب تطبيق مرتبط بهويته` : ""}${firstError ? ` — التشخيص: ${firstError}` : ""}. للتطبيق المغلق: نسخة المتجر المحدّثة + الإشعارات والصوت مفعّلة + إيقاف الكتم وعدم الإزعاج.`,
+    pushFailed: "تعذّر إرسال تنبيه التطبيق للموظفين — تحقق من نسخة المتجر المحدّثة وتفعيل الإشعارات مع الصوت وربط الحسابات بالهويات، وأوقف الكتم وعدم الإزعاج.",
     pushNoUser: "لم يُرسل تنبيه التطبيق لأن حسابات الموظفين المستهدفين غير مرتبطة بهوياتهم بعد — يرى الموظفون التنبيه أعلى بوابة الموظف عند فتحها برقم الهوية.",
   } : {
     title: "Instant presence proof",
-    desc: "An urgent check for employees currently on shift only — confirm within 5 minutes. It reaches only the app account linked to the employee identity in the same organization, and appears at the top of the employee portal when opened. A missed confirmation appears only in follow-up; it is never automatic absence or deduction.",
+    desc: "An urgent check for employees currently on shift only — confirm within 5 minutes. It reaches only the app account linked to the employee identity in the same organization, and appears at the top of the employee portal when opened. To hear it with the app closed: install/update the store app, enable notifications with sound, and turn off silent mode and Do Not Disturb. A missed confirmation appears only in follow-up; it is never automatic absence or deduction.",
     request: "Request presence proof now",
     requesting: "Sending the urgent alert...",
     active: "Active request",
@@ -98,8 +98,8 @@ export default function PresenceProofManager({ org }) {
     loading: "Loading...",
     payrollNote: "Note: this action does not change attendance records or payroll.",
     pushSent: (sent, total) => `App alerts were sent to ${sent} of ${total} targeted employees.`,
-    pushPartial: (sent, failed, skipped) => `App alerts reached ${sent} but failed for ${failed}${skipped ? ` — ${skipped} have no app account linked to their identity` : ""}. Employees without a linked account still see the alert at the top of the employee portal when opened.`,
-    pushFailed: "App alerts could not be sent — check the store build, notification settings, and identity-linked app accounts.",
+    pushPartial: (sent, failed, skipped, firstError) => `App alerts reached ${sent} but failed for ${failed}${skipped ? ` — ${skipped} have no app account linked to their identity` : ""}${firstError ? ` — diagnostic: ${firstError}` : ""}. For closed-app sound: updated store app + notifications with sound on + silent/DND off.`,
+    pushFailed: "App alerts could not be sent — check the updated store build, notifications with sound, identity-linked app accounts, and turn off silent mode / Do Not Disturb.",
     pushNoUser: "App alerts were not sent because the targeted employees have no app account linked to their identities yet — they still see the alert at the top of the employee portal when opened with their national ID.",
   };
 
@@ -115,6 +115,7 @@ export default function PresenceProofManager({ org }) {
   }, []);
 
   const [request, setRequest] = useState(null);
+  const [pushInfo, setPushInfo] = useState(null);
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
@@ -184,6 +185,7 @@ export default function PresenceProofManager({ org }) {
       const data = res?.data || res;
       if (data?.ok) {
         setRequest(data.request || null);
+        if (data.push) setPushInfo(data.push);
         setError("");
         setErrorCode("");
       } else {
@@ -207,14 +209,15 @@ export default function PresenceProofManager({ org }) {
   const pushFailedCount = Number(request?.push_failed_count || 0);
   const pushSkippedCount = Number(request?.push_skipped_count || 0);
   const pushTargetTotal = Number(request?.target_count || 0);
+  const pushFirstError = String(pushInfo?.first_error || "");
   const pushDetail = !pushStatus
     ? ""
     : pushStatus === "sent"
       ? t.pushSent(pushSentCount, pushTargetTotal)
       : pushStatus === "partial"
-        ? t.pushPartial(pushSentCount, pushFailedCount, pushSkippedCount)
+        ? t.pushPartial(pushSentCount, pushFailedCount, pushSkippedCount, pushFirstError)
         : pushStatus === "failed"
-          ? t.pushFailed
+          ? (pushFirstError ? `${t.pushFailed} ${isAr ? "التشخيص" : "Diagnostic"}: ${pushFirstError}` : t.pushFailed)
           : t.pushNoUser;
   const pushWarn = pushStatus === "partial" || pushStatus === "failed" || pushStatus === "skipped_no_user";
 

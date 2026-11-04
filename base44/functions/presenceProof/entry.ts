@@ -463,7 +463,8 @@ export default async function (req) {
       }
 
       // تنبيه الجوال الأصلي للمستهدفين فقط — لا يؤثر في الحضور أو الرواتب.
-      // يعمل حتى لو كان التطبيق مغلقاً بشرط تثبيت نسخة المتجر وتفعيل الإشعارات.
+      // يصل للتطبيق المغلق عبر إشعار النظام بشرط: نسخة المتجر المحدّثة، وربط الحساب بالهوية،
+      // وتفعيل الإشعارات مع الصوت وإيقاف الكتم/عدم الإزعاج. واجهة Base44 لا توفر بارامتر صوت/أولوية.
       const pushTitle = `${messages.ar.title} — ${messages.en.title}`.slice(0, 100);
       const pushBody = `${messages.ar.body} ${messages.en.body}`.slice(0, 500);
       const push = {
@@ -472,6 +473,7 @@ export default async function (req) {
         failed: 0,
         skipped: 0,
         status: "skipped_no_user",
+        first_error: "",
       };
       for (const emp of targets) {
         const userId = String(emp?.user_id || "").trim();
@@ -488,8 +490,11 @@ export default async function (req) {
             action_url: "/portal",
           });
           push.sent += 1;
-        } catch {
+        } catch (err) {
           push.failed += 1;
+          if (!push.first_error) {
+            try { push.first_error = String(err?.message || err?.code || "send_failed").slice(0, 160); } catch {}
+          }
         }
       }
       if (push.sent > 0 && push.failed === 0) push.status = "sent";

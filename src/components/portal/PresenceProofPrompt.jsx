@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useState } from "react";
+import React, { useCallback, useEffect, useRef, useState } from "react";
 import { base44 } from "@/api/base44Client";
 import { Button } from "@/components/ui/button";
 import { BellRing, CheckCircle2, Loader2 } from "lucide-react";
@@ -18,6 +18,9 @@ export default function PresenceProofPrompt({ session }) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [nowMs, setNowMs] = useState(Date.now());
+  const [soundBlocked, setSoundBlocked] = useState(false);
+  const alarmCtx = useRef(null);
+  const alarmTimer = useRef(null);
 
   const load = useCallback(async () => {
     if (!session?.token || !session?.employee_id) {
@@ -48,6 +51,52 @@ export default function PresenceProofPrompt({ session }) {
     return () => clearInterval(id);
   }, [load]);
 
+  const stopAlarm = () => {
+    try { if (alarmTimer.current) clearInterval(alarmTimer.current); } catch {}
+    alarmTimer.current = null;
+  };
+  const playAlarmBurst = async () => {
+    try {
+      if (typeof window === "undefined") return false;
+      const AC = window.AudioContext || window.webkitAudioContext;
+      if (!AC) return false;
+      if (!alarmCtx.current) alarmCtx.current = new AC();
+      const ctx = alarmCtx.current;
+      if (ctx.state === "suspended") { try { await ctx.resume(); } catch {} }
+      const at = ctx.currentTime + 0.02;
+      [880, 880, 1174].forEach((freq, i) => {
+        const osc = ctx.createOscillator();
+        const gain = ctx.createGain();
+        osc.type = "sine";
+        osc.frequency.value = freq;
+        const t0 = at + i * 0.34;
+        gain.gain.setValueAtTime(0.0001, t0);
+        gain.gain.exponentialRampToValueAtTime(0.5, t0 + 0.03);
+        gain.gain.exponentialRampToValueAtTime(0.0001, t0 + 0.3);
+        osc.connect(gain);
+        gain.connect(ctx.destination);
+        osc.start(t0);
+        osc.stop(t0 + 0.32);
+      });
+      return true;
+    } catch { return false; }
+  };
+  const enableSound = async () => {
+    const ok = await playAlarmBurst();
+    setSoundBlocked(!ok);
+  };
+  useEffect(() => {
+    if (!active || active.confirmed) { stopAlarm(); return; }
+    let cancelled = false;
+    playAlarmBurst().then((ok) => { if (!ok && !cancelled) setSoundBlocked(true); });
+    try { if (alarmTimer.current) clearInterval(alarmTimer.current); } catch {}
+    alarmTimer.current = setInterval(() => {
+      playAlarmBurst().then((ok) => { if (!ok) setSoundBlocked(true); });
+    }, 7000);
+    return () => { cancelled = true; stopAlarm(); };
+  }, [active?.id, active?.confirmed]);
+  useEffect(() => () => { try { if (alarmTimer.current) clearInterval(alarmTimer.current); } catch {} try { alarmCtx.current?.close(); } catch {} }, []);
+
   useEffect(() => {
     if (!active || active.confirmed) return;
     setNowMs(Date.now());
@@ -68,6 +117,7 @@ export default function PresenceProofPrompt({ session }) {
       const data = res?.data || res;
       if (data?.ok) {
         setActive(data.active || { ...active, confirmed: true, confirmed_at: Date.now() });
+        stopAlarm();
       } else {
         setError(t.failed);
         load();
@@ -102,6 +152,10 @@ export default function PresenceProofPrompt({ session }) {
         </div>
         <div className="px-4 py-3" dir={portalDir(lang)}>
           <p className="text-sm leading-relaxed text-slate-700">{t.instruction}</p>
+          {t.soundHint && <p className="mt-2 text-[11px] leading-relaxed text-muted-foreground">{t.soundHint}</p>}
+          {soundBlocked && (
+            <Button onClick={enableSound} variant="outline" className="w-full mt-2 h-10 font-bold">{t.sound || "Enable sound"}</Button>
+          )}
           {error && <p className="mt-2 text-xs font-medium text-rose-600">{error}</p>}
           <Button onClick={confirm} disabled={busy || remaining <= 0} className="w-full mt-3 h-11 text-base font-bold bg-rose-600 hover:bg-rose-700">
             {busy ? (<><Loader2 size={18} className="animate-spin" /> {t.confirming}</>) : t.confirm}
