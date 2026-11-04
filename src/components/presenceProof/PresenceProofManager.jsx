@@ -26,6 +26,12 @@ const fmtRemaining = (ms, isAr) => {
   return isAr ? `${m}:${s} دقيقة` : `${m}:${s} min`;
 };
 
+const presenceFailure = (err) => ({
+  payload: err?.response?.data || {},
+  status: err?.response?.status || err?.status || 0,
+  code: err?.response?.data?.error || err?.code || err?.message || "",
+});
+
 export default function PresenceProofManager({ org }) {
   const { lang } = useI18n();
   const isAr = lang === "ar";
@@ -48,7 +54,14 @@ export default function PresenceProofManager({ org }) {
     noTargets: "لا يوجد موظفون في الدوام حالياً ضمن هذه المنشأة.",
     disabled: "طلبات إثبات الحضور الفوري موقوفة من إعدادات المنشأة.",
     activeExists: "يوجد طلب نشط بالفعل لهذه المنشأة — لا يمكن إصدار طلب آخر حتى تنتهي مهلته.",
+    noCompany: "تعذّر تحديد منشأة الحساب الحالي — أعد تسجيل الدخول بحساب الشركة الصحيح.",
+    unauthorized: "انتهت الجلسة أو لم يتم التعرف على المستخدم — أعد تسجيل الدخول ثم حاول مجدداً.",
+    forbidden: "الحساب الحالي لا يملك صلاحية إرسال طلب إثبات الحضور.",
+    notDeployed: "خدمة إثبات الحضور غير منشورة بعد على الخادم — انشر التطبيق من لوحة Base44 ثم أعد المحاولة.",
+    serverError: "حدث خطأ في الخادم أثناء إنشاء الطلب — أعد المحاولة، وإن تكرر أرسل رمز التشخيص للدعم.",
+    networkError: "تعذّر الاتصال بالخادم — تحقق من الإنترنت ثم أعد المحاولة.",
     failed: "تعذّر إرسال الطلب",
+    diagCode: "رمز التشخيص",
     loading: "جارٍ التحميل...",
     payrollNote: "تنبيه: هذا الإجراء لا يغيّر سجلات الحضور ولا مسير الرواتب.",
   } : {
@@ -70,7 +83,14 @@ export default function PresenceProofManager({ org }) {
     noTargets: "No employees are currently on shift in this organization.",
     disabled: "Instant presence-proof requests are disabled in organization settings.",
     activeExists: "This organization already has an active request — wait until its window ends before issuing another.",
+    noCompany: "Could not determine this account's organization — sign in again with the correct company account.",
+    unauthorized: "The session expired or the user was not recognized — sign in again and retry.",
+    forbidden: "The current account does not have permission to send a presence-proof request.",
+    notDeployed: "The presence-proof service is not published on the server yet — publish the app from the Base44 dashboard, then retry.",
+    serverError: "The server failed while creating the request — retry, and send the diagnostic code to support if it repeats.",
+    networkError: "Could not reach the server — check the internet connection and retry.",
     failed: "Could not send the request",
+    diagCode: "Diagnostic code",
     loading: "Loading...",
     payrollNote: "Note: this action does not change attendance records or payroll.",
   };
@@ -90,6 +110,7 @@ export default function PresenceProofManager({ org }) {
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
+  const [errorCode, setErrorCode] = useState("");
   const [nowMs, setNowMs] = useState(Date.now());
 
   const load = useCallback(async (silent = false) => {
@@ -118,26 +139,52 @@ export default function PresenceProofManager({ org }) {
     return () => clearInterval(id);
   }, [request]);
 
+  const failWith = (payload = {}, status = 0) => {
+    const code = String(payload?.error || "");
+    setErrorCode(code || (status ? `http_${status}` : "network"));
+    if (code === "active_exists") {
+      setRequest(payload.request || request);
+      setError(t.activeExists);
+    } else if (code === "no_targets") {
+      const when = [payload.date, payload.clock].filter(Boolean).join(" ");
+      setError(when ? `${t.noTargets} (${when})` : t.noTargets);
+    } else if (code === "proof_disabled") {
+      setError(t.disabled);
+    } else if (code === "no_company") {
+      setError(t.noCompany);
+    } else if (code === "unauthorized" || code === "invalid_session") {
+      setError(t.unauthorized);
+    } else if (code === "forbidden") {
+      setError(t.forbidden);
+    } else if (status === 404) {
+      setError(t.notDeployed);
+    } else if (status >= 500) {
+      setError(t.serverError);
+    } else if (!status) {
+      setError(t.networkError);
+    } else {
+      setError(t.failed);
+    }
+  };
+
   const sendRequest = async () => {
     setBusy(true);
     setError("");
+    setErrorCode("");
     try {
       const res = await base44.functions.invoke("presenceProof", { ...portalArgs, action: "request" });
       const data = res?.data || res;
       if (data?.ok) {
         setRequest(data.request || null);
-      } else if (data?.error === "active_exists") {
-        setRequest(data.request || request);
-        setError(t.activeExists);
-      } else if (data?.error === "no_targets") {
-        setError(t.noTargets);
-      } else if (data?.error === "proof_disabled") {
-        setError(t.disabled);
+        setError("");
+        setErrorCode("");
       } else {
-        setError(t.failed);
+        failWith(data, res?.status);
       }
-    } catch {
-      setError(t.failed);
+    } catch (err) {
+      const { payload, status } = presenceFailure(err);
+      console.error("presenceProof request failed", { status, error: payload?.error || err?.message });
+      failWith(payload, status);
     } finally {
       setBusy(false);
       load(true);
@@ -167,7 +214,10 @@ export default function PresenceProofManager({ org }) {
       </div>
 
       {error && (
-        <div className="mt-3 text-sm text-rose-700 bg-rose-50 border border-rose-200 rounded-xl px-3 py-2">{error}</div>
+        <div className="mt-3 text-sm text-rose-700 bg-rose-50 border border-rose-200 rounded-xl px-3 py-2">
+          <div>{error}</div>
+          {errorCode && <div className="mt-1 text-xs text-rose-600/90 tabular-nums">{t.diagCode}: {errorCode}</div>}
+        </div>
       )}
       {proofDisabled && !error && (
         <div className="mt-3 text-sm text-amber-700 bg-amber-50 border border-amber-200 rounded-xl px-3 py-2">{t.disabled}</div>

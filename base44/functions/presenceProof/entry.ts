@@ -1,4 +1,4 @@
-import { createClientFromRequest } from "npm:@base44/sdk@0.8.40";
+import { createClientFromRequest } from "npm:@base44/sdk@0.8.54";
 import { verifyToken } from "../../shared/portalToken.ts";
 
 // طلب إثبات الحضور الفوري — نطاق المنشأة فقط.
@@ -453,6 +453,7 @@ export default async function (req) {
 
     return Response.json({ ok: false, error: "unknown_action" }, { status: 400 });
   } catch (error) {
+    console.error("presenceProof failed", { action: String(body?.action || "") });
     return Response.json({ ok: false, error: error.message }, { status: 500 });
   }
 }
