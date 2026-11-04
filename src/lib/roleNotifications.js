@@ -32,6 +32,13 @@ export async function loadMyRole() {
 // إشعاراتي الشخصية + إشعارات مرحلة الموارد (للموارد/الأدمن) + كل ما ليس موافقات.
 export function visibleInCompanyPortal(n, role) {
   if (!n) return false;
+  // تنبيه إثبات الحضور موجّه للموظف في بوابته فقط — لا يظهر في بوابة الشركات لغير صاحبه.
+  if (n.type === "presence_proof") {
+    return Boolean(
+      (role?.myEmp && n.employee_id && n.employee_id === role.myEmp.id) ||
+      (role?.me && n.user_id && n.user_id === role.me.id)
+    );
+  }
   if (n.type !== "approval_pending") return true;
   const mine =
     (role?.myEmp && n.employee_id && n.employee_id === role.myEmp.id) ||

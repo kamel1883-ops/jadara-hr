@@ -229,6 +229,10 @@ async function hydrate(base44: any, row: any) {
     targets,
     pending,
     payroll_effect: "none",
+    push_status: String(row?.push_status || ""),
+    push_sent_count: Number(row?.push_sent_count || 0),
+    push_failed_count: Number(row?.push_failed_count || 0),
+    push_skipped_count: Number(row?.push_skipped_count || 0),
   };
 }
 
@@ -424,6 +428,7 @@ export default async function (req) {
         user_id: emp.user_id || "",
         unified_number: unified,
         i18n: JSON.stringify(i18n),
+        link: "/portal",
         is_read: false,
       }));
       try {
@@ -433,7 +438,53 @@ export default async function (req) {
           try { await base44.asServiceRole.entities.Notification.create(item); } catch {}
         }
       }
-      return Response.json({ ok: true, request: await hydrate(base44, created) });
+
+      // تنبيه الجوال الأصلي للمستهدفين فقط — لا يؤثر في الحضور أو الرواتب.
+      // يعمل حتى لو كان التطبيق مغلقاً بشرط تثبيت نسخة المتجر وتفعيل الإشعارات.
+      const pushTitle = `${messages.ar.title} — ${messages.en.title}`.slice(0, 100);
+      const pushBody = `${messages.ar.body} ${messages.en.body}`.slice(0, 500);
+      const push = {
+        attempted: targetIds.length,
+        sent: 0,
+        failed: 0,
+        skipped: 0,
+        status: "skipped_no_user",
+      };
+      for (const emp of targets) {
+        const userId = String(emp?.user_id || "").trim();
+        if (!userId) {
+          push.skipped += 1;
+          continue;
+        }
+        try {
+          await base44.asServiceRole.integrations.Core.SendPushNotification({
+            user_id: userId,
+            title: pushTitle,
+            content: pushBody,
+            action_label: "أنا موجود الآن / I’m present",
+            action_url: "/portal",
+          });
+          push.sent += 1;
+        } catch {
+          push.failed += 1;
+        }
+      }
+      if (push.sent > 0 && push.failed === 0) push.status = "sent";
+      else if (push.sent > 0) push.status = "partial";
+      else if (push.failed > 0) push.status = "failed";
+      try {
+        await base44.asServiceRole.entities.PresenceProofRequest.update(created.id, {
+          push_status: push.status,
+          push_sent_count: push.sent,
+          push_failed_count: push.failed,
+          push_skipped_count: push.skipped,
+        });
+        created.push_status = push.status;
+        created.push_sent_count = push.sent;
+        created.push_failed_count = push.failed;
+        created.push_skipped_count = push.skipped;
+      } catch {}
+      return Response.json({ ok: true, request: await hydrate(base44, created), push });
     }
 
     if (action === "status") {

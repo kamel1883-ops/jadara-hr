@@ -60,6 +60,25 @@
     "confirmed_log": {
       "type": "string",
       "title": "سجل التأكيدات (مصفوفة JSON: employee_id, confirmed_at)"
+    },
+    "push_status": {
+      "type": "string",
+      "title": "حالة إرسال تنبيه الجوال: sent/partial/failed/skipped_no_user"
+    },
+    "push_sent_count": {
+      "type": "number",
+      "default": 0,
+      "title": "عدد تنبيهات الجوال المرسلة"
+    },
+    "push_failed_count": {
+      "type": "number",
+      "default": 0,
+      "title": "عدد تنبيهات الجوال المتعذرة"
+    },
+    "push_skipped_count": {
+      "type": "number",
+      "default": 0,
+      "title": "عدد المستهدفين بلا حساب تطبيق مرتبط"
     }
   },
   "required": [

@@ -64,6 +64,10 @@ export default function PresenceProofManager({ org }) {
     diagCode: "رمز التشخيص",
     loading: "جارٍ التحميل...",
     payrollNote: "تنبيه: هذا الإجراء لا يغيّر سجلات الحضور ولا مسير الرواتب.",
+    pushSent: (sent, total) => `تم إرسال تنبيه الجوال إلى ${sent} من ${total} موظفاً مستهدفاً.`,
+    pushPartial: (sent, failed, skipped) => `تم إرسال تنبيه الجوال إلى ${sent} وتعذّر ${failed}${skipped ? ` — ${skipped} بلا حساب تطبيق مرتبط` : ""}. تحقق من نسخة المتجر وإعدادات الإشعارات وربط الحسابات.`,
+    pushFailed: "تعذّر إرسال تنبيه الجوال للموظفين — تحقق من تفعيل التنبيهات في نسخة المتجر وربط حسابات التطبيق.",
+    pushNoUser: "لم يُرسل تنبيه الجوال: لا يوجد حساب تطبيق مرتبط بالموظفين المستهدفين — اربط سجلات الموظفين بحسابات التطبيق.",
   } : {
     title: "Instant presence proof",
     desc: "An urgent check for employees currently on shift only — confirm within 5 minutes. A missed confirmation appears only in follow-up; it is never automatic absence or deduction.",
@@ -93,6 +97,10 @@ export default function PresenceProofManager({ org }) {
     diagCode: "Diagnostic code",
     loading: "Loading...",
     payrollNote: "Note: this action does not change attendance records or payroll.",
+    pushSent: (sent, total) => `Mobile push was sent to ${sent} of ${total} targeted employees.`,
+    pushPartial: (sent, failed, skipped) => `Mobile push reached ${sent} but failed for ${failed}${skipped ? ` — ${skipped} have no linked app account` : ""}. Check the store build, notification settings, and account linking.`,
+    pushFailed: "Mobile push could not be sent — check push setup in the store build and linked app accounts.",
+    pushNoUser: "Mobile push was not sent: targeted employees have no linked app account — link employee records to app accounts.",
   };
 
   const portalArgs = useMemo(() => {
@@ -194,6 +202,21 @@ export default function PresenceProofManager({ org }) {
   const proofDisabled = org && org.presence_proof_enabled === false;
   const active = request && request.status === "active";
   const remaining = active ? Math.max(0, Number(request.deadline_at || 0) - nowMs) : 0;
+  const pushStatus = String(request?.push_status || "");
+  const pushSentCount = Number(request?.push_sent_count || 0);
+  const pushFailedCount = Number(request?.push_failed_count || 0);
+  const pushSkippedCount = Number(request?.push_skipped_count || 0);
+  const pushTargetTotal = Number(request?.target_count || 0);
+  const pushDetail = !pushStatus
+    ? ""
+    : pushStatus === "sent"
+      ? t.pushSent(pushSentCount, pushTargetTotal)
+      : pushStatus === "partial"
+        ? t.pushPartial(pushSentCount, pushFailedCount, pushSkippedCount)
+        : pushStatus === "failed"
+          ? t.pushFailed
+          : t.pushNoUser;
+  const pushWarn = pushStatus === "partial" || pushStatus === "failed" || pushStatus === "skipped_no_user";
 
   return (
     <div className="bg-white rounded-2xl border border-border p-4 mb-5">
@@ -206,6 +229,11 @@ export default function PresenceProofManager({ org }) {
           <p className="text-[11px] text-muted-foreground mt-1 flex items-center gap-1">
             <ShieldCheck size={12} /> {t.payrollNote}
           </p>
+          {pushDetail && (
+            <p className={pushWarn ? "text-[11px] text-amber-700 mt-1" : "text-[11px] text-muted-foreground mt-1"}>
+              {pushDetail}
+            </p>
+          )}
         </div>
         <Button onClick={sendRequest} disabled={busy || active || proofDisabled} className="gap-2 shrink-0">
           {busy ? <Loader2 size={16} className="animate-spin" /> : <AlarmCheck size={16} />}
