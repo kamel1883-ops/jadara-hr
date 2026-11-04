@@ -1,0 +1,94 @@
+{
+  "name": "PresenceProofRequest",
+  "type": "object",
+  "properties": {
+    "unified_number": {
+      "type": "string",
+      "title": "الرقم الموحّد للمنشأة (نطاق عزل البيانات)"
+    },
+    "status": {
+      "type": "string",
+      "enum": [
+        "active",
+        "expired",
+        "cancelled"
+      ],
+      "default": "active",
+      "title": "حالة طلب إثبات الحضور"
+    },
+    "scope": {
+      "type": "string",
+      "enum": [
+        "on_shift"
+      ],
+      "default": "on_shift",
+      "title": "نطاق الاستهداف"
+    },
+    "requested_by_user_id": {
+      "type": "string",
+      "title": "معرّف حساب مُصدر الطلب"
+    },
+    "requested_by_employee_id": {
+      "type": "string",
+      "title": "معرّف سجل مُصدر الطلب (إن كان موظفاً مفوّضاً)"
+    },
+    "requested_by_name": {
+      "type": "string",
+      "title": "اسم مُصدر الطلب"
+    },
+    "requested_at": {
+      "type": "number",
+      "title": "وقت إصدار الطلب (timestamp ms)"
+    },
+    "deadline_at": {
+      "type": "number",
+      "title": "نهاية مهلة التأكيد (timestamp ms)"
+    },
+    "target_ids": {
+      "type": "string",
+      "title": "معرّفات الموظفين المستهدفين (مصفوفة JSON)"
+    },
+    "target_count": {
+      "type": "number",
+      "default": 0,
+      "title": "عدد الموظفين المستهدفين"
+    },
+    "confirmed_ids": {
+      "type": "string",
+      "title": "معرّفات الموظفين الذين أكّدوا (مصفوفة JSON)"
+    },
+    "confirmed_log": {
+      "type": "string",
+      "title": "سجل التأكيدات (مصفوفة JSON: employee_id, confirmed_at)"
+    }
+  },
+  "required": [
+    "unified_number",
+    "status",
+    "requested_at",
+    "deadline_at",
+    "target_ids"
+  ],
+  "rls": {
+    "create": {
+      "user_condition": {
+        "role": "admin"
+      }
+    },
+    "read": {
+      "user_condition": {
+        "role": "admin"
+      }
+    },
+    "update": {
+      "user_condition": {
+        "role": "admin"
+      }
+    },
+    "delete": {
+      "user_condition": {
+        "role": "admin"
+      }
+    }
+  }
+}

@@ -14,6 +14,7 @@ import { todayISO, attendanceStatusLabel, isOrgWeeklyOff, dayNameAr } from "@/li
 // dayNameAr يُستخدم فقط في الفرع العربي للإجازة الأسبوعية؛ الفرع الإنجليزي يستخدم toLocaleDateString داخل العنصر.
 import { useI18n } from "@/lib/i18n";
 import AttendanceReport from "@/components/reports/AttendanceReport";
+import PresenceProofManager from "@/components/presenceProof/PresenceProofManager";
 import PullToRefresh from "@/components/PullToRefresh";
 
 export default function Attendance() {
@@ -115,6 +116,8 @@ export default function Attendance() {
     <PullToRefresh onRefresh={() => load(true)}>
     <div dir={isAr ? "rtl" : "ltr"}>
       <PageHeader title={t.title} subtitle={t.subtitle} />
+
+      <PresenceProofManager org={org} />
 
       {isOrgWeeklyOff(date, org) && (
         <div className="bg-violet-50 border border-violet-200 text-violet-700 rounded-2xl px-4 py-2.5 mb-4 text-sm font-medium flex items-center gap-2">

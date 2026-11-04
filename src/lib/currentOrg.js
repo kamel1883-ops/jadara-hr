@@ -11,6 +11,7 @@ export const ORG_DEFAULTS = {
   gosi_new_saudi_employee_rate: 10.75, gosi_new_saudi_employer_rate: 12.75, gosi_expat_employer_rate: 2,
   work_week_hours: 48, work_week_days: 6, late_grace_minutes: 15,
   work_days: "0,1,2,3,4,6",
+  presence_proof_enabled: true,
   work_start_time: "08:00", work_end_time: "17:00", work_hours_per_day: 9,
   absence_deduction_type: "monthly_divided",
   workplace_lat: "", workplace_lng: "", workplace_radius: 50,

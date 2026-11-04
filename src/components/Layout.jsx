@@ -7,7 +7,6 @@ import Logo from "@/components/Logo";
 import { Image } from "@/components/ui/image";
 import LanguageToggle from "@/components/LanguageToggle";
 import NotificationsBell from "@/components/NotificationsBell";
-import IdleSessionGuard from "@/components/portal/IdleSessionGuard";
 import CompanyAssistant from "@/components/CompanyAssistant";
 import AnimatedOutlet from "@/components/AnimatedOutlet";
 import BottomTabBar from "@/components/BottomTabBar";
@@ -95,7 +94,6 @@ export default function Layout() {
 
   return (
     <div className="min-h-screen bg-background flex">
-      {user && <IdleSessionGuard onTimeout={handleLogout} />}
       <aside
         className={cn(
           "fixed lg:sticky top-0 right-0 h-screen w-72 bg-gradient-to-b from-[#F6F3FC] to-[#EFE9F8] text-[#2A2340] z-40 transition-transform duration-300 flex flex-col border-l border-[#E2D6F4]",

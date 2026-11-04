@@ -52,6 +52,7 @@ export default function SettingsPage() {
     dayStart: "بداية الدوام", dayEnd: "نهاية الدوام", dayHours: "ساعات العمل اليومية المطلوبة (تتخللها فترة راحة)",
     dayHoursHint: "إن تجاوزت الساعات 8 فالزيادة فترة راحة غير مدفوعة والمطلوب 8 ساعات صافية (مثال: 9 = 8 عمل + 1 راحة). وإن كانت 8 أو أقل فلا راحة والمطلوب نفس العدد. يُحدَّد التأخير عند الانصراف فقط إذا قلّ صافي الدوام عن المطلوب — والزيادة لا تُحتسب عملاً إضافياً.",
     absType: "طريقة خصم الغياب", monthlyDiv: "الراتب الشهري ÷ 30 لليوم", dailyWage: "الأجر اليومي",
+    proofTitle: "إثبات الحضور الفوري", proofEnable: "السماح بطلب إثبات الحضور الفوري", proofHint: "عند التفعيل يمكن للإدارة إرسال تنبيه عاجل للموجودين في الدوام حالياً فقط، مع مهلة 5 دقائق للتأكيد. يُستبعد من هم في إجازة أو عطلة أو خارج مناوبتهم، وعدم التأكيد لا يُحتسب غياباً أو خصماً تلقائياً.",
     secLoc: "موقع مقر العمل (للبصمة)", lat: "خط العرض", lng: "خط الطول", radius: "نطاق البصمة (متر)", capture: "تحديد موقعي الحالي",
     locNote: (r) => `سيُسمح للموظف بالبصمة فقط ضمن ${r || 50} متر من هذا الموقع.`,
     mapHint: "انقر على الخريطة أو اسحب الدبوس لتحديد موقع المقر بدقة — الدائرة تمثل نطاق البصمة المسموح.",
@@ -86,6 +87,7 @@ export default function SettingsPage() {
     dayStart: "Daily start time", dayEnd: "Daily end time", dayHours: "Required daily work hours (including a break period)",
     dayHoursHint: "Above 8, the excess is an unpaid break and 8 net hours are required (e.g. 9 = 8 work + 1 break). At 8 or below there is no break. Lateness is decided at check-out only, when net hours fall below the requirement — extra hours are never overtime.",
     absType: "Absence deduction method", monthlyDiv: "Monthly salary ÷ 30 per day", dailyWage: "Daily wage",
+    proofTitle: "Instant presence proof", proofEnable: "Allow instant presence-proof requests", proofHint: "When enabled, management can send an urgent check only to employees currently on shift, with a 5-minute confirmation window. Leave, holiday and off-shift employees are excluded, and a missed confirmation is never automatic absence or deduction.",
     secLoc: "Workplace location (for check‑in)", lat: "Latitude", lng: "Longitude", radius: "Check‑in radius (m)", capture: "Set my current location",
     locNote: (r) => `Employees may check in only within ${r || 50} m of this location.`,
     mapHint: "Click the map or drag the pin to set the exact workplace — the circle shows the allowed check‑in radius.",
@@ -344,6 +346,17 @@ export default function SettingsPage() {
                 <MobileSelectItem value="daily_wage">{t.dailyWage}</MobileSelectItem>
               </MobileSelect>
             </Field>
+          </div>
+          <div className="rounded-xl border border-border bg-muted/40 p-3">
+            <label className="flex items-center gap-2 text-sm font-medium cursor-pointer">
+              <input
+                type="checkbox"
+                checked={org.presence_proof_enabled !== false}
+                onChange={(e) => set("presence_proof_enabled", e.target.checked)}
+              />
+              {t.proofEnable}
+            </label>
+            <p className="text-xs text-muted-foreground mt-1.5 leading-relaxed">{t.proofHint}</p>
           </div>
         </Card>
 

@@ -20,6 +20,7 @@ import Logo from "@/components/Logo";
 import PortalLanguageSelector from "@/components/portal/PortalLanguageSelector";
 import PortalNotificationsBell from "@/components/portal/PortalNotificationsBell";
 import PortalNotificationsSection from "@/components/portal/PortalNotificationsSection";
+import PresenceProofPrompt from "@/components/portal/PresenceProofPrompt";
 import PortalAuthCard from "@/components/portal/PortalAuthCard";
 import { Image } from "@/components/ui/image";
 import { usePortalI18n, usePortalT, portalDir } from "@/lib/portalI18n";
@@ -34,7 +35,6 @@ import { entitledLeaveDays, usedLeaveTotal } from "@/lib/leaveBalance";
 import { computeSettlement } from "@/lib/eos";
 import { parsePermissions } from "@/lib/employeePermissions";
 import { portalSession } from "@/lib/portalSession";
-import IdleSessionGuard from "@/components/portal/IdleSessionGuard";
 import JobDescPrintActions from "@/components/docs/JobDescPrintActions";
 import JobDescriptionDoc from "@/components/docs/JobDescriptionDoc";
 import DelegatedWorkspace from "@/components/portal/DelegatedWorkspace";
@@ -386,6 +386,7 @@ export default function MyRequests() {
               <InfoCard icon={BadgeCheck} label={t.ticketLabel} value={ticketLabel} sub={employee.is_saudi ? t.ticketSaudi : t.ticketExpat} />
             </div>
 
+            <PresenceProofPrompt session={session} />
             {can("attendance") && (
               <EmployeeClock employee={employee} org={org} branch={branch} branches={branches} onChanged={() => load(session)} clockApi={clockApi} initialToday={todayAtt} />
             )}
@@ -646,7 +647,6 @@ export default function MyRequests() {
 
   return (
     <div className="min-h-screen bg-background" dir={portalDir(lang)}>
-      {session && <IdleSessionGuard onTimeout={exitToLanding} />}
       <header className="sticky top-0 z-40 bg-gradient-to-b from-[#F6F3FC] to-[#EFE9F8] text-[#2A2340] border-b border-[#E2D6F4]" style={{ paddingTop: "max(env(safe-area-inset-top), 12px)" }}>
         <div className="max-w-5xl mx-auto px-4 sm:px-6 h-16 flex items-center justify-between">
           <div className="flex items-center gap-3">
