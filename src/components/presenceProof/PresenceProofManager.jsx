@@ -74,6 +74,7 @@ export default function PresenceProofManager({ org }) {
     testNone: (missing) => `الدفع التجريبي: الموظفون الحاضرون الآن بلا حساب تطبيق مرتبط${missing?.length ? ` (${missing.join("، ")})` : ""} — يدخل الموظف من نسخة المتجر بنفس بريد العمل المسجّل في الموارد البشرية مرة واحدة، ثم أعد الضغط.`,
     testFail: "الدفع التجريبي: فشل الإرسال",
     testEmpty: "الدفع التجريبي: لا يوجد موظف في الدوام الآن — الزر يستهدف الحاضرين في هذه اللحظة فقط.",
+    phoneCoverage: (withPhone, total) => `وللعلم: ${withPhone} من ${total} من هؤلاء لديهم رقم جوال مسجّل في ملف الموظف.`,
   } : {
     title: "Instant presence proof",
     desc: "An urgent check for employees currently on shift only — confirm within 5 minutes. It reaches only the app account linked to the employee identity in the same organization, and appears at the top of the employee portal when opened. For the alert to arrive while the app is closed: install the updated store build (Google Play / App Store), sign in from it, enable notifications with sound, and turn off silent mode and Do Not Disturb. Use “Test push” to verify it before relying on it. A missed confirmation appears only in follow-up; it is never automatic absence or deduction.",
@@ -113,6 +114,7 @@ export default function PresenceProofManager({ org }) {
     testNone: (missing) => `Test push: the employees on shift now have no linked app account${missing?.length ? ` (${missing.join(", ")})` : ""} — each signs in once from the store app with the work email on their HR record, then retry.`,
     testFail: "Test push failed",
     testEmpty: "Test push: no employee is on shift right now — this button targets only those present at this moment.",
+    phoneCoverage: (withPhone, total) => `Note: ${withPhone} of ${total} of them have a phone number on file.`,
   };
 
   const portalArgs = useMemo(() => {
@@ -232,7 +234,10 @@ export default function PresenceProofManager({ org }) {
         const sent = Number(test.sent || 0);
         if (sent > 0) setTestNote(t.testSent(sent, total, missing));
         else if (failed) setTestNote(`${t.testFail}${failed.error || test.first_error ? ` — ${failed.error || test.first_error}` : ""}`);
-        else setTestNote(t.testNone(missing));
+        else {
+          const coverage = Number(test.total || 0) > 0 ? t.phoneCoverage(Number(test.with_phone || 0), Number(test.total || 0)) : "";
+          setTestNote(`${t.testNone(missing)}${coverage ? ` ${coverage}` : ""}`);
+        }
       }
     } catch (err) {
       const { payload } = presenceFailure(err);

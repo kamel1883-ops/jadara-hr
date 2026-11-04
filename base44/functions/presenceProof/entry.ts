@@ -405,6 +405,8 @@ export default async function (req) {
         source,
         date: now.date,
         clock: now.clock,
+        total: ids.length,
+        with_phone: ids.filter((id: string) => String((byId.get(String(id)) as any)?.phone || "").trim()).length,
         details: [] as any[],
       };
       for (const id of ids) {
