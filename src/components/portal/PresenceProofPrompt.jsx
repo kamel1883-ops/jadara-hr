@@ -37,7 +37,7 @@ export default function PresenceProofPrompt({ session }) {
       const next = data?.ok ? data.active || null : null;
       setActive((prev) => {
         if (next && (!prev || prev.id !== next.id) && typeof navigator !== "undefined" && navigator.vibrate) {
-          try { navigator.vibrate([180, 80, 180]); } catch {}
+          try { navigator.vibrate([400, 100, 400, 100, 700]); } catch {}
         }
         return next;
       });
@@ -47,14 +47,23 @@ export default function PresenceProofPrompt({ session }) {
 
   useEffect(() => {
     load();
-    const id = setInterval(load, 20000);
-    return () => clearInterval(id);
+    const id = setInterval(load, 10000);
+    // عودة التطبيق من الخلفية: جلب فوري حتى يظهر التنبيه لحظتها.
+    const onVisible = () => { if (document.visibilityState === "visible") load(); };
+    document.addEventListener("visibilitychange", onVisible);
+    window.addEventListener("focus", load);
+    return () => {
+      clearInterval(id);
+      document.removeEventListener("visibilitychange", onVisible);
+      window.removeEventListener("focus", load);
+    };
   }, [load]);
 
   const stopAlarm = () => {
     try { if (alarmTimer.current) clearInterval(alarmTimer.current); } catch {}
     alarmTimer.current = null;
   };
+  // منبه قوي: صفارة مربعة عالية متناوبة (700/950Hz) بأربع دورات متتالية.
   const playAlarmBurst = async () => {
     try {
       if (typeof window === "undefined") return false;
@@ -63,21 +72,30 @@ export default function PresenceProofPrompt({ session }) {
       if (!alarmCtx.current) alarmCtx.current = new AC();
       const ctx = alarmCtx.current;
       if (ctx.state === "suspended") { try { await ctx.resume(); } catch {} }
+      const master = ctx.createGain();
+      master.gain.value = 0.9;
+      master.connect(ctx.destination);
       const at = ctx.currentTime + 0.02;
-      [880, 880, 1174].forEach((freq, i) => {
-        const osc = ctx.createOscillator();
-        const gain = ctx.createGain();
-        osc.type = "sine";
-        osc.frequency.value = freq;
-        const t0 = at + i * 0.34;
-        gain.gain.setValueAtTime(0.0001, t0);
-        gain.gain.exponentialRampToValueAtTime(0.5, t0 + 0.03);
-        gain.gain.exponentialRampToValueAtTime(0.0001, t0 + 0.3);
-        osc.connect(gain);
-        gain.connect(ctx.destination);
-        osc.start(t0);
-        osc.stop(t0 + 0.32);
-      });
+      const cycles = 4;
+      const half = 0.22;
+      for (let i = 0; i < cycles; i++) {
+        [700, 950].forEach((freq, k) => {
+          const t0 = at + i * half * 2 + k * half;
+          const osc = ctx.createOscillator();
+          const gain = ctx.createGain();
+          osc.type = "square";
+          osc.frequency.value = freq;
+          gain.gain.setValueAtTime(0.0001, t0);
+          gain.gain.exponentialRampToValueAtTime(1.0, t0 + 0.02);
+          gain.gain.setValueAtTime(1.0, t0 + half - 0.02);
+          gain.gain.exponentialRampToValueAtTime(0.0001, t0 + half);
+          osc.connect(gain);
+          gain.connect(master);
+          osc.start(t0);
+          osc.stop(t0 + half + 0.02);
+        });
+      }
+      try { navigator.vibrate?.([400, 100, 400, 100, 700]); } catch {}
       return true;
     } catch { return false; }
   };
@@ -92,10 +110,23 @@ export default function PresenceProofPrompt({ session }) {
     try { if (alarmTimer.current) clearInterval(alarmTimer.current); } catch {}
     alarmTimer.current = setInterval(() => {
       playAlarmBurst().then((ok) => { if (!ok) setSoundBlocked(true); });
-    }, 7000);
+    }, 4000);
     return () => { cancelled = true; stopAlarm(); };
   }, [active?.id, active?.confirmed]);
   useEffect(() => () => { try { if (alarmTimer.current) clearInterval(alarmTimer.current); } catch {} try { alarmCtx.current?.close(); } catch {} }, []);
+
+  // وميض عنوان التبويب أثناء وجود طلب نشط — يلفت الانتباه والتبويب في الخلفية.
+  useEffect(() => {
+    if (typeof document === "undefined") return;
+    const original = document.title;
+    if (!active || active.confirmed) { document.title = original; return; }
+    let on = false;
+    const id = setInterval(() => {
+      on = !on;
+      document.title = on ? "🚨 إثبات الحضور الآن — افتح التطبيق" : original;
+    }, 1500);
+    return () => { clearInterval(id); document.title = original; };
+  }, [active?.id, active?.confirmed]);
 
   useEffect(() => {
     if (!active || active.confirmed) return;
@@ -144,7 +175,12 @@ export default function PresenceProofPrompt({ session }) {
     <div className="fixed inset-x-3 bottom-3 z-[70] sm:inset-x-auto sm:right-6 sm:bottom-6 sm:w-[380px]">
       <div className="rounded-2xl border-2 border-rose-500 bg-white shadow-2xl overflow-hidden animate-pulse">
         <div className="bg-rose-600 text-white px-4 py-2.5 flex items-center gap-2">
-          <BellRing size={18} className="shrink-0" />
+          <span className="relative flex h-9 w-9 shrink-0 items-center justify-center">
+            <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-white opacity-60" />
+            <span className="relative inline-flex h-9 w-9 items-center justify-center rounded-full bg-white text-rose-600">
+              <BellRing size={20} />
+            </span>
+          </span>
           <div className="font-bold text-sm leading-tight">{t.urgent}</div>
           <div className="ms-auto text-xs font-bold tabular-nums bg-white/20 rounded-full px-2.5 py-1 shrink-0">
             {fmtRemaining(remaining)}

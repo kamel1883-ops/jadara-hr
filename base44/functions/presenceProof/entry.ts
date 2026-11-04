@@ -464,9 +464,10 @@ export default async function (req) {
 
       // تنبيه الجوال الأصلي للمستهدفين فقط — لا يؤثر في الحضور أو الرواتب.
       // يصل للتطبيق المغلق عبر إشعار النظام بشرط: نسخة المتجر المحدّثة، وربط الحساب بالهوية،
-      // وتفعيل الإشعارات مع الصوت وإيقاف الكتم/عدم الإزعاج. واجهة Base44 لا توفر بارامتر صوت/أولوية.
-      const pushTitle = `${messages.ar.title} — ${messages.en.title}`.slice(0, 100);
-      const pushBody = `${messages.ar.body} ${messages.en.body}`.slice(0, 500);
+      // وتفعيل الإشعارات مع الصوت وإيقاف الكتم/عدم الإزعاج. واجهة الدفع لا توفر بارامتر
+      // صورة أو صوت مخصص — الأيقونة والصوت من نسخة المتجر نفسها، والنص هنا عربي مباشر.
+      const pushTitle = "\uD83D\uDEA8 إثبات الحضور الآن".slice(0, 100);
+      const pushBody = `الإدارة تطلب إثبات وجودك في الدوام الآن — افتح التطبيق واضغط «أنا موجود الآن» قبل ${deadlineClock}. عدم التأكيد يظهر في تقرير المتابعة فقط.`.slice(0, 500);
       const push = {
         attempted: targetIds.length,
         sent: 0,
@@ -486,7 +487,7 @@ export default async function (req) {
             user_id: userId,
             title: pushTitle,
             content: pushBody,
-            action_label: "أنا موجود الآن / I’m present",
+            action_label: "افتح التطبيق الآن",
             action_url: "/portal",
           });
           push.sent += 1;
