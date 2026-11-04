@@ -15,11 +15,27 @@ export const computeWorkDaysInMonth = (year, month, workDaysSet) => {
   return count;
 };
 
+// سياسة الدوام الصافي (تُطبق على كل المنشآت والفروع):
+// - ساعات العمل المضبوطة في الإعدادات تشمل فترة الراحة إن وُجدت.
+// - إن تجاوزت 8 ساعات فالزيادة راحة غير مدفوعة، والمطلوب 8 ساعات صافية (مثال: 9 = 8 عمل + 1 راحة).
+// - إن كانت 8 ساعات أو أقل فلا راحة، والمطلوب هو نفس العدد (مثال: 8 = 8 عمل متواصل).
+// - التأخير/الانصراف المبكر يُحتسب عند الانصراف فقط: الصافي (انصراف − حضور − راحات مسجلة)
+//   أقل من المطلوب → متأخر + خصم. الزيادة عن المطلوب لا تُحسب عملاً إضافياً.
+export const REQUIRED_NET_CAP = 8;
+export const requiredNetHours = (workHoursPerDay) => {
+  const hpd = Number(workHoursPerDay) || 0;
+  if (hpd <= 0) return 0;
+  return hpd > REQUIRED_NET_CAP ? REQUIRED_NET_CAP : hpd;
+};
+
 // الأجر اليومي = إجمالي الراتب ÷ 30 يوماً (الأجر النظامي لليوم) — لا يُقسم على أيام عمل الشهر.
-// الأجر بالساعة = الأجر اليومي ÷ ساعات العمل المعتمدة للموظف (دوام فرعه، وإلا دوام المنشأة) — وليست 8 ساعات ثابتة.
+// الأجر بالساعة = الأجر اليومي ÷ صافي ساعات العمل المطلوبة (8 كحد أقصى) — وليست 8 ساعات ثابتة.
 export const DAILY_DIVISOR = 30;
 export const computeDailyWage = (gross) => Number(((Number(gross) || 0) / DAILY_DIVISOR).toFixed(2));
-export const computeHourlyWage = (dailyWage, workHoursPerDay) => (workHoursPerDay > 0 ? dailyWage / workHoursPerDay : 0);
+export const computeHourlyWage = (dailyWage, workHoursPerDay) => {
+  const req = requiredNetHours(workHoursPerDay);
+  return req > 0 ? dailyWage / req : 0;
+};
 
 // قيمة خصم الغياب (أيام) ونقص الدوام/التأخير (ساعات) — تُخصم مباشرة من الراتب
 export const computeAbsentDeduction = (gross, absentDays, absentHours, workDaysInMonth, workHoursPerDay) => {
@@ -28,11 +44,12 @@ export const computeAbsentDeduction = (gross, absentDays, absentHours, workDaysI
   return Number(((absentDays || 0) * daily + (absentHours || 0) * hourly).toFixed(2));
 };
 
-// نقص دوام اليوم المؤهل للخصم: ما زاد على فترة السماح المعتمدة يُخصم، وما داخل السماح يُعفى.
+// نقص دوام اليوم المؤهل للخصم: الفرق بين الصافي المطلوب (8 كحد أقصى) والصافي الفعلي،
+// وما زاد على فترة السماح المعتمدة يُخصم، وما داخل السماح يُعفى.
 export const computeDeductibleShortfall = (workHoursPerDay, actualHours, graceMinutes) => {
-  const hpd = Number(workHoursPerDay) || 0;
-  if (hpd <= 0) return 0;
-  const gap = hpd - (Number(actualHours) || 0) - (Number(graceMinutes) || 0) / 60;
+  const req = requiredNetHours(workHoursPerDay);
+  if (req <= 0) return 0;
+  const gap = req - (Number(actualHours) || 0) - (Number(graceMinutes) || 0) / 60;
   return gap > 0 ? Number(gap.toFixed(2)) : 0;
 };
 

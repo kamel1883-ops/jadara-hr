@@ -5,6 +5,7 @@ import { Fingerprint, Loader2, LogIn, LogOut, MapPin, CheckCircle2, Coffee, Play
 import { cn } from "@/lib/utils";
 import { usePortalI18n, usePortalT, portalDir } from "@/lib/portalI18n";
 import { resolveWorkHours } from "@/lib/branchHours";
+import { computeDeductibleShortfall } from "@/lib/payrollCompute";
 
 const localToday = () => {
   const d = new Date();
@@ -154,20 +155,13 @@ export default function EmployeeClock({ employee, org, branch, branches, onChang
           const name = `${employee.employee_number} - ${employee.position}`;
           const bId = selected?.id || employee.branch_id || null;
           const bName = selected?.name || employee.branch_name || "";
-          // حساب حالة التأخير من دوام الفرع المعتمد لموظفيه (وإلا دوام المنشأة)
+          // السياسة الجديدة: لا يُحكم على التأخير عند الحضور — البصمة مفتوحة دائماً
+          // وحالة الموظف أثناء الدوام «موجود بالعمل» (present). يُحدَّد التأخير عند الانصراف فقط.
           const checkInTime = nowHM();
-          let arrivalStatus = "present";
-          const ws = hours.work_start_time;
-          const grace = hours.late_grace_minutes;
-          if (ws && checkInTime) {
-            const toMin = (hm) => { const m = /^(\d{1,2}):(\d{2})/.exec(hm); return m ? Number(m[1]) * 60 + Number(m[2]) : null; };
-            const startMin = toMin(ws), checkMin = toMin(checkInTime);
-            if (startMin !== null && checkMin !== null && checkMin > startMin + grace) arrivalStatus = "late";
-          }
           if (today) {
-            await base44.entities.Attendance.update(today.id, { check_in: checkInTime, status: arrivalStatus, source: "portal", employee_user_id: employee.user_id, branch_id: bId, branch_name: bName });
+            await base44.entities.Attendance.update(today.id, { check_in: checkInTime, status: "present", source: "portal", employee_user_id: employee.user_id, branch_id: bId, branch_name: bName });
           } else {
-            await base44.entities.Attendance.create({ employee_id: employee.id, employee_user_id: employee.user_id, employee_name: name, emp_ref: employee.emp_ref || "", date: localToday(), check_in: checkInTime, status: arrivalStatus, source: "portal", work_hours: 0, branch_id: bId, branch_name: bName });
+            await base44.entities.Attendance.create({ employee_id: employee.id, employee_user_id: employee.user_id, employee_name: name, emp_ref: employee.emp_ref || "", date: localToday(), check_in: checkInTime, status: "present", source: "portal", work_hours: 0, branch_id: bId, branch_name: bName });
           }
         }
         setMsg({ type: "ok", text: t.doneIn });
@@ -199,7 +193,12 @@ export default function EmployeeClock({ employee, org, branch, branches, onChang
         const net = Math.max(0, mins - (Number(today.break_minutes) || 0));
         const wh = Math.max(0, Math.round((net / 60) * 100) / 100);
         if (clockApi?.clockOut) { await clockApi.clockOut(wh); }
-        else { await base44.entities.Attendance.update(today.id, { check_out: nowHM(), work_hours: wh, source: "portal" }); }
+        else {
+          // عند الانصراف يُقارن الصافي (انصراف − حضور − راحات) بالمطلوب (8 ساعات كحد أقصى):
+          // أقل منه (بعد السماح) → متأخر، وإلا → حاضر 100%. لا عمل إضافي للزيادة.
+          const outStatus = computeDeductibleShortfall(hours.work_hours_per_day, wh, hours.late_grace_minutes) > 0 ? "late" : "present";
+          await base44.entities.Attendance.update(today.id, { check_out: nowHM(), work_hours: wh, status: outStatus, source: "portal" });
+        }
         setMsg({ type: "ok", text: t.doneOut });
       }
       await loadToday(); onChanged?.();

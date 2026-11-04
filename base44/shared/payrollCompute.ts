@@ -15,10 +15,25 @@ export const computeWorkDaysInMonth = (year: number, month: number, workDaysSet:
   return count;
 };
 
-// الأجر اليومي = إجمالي الراتب ÷ 30 يوماً، والأجر بالساعة = اليومي ÷ ساعات العمل المعتمدة للموظف.
+// سياسة الدوام الصافي (تُطبق على كل المنشآت والفروع):
+// - ساعات العمل المضبوطة في الإعدادات تشمل فترة الراحة إن وُجدت.
+// - إن تجاوزت 8 ساعات فالزيادة راحة غير مدفوعة، والمطلوب 8 ساعات صافية (مثال: 9 = 8 عمل + 1 راحة).
+// - إن كانت 8 ساعات أو أقل فلا راحة، والمطلوب هو نفس العدد.
+// - التأخير يُحتسب عند الانصراف فقط: الصافي أقل من المطلوب → متأخر + خصم. الزيادة لا تُحسب إضافياً.
+export const REQUIRED_NET_CAP = 8;
+export const requiredNetHours = (workHoursPerDay: any) => {
+  const hpd = Number(workHoursPerDay) || 0;
+  if (hpd <= 0) return 0;
+  return hpd > REQUIRED_NET_CAP ? REQUIRED_NET_CAP : hpd;
+};
+
+// الأجر اليومي = إجمالي الراتب ÷ 30 يوماً، والأجر بالساعة = اليومي ÷ صافي ساعات العمل المطلوبة (8 كحد أقصى).
 export const DAILY_DIVISOR = 30;
 export const computeDailyWage = (gross: number, _workDaysInMonth?: number) => Number(((Number(gross) || 0) / DAILY_DIVISOR).toFixed(2));
-export const computeHourlyWage = (dailyWage: number, workHoursPerDay: number) => (workHoursPerDay > 0 ? dailyWage / workHoursPerDay : 0);
+export const computeHourlyWage = (dailyWage: number, workHoursPerDay: number) => {
+  const req = requiredNetHours(workHoursPerDay);
+  return req > 0 ? dailyWage / req : 0;
+};
 
 export const computeAbsentDeduction = (gross: number, absentDays: number, absentHours: number, workDaysInMonth: number, workHoursPerDay: number) => {
   const daily = computeDailyWage(gross, workDaysInMonth);
@@ -26,11 +41,12 @@ export const computeAbsentDeduction = (gross: number, absentDays: number, absent
   return Number(((absentDays || 0) * daily + (absentHours || 0) * hourly).toFixed(2));
 };
 
-// نقص دوام اليوم المؤهل للخصم: ما زاد على فترة السماح المعتمدة يُخصم، وما داخل السماح يُعفى.
+// نقص دوام اليوم المؤهل للخصم: الفرق بين الصافي المطلوب (8 كحد أقصى) والصافي الفعلي،
+// وما زاد على فترة السماح المعتمدة يُخصم، وما داخل السماح يُعفى.
 export const computeDeductibleShortfall = (workHoursPerDay: number, actualHours: number, graceMinutes: number) => {
-  const hpd = Number(workHoursPerDay) || 0;
-  if (hpd <= 0) return 0;
-  const gap = hpd - (Number(actualHours) || 0) - (Number(graceMinutes) || 0) / 60;
+  const req = requiredNetHours(workHoursPerDay);
+  if (req <= 0) return 0;
+  const gap = req - (Number(actualHours) || 0) - (Number(graceMinutes) || 0) / 60;
   return gap > 0 ? Number(gap.toFixed(2)) : 0;
 };
 

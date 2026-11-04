@@ -8,15 +8,32 @@ import { wrapEmailContent } from "../../shared/emailFooter.ts";
 
 const LANGS = ["ar", "en", "hi", "ne", "bn", "fil", "ur"];
 
-// احتساب مدة التأخير بين وقت بداية الدوام (مثلاً "08:00") ووقت الحضور الفعلي (مثلاً "10:46")
-// إذا لم يتوفّر وقت الدوام أو وقت الحضور → يُعيد null
+// سياسة الدوام الصافي: المطلوب 8 ساعات كحد أقصى (الزيادة عنها راحة غير مدفوعة).
+function requiredNetHours(hpd: any): number {
+  const h = Number(hpd) || 0;
+  if (h <= 0) return 0;
+  return h > 8 ? 8 : h;
+}
+
+function toMinutes(hm: string): number | null {
+  const m = String(hm || "").match(/^(\d{1,2}):(\d{2})/);
+  return m ? Number(m[1]) * 60 + Number(m[2]) : null;
+}
+
+// مدة النقص بالساعات العشرية → { ساعات، دقائق } لعرضها في الإشعار
+function shortfallDuration(shortHours: number): { hours: number; minutes: number } | null {
+  const s = Number(shortHours) || 0;
+  if (s <= 0) return null;
+  const totalMin = Math.round(s * 60);
+  return { hours: Math.floor(totalMin / 60), minutes: totalMin % 60 };
+}
+
+// احتياطي للسجلات القديمة (تأخير وصول بلا انصراف): الفرق بين بداية الدوام والحضور
 function computeLateDuration(workStart: string, checkIn: string): { hours: number; minutes: number } | null {
   if (!workStart || !checkIn) return null;
-  const [sh, sm] = workStart.split(":").map(Number);
-  const [ch, cm] = checkIn.split(":").map(Number);
-  if (isNaN(sh) || isNaN(sm) || isNaN(ch) || isNaN(cm)) return null;
-  const startMins = sh * 60 + sm;
-  const checkMins = ch * 60 + cm;
+  const startMins = toMinutes(workStart);
+  const checkMins = toMinutes(checkIn);
+  if (startMins == null || checkMins == null) return null;
   const diff = checkMins - startMins;
   if (diff <= 0) return null;
   return { hours: Math.floor(diff / 60), minutes: diff % 60 };
@@ -34,15 +51,17 @@ function formatDuration(dur: { hours: number; minutes: number }, lang: string): 
   return h > 0 ? `${h}h ${m}m` : `${m} min`;
 }
 
+// رسالة التأخير الجديدة: تُبنى على صافي ساعات العمل عند الانصراف (لا على وقت الوصول).
+// late(d, actual, req, dur): التاريخ، الصافي المسجل، الصافي المطلوب، مدة النقص.
 const MESSAGES = {
   late: {
-    ar: { title: "تأخّر في الحضور", body: (d: string, t: string, dur: string | null) => `تم تسجيل تأخّر في الحضور بتاريخ ${d}${t ? ` — وقت الحضور: ${t}` : ""}${dur ? ` — مدة التأخير: ${dur}` : ""}.` },
-    en: { title: "Late arrival", body: (d: string, t: string, dur: string | null) => `Late check-in recorded on ${d}${t ? ` at ${t}` : ""}${dur ? ` — late by ${dur}` : ""}.` },
-    hi: { title: "देरी से आगमन", body: (d: string, t: string, dur: string | null) => `${d} को देर से चेक-इन${t ? ` ${t} पर` : ""}${dur ? ` — ${dur} देरी` : ""}.` },
-    ne: { title: "ढिलो आगमन", body: (d: string, t: string, dur: string | null) => `${d} मा ढिलो चेक-इन${t ? ` ${t}` : ""}${dur ? ` — ${dur} ढिलो` : ""}.` },
-    bn: { title: "বিলম্বে উপস্থিতি", body: (d: string, t: string, dur: string | null) => `${d} তারিখে বিলম্বে চেক-ইন${t ? ` ${t}` : ""}${dur ? ` — ${dur} বিলম্ব` : ""}.` },
-    fil: { title: "Huling pagdating", body: (d: string, t: string, dur: string | null) => `Late check-in noong ${d}${t ? ` ng ${t}` : ""}${dur ? ` — ${dur} huli` : ""}.` },
-    ur: { title: "دیر سے آمد", body: (d: string, t: string, dur: string | null) => `${d} کو دیر سے چیک اِن${t ? ` ${t} پر` : ""}${dur ? ` — ${dur} تاخیر` : ""}.` },
+    ar: { title: "تأخير في الدوام", body: (d: string, actual: string, req: string, dur: string | null) => `تم تسجيل تأخير بتاريخ ${d} — ساعات العمل المسجلة: ${actual} من ${req} المطلوبة${dur ? ` — مدة النقص: ${dur}` : ""}.` },
+    en: { title: "Short working day", body: (d: string, actual: string, req: string, dur: string | null) => `Shortfall recorded on ${d} — worked ${actual} of the required ${req} hours${dur ? ` — short by ${dur}` : ""}.` },
+    hi: { title: "कार्य दिवस में कमी", body: (d: string, actual: string, req: string, dur: string | null) => `${d} को कमी दर्ज — आवश्यक ${req} में से ${actual} घंटे कार्य${dur ? ` — कमी: ${dur}` : ""}।` },
+    ne: { title: "कार्य दिनमा कमी", body: (d: string, actual: string, req: string, dur: string | null) => `${d} मा कमी — आवश्यक ${req} घण्टामध्ये ${actual} घण्टा काम${dur ? ` — कमी: ${dur}` : ""}।` },
+    bn: { title: "কর্মদিবসে ঘাটতি", body: (d: string, actual: string, req: string, dur: string | null) => `${d} তারিখে ঘাটতি — প্রয়োজনীয় ${req} ঘণ্টার মধ্যে ${actual} ঘণ্টা কাজ${dur ? ` — ঘাটতি: ${dur}` : ""}।` },
+    fil: { title: "Kakulangan sa oras", body: (d: string, actual: string, req: string, dur: string | null) => `Kakulangan naitala noong ${d} — nagtrabaho ng ${actual} sa ${req} kinakailangang oras${dur ? ` — kulang ng ${dur}` : ""}.` },
+    ur: { title: "کام کے اوقات میں کمی", body: (d: string, actual: string, req: string, dur: string | null) => `${d} کو کمی ریکارڈ — مطلوبہ ${req} گھنٹوں میں سے ${actual} گھنٹے کام${dur ? ` — کمی: ${dur}` : ""}۔` },
   },
   absent: {
     ar: { title: "غياب عن العمل", body: (d: string) => `تم تسجيل غياب عن العمل بتاريخ ${d}.` },
@@ -79,25 +98,58 @@ export default async function (req: Request): Promise<Response> {
     const dateStr = String(att.date || "");
     const checkIn = String(att.check_in || "");
 
-    // جلب وقت بداية الدوام من إعدادات المنشأة لحساب مدة التأخير
-    let workStart = "";
+    // جلب الدوام المعتمد (فرع الانصراف إن كان له دوام خاص، وإلا إعدادات منشأة الموظف نفسه فقط)
+    // لحساب الصافي المطلوب (8 ساعات كحد أقصى) ومدة النقص المؤهلة للخصم.
+    let hpd = 0, graceMinutes = 0;
+    const empUnified = String(emp?.unified_number || "").trim();
     try {
-      // إعدادات منشأة الموظف نفسه فقط (بمطابقة رقمها الموحّد) — لا إعدادات أي منشأة أخرى
-      const empUnified = String(emp?.unified_number || "").trim();
       const orgs: any[] = empUnified
         ? await base44.asServiceRole.entities.Organization.filter({ unified_number: empUnified }, "-created_date", 5)
         : [];
-      workStart = String(orgs[0]?.work_start_time || "");
+      const org = orgs?.[0] || {};
+      hpd = Number(org.work_hours_per_day) || 0;
+      graceMinutes = Number(org.late_grace_minutes) || 0;
+      if (att.branch_id) {
+        try {
+          const br: any = await base44.asServiceRole.entities.Branch.get(att.branch_id);
+          const useBh = !!(br && br.custom_hours && String(br.work_start_time || "").trim() && String(br.work_end_time || "").trim());
+          if (useBh) {
+            hpd = Number(br.work_hours_per_day) || hpd;
+            graceMinutes = Number(br.late_grace_minutes) || 0;
+          }
+        } catch {}
+      }
     } catch {}
 
-    const lateDur = status === "late" ? computeLateDuration(workStart, checkIn) : null;
+    const required = requiredNetHours(hpd);
+    const actual = Number(att.work_hours) || 0;
+    const hasCheckout = !!att.check_out && actual > 0;
+    // النقص المؤهل للخصم (بعد السماح) — هو ما يُعرض في الإشعار ويُحتسب في الرواتب
+    const short = required > 0 && hasCheckout
+      ? Math.max(0, Number((required - actual - graceMinutes / 60).toFixed(2)))
+      : 0;
+    const shortDur = short > 0 ? shortfallDuration(short) : null;
+    // احتياطي للسجلات القديمة بلا انصراف: مدة التأخير من وقت الوصول وبداية الدوام
+    let legacyWorkStart = "";
+    try {
+      const orgs: any[] = empUnified
+        ? await base44.asServiceRole.entities.Organization.filter({ unified_number: empUnified }, "-created_date", 5)
+        : [];
+      legacyWorkStart = String(orgs?.[0]?.work_start_time || "");
+    } catch {}
+    const legacyDur = !hasCheckout && status === "late"
+      ? computeLateDuration(legacyWorkStart, checkIn)
+      : null;
+    const lateDur = shortDur || legacyDur;
 
     const dict: any = MESSAGES[status];
     const i18n: Record<string, { title: string; body: string }> = {};
+    const actualStr = hasCheckout ? String(actual) : "—";
+    const reqStr = required > 0 ? String(required) : "—";
     for (const lg of LANGS) {
       const m = dict[lg];
       const durStr = lateDur ? formatDuration(lateDur, lg) : null;
-      i18n[lg] = { title: m.title, body: status === "late" ? m.body(dateStr, checkIn, durStr) : m.body(dateStr) };
+      i18n[lg] = { title: m.title, body: status === "late" ? m.body(dateStr, actualStr, reqStr, durStr) : m.body(dateStr) };
     }
 
     // إنشاء الإشعار موجّهاً للموظف — بكل اللغات (تُعرض للموظف بلغته المختارة بالبوابة)
@@ -119,6 +171,39 @@ export default async function (req: Request): Promise<Response> {
         `${i18n.ar.body}\n\n${i18n.en.body}\n\n— منصة جداره | Jadara HR`;
       try {
         await base44.asServiceRole.integrations.Core.SendEmail({ to: emp.email, subject, ...wrapEmailContent(emailBody) });
+      } catch {}
+    }
+
+    // إشعار بوابة الشركات بالتأخير: يُوجَّه لمسؤول الموارد البشرية للمنشأة نفسها،
+    // وإلا للمدير المباشر للموظف — يظهر في جرس البوابة وصفحة الإشعارات (مرحلة الموارد).
+    // لا يُنشأ إشعار شركة للغياب (له مساره الخاص) — فقط عند توفر صافي مسجل.
+    if (status === "late" && hasCheckout) {
+      try {
+        let recipient: any = null;
+        if (empUnified) {
+          const sameOrg: any[] = await base44.asServiceRole.entities.Employee.filter(
+            { unified_number: empUnified }, "-created_date", 1000
+          );
+          recipient = (sameOrg || []).find((e) => e?.is_approver_hr) || null;
+          if (!recipient && emp?.manager_id) {
+            recipient = (sameOrg || []).find((e) => e?.id === emp.manager_id) || null;
+          }
+        }
+        if (recipient) {
+          const durAr = shortDur ? formatDuration(shortDur, "ar") : "—";
+          const empName = emp?.full_name || att.employee_name || "—";
+          const empNo = emp?.employee_number || "—";
+          await base44.asServiceRole.entities.Notification.create({
+            title: `تأخير موظف — ${empName}`,
+            body: `الموظف ${empName} (${empNo}) سجّل ${actualStr} ساعات عمل بتاريخ ${dateStr} من أصل ${reqStr} ساعات مطلوبة — النقص: ${durAr}. تم إشعار الموظف واحتساب النقص في مسير الرواتب.`,
+            type: "attendance_late",
+            stage: "hr",
+            employee_id: recipient.id || "",
+            user_id: recipient.user_id || "",
+            unified_number: empUnified,
+            is_read: false,
+          });
+        }
       } catch {}
     }
 

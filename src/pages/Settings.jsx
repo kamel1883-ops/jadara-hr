@@ -50,6 +50,7 @@ export default function SettingsPage() {
     workDays: "أيام العمل الأسبوعية", workDaysHint: "الأيام غير المختارة تُعد إجازة أسبوعية — تُستخدم لحساب عطلات الأسبوع في الحضور وكشف الحضور.",
     weeklyOffTitle: "الإجازة الأسبوعية",
     dayStart: "بداية الدوام", dayEnd: "نهاية الدوام", dayHours: "ساعات العمل اليومية المطلوبة (تتخللها فترة راحة)",
+    dayHoursHint: "إن تجاوزت الساعات 8 فالزيادة فترة راحة غير مدفوعة والمطلوب 8 ساعات صافية (مثال: 9 = 8 عمل + 1 راحة). وإن كانت 8 أو أقل فلا راحة والمطلوب نفس العدد. يُحدَّد التأخير عند الانصراف فقط إذا قلّ صافي الدوام عن المطلوب — والزيادة لا تُحتسب عملاً إضافياً.",
     absType: "طريقة خصم الغياب", monthlyDiv: "الراتب الشهري ÷ 30 لليوم", dailyWage: "الأجر اليومي",
     secLoc: "موقع مقر العمل (للبصمة)", lat: "خط العرض", lng: "خط الطول", radius: "نطاق البصمة (متر)", capture: "تحديد موقعي الحالي",
     locNote: (r) => `سيُسمح للموظف بالبصمة فقط ضمن ${r || 50} متر من هذا الموقع.`,
@@ -83,6 +84,7 @@ export default function SettingsPage() {
     workDays: "Weekly working days", workDaysHint: "Unselected days are treated as the weekly off — used to mark weekly holidays in attendance and the attendance report.",
     weeklyOffTitle: "Weekly off",
     dayStart: "Daily start time", dayEnd: "Daily end time", dayHours: "Required daily work hours (including a break period)",
+    dayHoursHint: "Above 8, the excess is an unpaid break and 8 net hours are required (e.g. 9 = 8 work + 1 break). At 8 or below there is no break. Lateness is decided at check-out only, when net hours fall below the requirement — extra hours are never overtime.",
     absType: "Absence deduction method", monthlyDiv: "Monthly salary ÷ 30 per day", dailyWage: "Daily wage",
     secLoc: "Workplace location (for check‑in)", lat: "Latitude", lng: "Longitude", radius: "Check‑in radius (m)", capture: "Set my current location",
     locNote: (r) => `Employees may check in only within ${r || 50} m of this location.`,
@@ -334,6 +336,7 @@ export default function SettingsPage() {
             <Field label={t.dayEnd}><Time24Input value={org.work_end_time || ""} onChange={(v) => set("work_end_time", v)} /></Field>
             <Field label={t.dayHours}><Input type="number" step="0.1" value={org.work_hours_per_day} onChange={(e) => set("work_hours_per_day", Number(e.target.value))} /></Field>
           </div>
+          <p className="text-xs text-muted-foreground mt-2 leading-relaxed">{t.dayHoursHint}</p>
           <div className="grid grid-cols-1 mt-4">
             <Field label={t.absType}>
               <MobileSelect value={org.absence_deduction_type} onValueChange={(v) => set("absence_deduction_type", v)} placeholder={t.absType}>

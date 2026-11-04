@@ -1150,35 +1150,20 @@ export default async function (req) {
         }
       }
 
-      // تحديد حالة الحضور من دوام الفرع الذي بصم فيه إن كان له دوام خاص، وإلا دوام المنشأة:
-      // إذا وصل بعد وقت الدوام + هامش التسامح → "late"، وإلا → "present"
-      let arrivalStatus = "present";
-      try {
-        const org = orgForWp || {};
-        const useBh = !!(branchHours && branchHours.custom_hours && String(branchHours.work_start_time || "").trim());
-        const workStart = String((useBh ? branchHours.work_start_time : org.work_start_time) || "").trim();
-        const graceMinutes = Number((useBh ? branchHours.late_grace_minutes : org.late_grace_minutes)) || 0;
-        if (workStart && checkIn) {
-          const toMin = (hm: string) => { const m = /^(\d{1,2}):(\d{2})/.exec(hm); return m ? Number(m[1]) * 60 + Number(m[2]) : null; };
-          const startMin = toMin(workStart);
-          const checkMin = toMin(checkIn);
-          if (startMin !== null && checkMin !== null && checkMin > startMin + graceMinutes) {
-            arrivalStatus = "late";
-          }
-        }
-      } catch {}
-
+      // السياسة الجديدة: لا يُحكم على التأخير عند الحضور — البصمة مفتوحة على مدار الساعة
+      // وحالة الموظف أثناء الدوام «موجود بالعمل» (present). يُحدَّد التأخير عند الانصراف فقط
+      // بمقارنة الصافي (انصراف − حضور − راحات) بالدوام الصافي المطلوب (8 ساعات كحد أقصى).
       const today = recs[0] || null;
       if (today) {
         const updated = await base44.asServiceRole.entities.Attendance.update(today.id, {
-          check_in: checkIn, status: arrivalStatus, source: "portal", employee_user_id: emp.user_id || null,
+          check_in: checkIn, status: "present", source: "portal", employee_user_id: emp.user_id || null,
           branch_id: branchId, branch_name: branchName,
         });
         return Response.json({ ok: true, today: updated });
       }
       const created = await base44.asServiceRole.entities.Attendance.create({
         employee_id: employeeId, employee_user_id: emp.user_id || null, employee_name: empLabel,
-        emp_ref: emp.emp_ref || "", date, check_in: checkIn, status: arrivalStatus, source: "portal", work_hours: 0,
+        emp_ref: emp.emp_ref || "", date, check_in: checkIn, status: "present", source: "portal", work_hours: 0,
         branch_id: branchId, branch_name: branchName,
       });
       return Response.json({ ok: true, today: created });
@@ -1251,8 +1236,24 @@ export default async function (req) {
         break_start = "";
       }
       const wh = computeNetHours(today.check_in, checkOut, breakMinutes);
+      // تحديد الحالة عند الانصراف: الصافي مقابل المطلوب (8 ساعات كحد أقصى، والزيادة راحة).
+      // أقل من المطلوب بعد السماح → متأخر (يُشعَر الموظف وبوابة الشركات ويُخصم في الرواتب)،
+      // وإلا → حاضر 100%. لا يُحتسب أي عمل إضافي للزيادة عن المطلوب.
+      let outStatus: string = today.status || "present";
+      try {
+        const cur = String(today.status || "present");
+        if (cur === "present" || cur === "late" || !cur) {
+          const org: any = await sessionOrg();
+          let br: any = null;
+          if (today.branch_id) { try { br = await base44.asServiceRole.entities.Branch.get(today.branch_id); } catch {} }
+          // الدوام المعتمد هو دوام فرع الانصراف إن كان له دوام خاص، وإلا دوام المنشأة
+          const rh = resolveBranchHours(org || {}, { ...(emp || {}), branch_id: today.branch_id || emp?.branch_id }, br ? [br] : []);
+          outStatus = computeDeductibleShortfall(rh.work_hours_per_day, wh, rh.late_grace_minutes) > 0 ? "late" : "present";
+        }
+      } catch {}
       const updated = await base44.asServiceRole.entities.Attendance.update(today.id, {
-        check_out: checkOut, work_hours: wh, break_minutes: breakMinutes, break_start, break_log, source: "portal",
+        check_out: checkOut, work_hours: wh, status: outStatus,
+        break_minutes: breakMinutes, break_start, break_log, source: "portal",
       });
       return Response.json({ ok: true, today: updated });
     }

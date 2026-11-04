@@ -135,14 +135,41 @@ export default async function (req) {
       if (a.date && dateSet.has(a.date)) existingMap[keyOf(a.employee_id, a.date)] = a;
     }
 
+    // الدوام المعتمد: ساعات المنشأة، أو ساعات فرع الموظف إن كان له دوام خاص.
+    // السياسة: الصافي المطلوب 8 ساعات كحد أقصى (الزيادة عنها راحة) — الأقل منها بعد السماح → متأخر.
+    let orgHoursPerDay = 0, orgGrace = 0;
+    try {
+      const orgs = await base44.asServiceRole.entities.Organization.filter({ unified_number: myUnified }, '-created_date', 5);
+      orgHoursPerDay = Number(orgs?.[0]?.work_hours_per_day) || 0;
+      orgGrace = Number(orgs?.[0]?.late_grace_minutes) || 0;
+    } catch {}
+    let branchById = {};
+    try {
+      const brs = await base44.asServiceRole.entities.Branch.filter({ unified_number: myUnified }, '-created_date', 500);
+      for (const b of (brs || [])) branchById[b.id] = b;
+    } catch {}
+    const requiredFor = (emp) => {
+      const b = emp?.branch_id ? branchById[emp.branch_id] : null;
+      const useBh = !!(b && b.custom_hours && String(b.work_start_time || '').trim() && String(b.work_end_time || '').trim());
+      const hpd = useBh ? (Number(b.work_hours_per_day) || 0) : orgHoursPerDay;
+      const grace = useBh ? (Number(b.late_grace_minutes) || 0) : orgGrace;
+      const req = hpd > 8 ? 8 : hpd;
+      return { req, grace };
+    };
+
     let created = 0, updated = 0;
     const unmatched = [];
 
     for (const r of records) {
       const emp = matchEmployee(r);
       if (!emp) { unmatched.push(r); continue; }
-      const workMin = (timeToMin(r.check_out) && timeToMin(r.check_in))
-        ? (timeToMin(r.check_out) - timeToMin(r.check_in)) / 60 : null;
+      const ciMin = timeToMin(r.check_in), coMin = timeToMin(r.check_out);
+      let workMin = (ciMin != null && coMin != null) ? (coMin - ciMin) / 60 : null;
+      if (workMin != null && workMin < 0) workMin += 24;
+      const wh = workMin != null ? Math.round(workMin * 100) / 100 : 0;
+      const { req, grace } = requiredFor(emp);
+      // لا حكم عند الحضور — الحالة تُحدد بالصافي الكامل: أقل من المطلوب بعد السماح → متأخر
+      const short = req > 0 ? req - wh - grace / 60 : 0;
       const payload = {
         employee_id: emp.id,
         employee_name: `${emp.employee_number} - ${emp.position || ''}`.trim(),
@@ -150,8 +177,8 @@ export default async function (req) {
         date: r.date,
         check_in: r.check_in || '',
         check_out: r.check_out || '',
-        work_hours: workMin != null ? Math.round(workMin * 100) / 100 : undefined,
-        status: 'present',
+        work_hours: workMin != null ? wh : undefined,
+        status: short > 0 ? 'late' : 'present',
       };
       const prev = existingMap[keyOf(emp.id, r.date)];
       if (prev) {
