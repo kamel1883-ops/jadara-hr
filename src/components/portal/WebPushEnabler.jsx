@@ -15,6 +15,19 @@ const COPY = {
     unsupported: "هذا المتصفح لا يدعم إشعارات الجوال. افتح بوابة الموظف من كروم على أندرويد أو سفاري على آيفون.",
     iosHint: "على آيفون: اضغط «مشاركة» ثم «إضافة إلى الشاشة الرئيسية»، وافتح البوابة من الأيقونة، ثم فعّل الإشعارات من هنا.",
     failed: "تعذّر تفعيل الإشعارات. أعد المحاولة.",
+    errSession: "انتهت جلسة الدخول — اخرج وادخل برقم الهوية من جديد، ثم فعّل الإشعارات.",
+    errOldBuild: "التطبيق المنشور على الخادم أقدم من دعم الإشعارات — انشر التطبيق من لوحة Base44 (النشر) ثم أعد المحاولة.",
+    errRegister: "تعذّر تحميل خدمة الإشعارات من النسخة المنشورة — تأكد من نشر آخر نسخة من Base44 ثم أعد المحاولة.",
+    errKey: "تعذّر إنشاء مفاتيح الإشعارات في الخادم — أعد المحاولة، وإن تكرر أرسل هذه الرسالة للدعم.",
+    errSubscribe: (name) =>
+      name === "NotAllowedError" || name === "PermissionDeniedError"
+        ? "المتصفح رفض الإذن — افتح إعدادات الموقع في المتصفح واسمح بالإشعارات ثم أعد المحاولة."
+        : name === "NotSupportedError"
+          ? "هذا المتصفح لا يدعم إشعارات الجوال. افتح بوابة الموظف من كروم على أندرويد أو سفاري على آيفون."
+          : name === "InvalidAccessError" || name === "InvalidStateError"
+            ? "مفتاح التشفير لا يطابق النسخة المنشورة — انشر التطبيق من Base44 من جديد ثم أعد المحاولة."
+            : `تعذّر الاشتراك في الإشعارات (${name || "؟"}) — أعد المحاولة، وإن تكرر أرسل هذه الرسالة للدعم.`,
+    errServer: (code) => `خلل في الخادم أثناء التفعيل (${code}) — انسخ هذه الرسالة وأرسلها للدعم.`,
   },
   en: {
     title: "Phone notifications on this device",
@@ -26,6 +39,19 @@ const COPY = {
     unsupported: "This browser does not support phone notifications. Open the employee portal from Chrome on Android or Safari on iPhone.",
     iosHint: "On iPhone: tap Share, choose “Add to Home Screen”, open the portal from that icon, then enable notifications here.",
     failed: "Could not enable notifications. Please try again.",
+    errSession: "Your session expired — sign out and sign back in with your national ID, then enable notifications.",
+    errOldBuild: "The published backend is older than notification support — publish the app from the Base44 dashboard, then retry.",
+    errRegister: "Could not load the notification service from the published build — publish the latest version from Base44, then retry.",
+    errKey: "Could not create notification keys on the server — retry, and if it repeats send this message to support.",
+    errSubscribe: (name) =>
+      name === "NotAllowedError" || name === "PermissionDeniedError"
+        ? "The browser refused permission — allow notifications for this site in the browser settings, then retry."
+        : name === "NotSupportedError"
+          ? "This browser does not support phone notifications. Open the portal from Chrome on Android or Safari on iPhone."
+          : name === "InvalidAccessError" || name === "InvalidStateError"
+            ? "The encryption key does not match the published build — republish the app from Base44, then retry."
+            : `Could not subscribe to notifications (${name || "?"}) — retry, and if it repeats send this message to support.`,
+    errServer: (code) => `Server error while enabling (${code}) — copy this message and send it to support.`,
   },
 };
 
@@ -78,54 +104,103 @@ export default function WebPushEnabler({ session }) {
   const enable = async () => {
     setBusy(true);
     setNote("");
+    const fail = (message, err) => {
+      try { console.error("[WebPushEnabler]", message, err || ""); } catch {}
+      setNote(message);
+      setBusy(false);
+    };
     try {
       if (!supported) {
         setState("unsupported");
+        setBusy(false);
         return;
       }
-      const permission = await Notification.requestPermission();
+      if (Notification.permission === "denied") {
+        setState("denied");
+        setBusy(false);
+        return;
+      }
+      let permission = Notification.permission;
+      try {
+        permission = await Notification.requestPermission();
+      } catch (e) {
+        return fail(t.failed, e);
+      }
       if (permission !== "granted") {
         setState("denied");
+        setBusy(false);
         return;
       }
-      const keyRes = await base44.functions.invoke("presenceProof", {
-        token: session.token,
-        employee_id: session.employee_id,
-        action: "push_key",
-      });
-      const keyData = keyRes?.data || keyRes;
-      const publicKey = String(keyData?.public_key || "");
-      if (!keyData?.ok || !publicKey) {
-        setNote(t.failed);
-        return;
-      }
-      const registration = await navigator.serviceWorker.register("/push-sw.js");
-      await navigator.serviceWorker.ready;
-      let subscription = await registration.pushManager.getSubscription();
-      if (!subscription) {
-        subscription = await registration.pushManager.subscribe({
-          userVisibleOnly: true,
-          applicationServerKey: urlBase64ToUint8Array(publicKey),
+      let keyData = null;
+      try {
+        const keyRes = await base44.functions.invoke("presenceProof", {
+          token: session.token,
+          employee_id: session.employee_id,
+          action: "push_key",
         });
+        keyData = keyRes?.data || keyRes;
+      } catch (e) {
+        const hint = String(e?.message || e || "");
+        if (/401|invalid_session/i.test(hint)) return fail(t.errSession, e);
+        if (/unknown_action|404/i.test(hint)) return fail(t.errOldBuild, e);
+        return fail(t.errServer("push_key"), e);
+      }
+      if (!keyData?.ok) {
+        const err = String(keyData?.error || "");
+        if (err === "invalid_session") return fail(t.errSession);
+        if (err === "unknown_action") return fail(t.errOldBuild);
+        if (err === "vapid_failed") return fail(t.errKey);
+        return fail(t.errServer(`push_key:${err || "?"}`), keyData);
+      }
+      const publicKey = String(keyData?.public_key || "");
+      if (!publicKey) return fail(t.errKey, keyData);
+      let registration = null;
+      try {
+        registration = await navigator.serviceWorker.register("/push-sw.js");
+        await navigator.serviceWorker.ready;
+      } catch (e) {
+        return fail(t.errRegister, e);
+      }
+      let subscription = null;
+      try {
+        subscription = await registration.pushManager.getSubscription();
+        if (!subscription) {
+          subscription = await registration.pushManager.subscribe({
+            userVisibleOnly: true,
+            applicationServerKey: urlBase64ToUint8Array(publicKey),
+          });
+        }
+      } catch (e) {
+        return fail(t.errSubscribe(String(e?.name || "")), e);
       }
       const payload = subscription.toJSON ? subscription.toJSON() : subscription;
-      const saved = await base44.functions.invoke("presenceProof", {
-        token: session.token,
-        employee_id: session.employee_id,
-        action: "push_subscribe",
-        subscription: { endpoint: payload.endpoint, keys: payload.keys },
-        user_agent: navigator.userAgent,
-      });
-      const savedData = saved?.data || saved;
+      let savedData = null;
+      try {
+        const saved = await base44.functions.invoke("presenceProof", {
+          token: session.token,
+          employee_id: session.employee_id,
+          action: "push_subscribe",
+          subscription: { endpoint: payload.endpoint, keys: payload.keys },
+          user_agent: navigator.userAgent,
+        });
+        savedData = saved?.data || saved;
+      } catch (e) {
+        const hint = String(e?.message || e || "");
+        if (/401|invalid_session/i.test(hint)) return fail(t.errSession, e);
+        if (/unknown_action|404/i.test(hint)) return fail(t.errOldBuild, e);
+        return fail(t.errServer("push_subscribe"), e);
+      }
       if (!savedData?.ok) {
-        setNote(t.failed);
-        return;
+        const err = String(savedData?.error || "");
+        if (err === "invalid_session") return fail(t.errSession);
+        if (err === "unknown_action") return fail(t.errOldBuild);
+        if (err === "invalid_subscription") return fail(t.errSubscribe("InvalidAccessError"));
+        return fail(t.errServer(`push_subscribe:${err || "?"}`), savedData);
       }
       setState("on");
-    } catch {
-      setNote(t.failed);
-    } finally {
       setBusy(false);
+    } catch (e) {
+      return fail(t.failed, e);
     }
   };
 

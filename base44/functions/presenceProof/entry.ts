@@ -1,7 +1,8 @@
 import { createClientFromRequest } from "npm:@base44/sdk@0.8.54";
 import { verifyToken } from "../../shared/portalToken.ts";
 import { resolveBranchSchedule } from "../../shared/branchSchedule.ts";
-import webpush from "npm:web-push@3.6.7";
+// تُحمَّل مكتبة الدفع ديناميكياً داخل getVapid/sendWebPush فقط،
+// حتى تبقى بقية أفعال الدالة (mine/request/status) تعمل لو تعذّر تحميلها.
 
 // طلب إثبات الحضور الفوري — نطاق المنشأة فقط.
 // يصدر طلباً واحداً نشطاً لكل منشأة، ويستهدف الموجودين في الدوام حالياً فقط.
@@ -128,6 +129,11 @@ function envVar(name: string): string {
   return "";
 }
 
+async function webpushLib() {
+  const mod: any = await import("npm:web-push@3.6.7");
+  return mod?.default || mod;
+}
+
 async function getVapid(base44: any) {
   const envPublic = envVar("VAPID_PUBLIC_KEY");
   const envPrivate = envVar("VAPID_PRIVATE_KEY");
@@ -138,6 +144,7 @@ async function getVapid(base44: any) {
   if (row?.public_key && row?.private_key) {
     return { publicKey: String(row.public_key), privateKey: String(row.private_key), subject: String(row.subject || envSubject) };
   }
+  const webpush = await webpushLib();
   const keys = webpush.generateVAPIDKeys();
   try {
     await base44.asServiceRole.entities.PushServerKey.create({ public_key: keys.publicKey, private_key: keys.privateKey, subject: envSubject });
@@ -157,11 +164,18 @@ async function sendWebPush(base44: any, employeeId: string, payload: any) {
     return { sent: 0, failed: 0, devices: 0 };
   }
   if (!subs.length) return { sent: 0, failed: 0, devices: 0 };
-  const vapid = await getVapid(base44);
+  let vapid: any = null;
   try {
+    vapid = await getVapid(base44);
+  } catch {
+    return { sent: 0, failed: 0, devices: subs.length, degraded: true };
+  }
+  let webpush: any = null;
+  try {
+    webpush = await webpushLib();
     webpush.setVapidDetails(vapid.subject, vapid.publicKey, vapid.privateKey);
   } catch {
-    return { sent: 0, failed: subs.length, devices: subs.length };
+    return { sent: 0, failed: 0, devices: subs.length, degraded: true };
   }
   let sent = 0;
   let failed = 0;
@@ -441,8 +455,12 @@ export default async function (req) {
     if (action === "push_key") {
       const ctx = await portalContext(base44, body);
       if (!ctx) return Response.json({ ok: false, error: "invalid_session" }, { status: 401 });
-      const vapid = await getVapid(base44);
-      return Response.json({ ok: true, public_key: vapid.publicKey });
+      try {
+        const vapid = await getVapid(base44);
+        return Response.json({ ok: true, public_key: vapid.publicKey });
+      } catch {
+        return Response.json({ ok: false, error: "vapid_failed" }, { status: 500 });
+      }
     }
 
     // ربط جوال الموظف بسجل هويته: يُحفظ اشتراك الدفع على الموظف نفسه، لا على بريد.
