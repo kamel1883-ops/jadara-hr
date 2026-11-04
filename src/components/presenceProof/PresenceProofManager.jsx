@@ -68,12 +68,12 @@ export default function PresenceProofManager({ org }) {
     pushPartial: (sent, failed, skipped, firstError) => `تم إرسال تنبيه التطبيق إلى ${sent} وتعذّر ${failed}${skipped ? ` — ${skipped} بلا حساب تطبيق مرتبط بهويته` : ""}${firstError ? ` — التشخيص: ${firstError}` : ""}. للتطبيق المغلق: نسخة المتجر المحدّثة + الإشعارات والصوت مفعّلة + إيقاف الكتم وعدم الإزعاج.`,
     pushFailed: "تعذّر إرسال تنبيه التطبيق للموظفين — تحقق من نسخة المتجر المحدّثة وتفعيل الإشعارات مع الصوت وربط الحسابات بالهويات، وأوقف الكتم وعدم الإزعاج.",
     pushNoUser: "لم يُرسل تنبيه التطبيق لأن حسابات الموظفين المستهدفين غير مرتبطة بهوياتهم بعد — يرى الموظفون التنبيه أعلى بوابة الموظف عند فتحها برقم الهوية.",
-    testPush: "دفع تجريبي للشاشة المقفلة",
+    testPush: "دفع تجريبي للحاضرين الآن",
     testing: "جارٍ إرسال الدفع التجريبي...",
-    testSent: "الدفع التجريبي: تم الإرسال — أقفل التطبيق تماماً وراقب شاشة إشعارات الجوال خلال ثوانٍ.",
-    testNone: "الدفع التجريبي: لا يوجد حساب تطبيق مرتبط — سجّل الموظف دخوله من نسخة المتجر أولاً.",
+    testSent: (sent, total, missing) => `الدفع التجريبي: أُرسل إلى ${sent} من ${total} موظفاً حاضراً الآن${missing?.length ? ` — بلا حساب تطبيق مرتبط: ${missing.join("، ")}` : ""}. أقفل التطبيق تماماً وراقب شاشة الإشعارات خلال ثوانٍ.`,
+    testNone: (missing) => `الدفع التجريبي: الموظفون الحاضرون الآن بلا حساب تطبيق مرتبط${missing?.length ? ` (${missing.join("، ")})` : ""} — يدخل الموظف من نسخة المتجر بنفس بريد العمل المسجّل في الموارد البشرية مرة واحدة، ثم أعد الضغط.`,
     testFail: "الدفع التجريبي: فشل الإرسال",
-    testEmpty: "الدفع التجريبي: لا يوجد مستهدفون بعد — أصدر طلباً أولاً ثم جرّب.",
+    testEmpty: "الدفع التجريبي: لا يوجد موظف في الدوام الآن — الزر يستهدف الحاضرين في هذه اللحظة فقط.",
   } : {
     title: "Instant presence proof",
     desc: "An urgent check for employees currently on shift only — confirm within 5 minutes. It reaches only the app account linked to the employee identity in the same organization, and appears at the top of the employee portal when opened. For the alert to arrive while the app is closed: install the updated store build (Google Play / App Store), sign in from it, enable notifications with sound, and turn off silent mode and Do Not Disturb. Use “Test push” to verify it before relying on it. A missed confirmation appears only in follow-up; it is never automatic absence or deduction.",
@@ -107,12 +107,12 @@ export default function PresenceProofManager({ org }) {
     pushPartial: (sent, failed, skipped, firstError) => `App alerts reached ${sent} but failed for ${failed}${skipped ? ` — ${skipped} have no app account linked to their identity` : ""}${firstError ? ` — diagnostic: ${firstError}` : ""}. For closed-app sound: updated store app + notifications with sound on + silent/DND off.`,
     pushFailed: "App alerts could not be sent — check the updated store build, notifications with sound, identity-linked app accounts, and turn off silent mode / Do Not Disturb.",
     pushNoUser: "App alerts were not sent because the targeted employees have no app account linked to their identities yet — they still see the alert at the top of the employee portal when opened with their national ID.",
-    testPush: "Test push to locked screen",
+    testPush: "Test push to on-shift staff",
     testing: "Sending the test push...",
-    testSent: "Test push sent — force-close the app and watch the phone notification shade within seconds.",
+    testSent: (sent, total, missing) => `Test push: delivered to ${sent} of ${total} employees currently on shift${missing?.length ? ` — no linked app account: ${missing.join(", ")}` : ""}. Force-close the app and watch the notification shade within seconds.`,
+    testNone: (missing) => `Test push: the employees on shift now have no linked app account${missing?.length ? ` (${missing.join(", ")})` : ""} — each signs in once from the store app with the work email on their HR record, then retry.`,
     testFail: "Test push failed",
-    testNone: "Test push: no linked app account — the employee must sign in from the store app first.",
-    testEmpty: "Test push: no targets yet — issue a request first, then try.",
+    testEmpty: "Test push: no employee is on shift right now — this button targets only those present at this moment.",
   };
 
   const portalArgs = useMemo(() => {
@@ -223,13 +223,16 @@ export default function PresenceProofManager({ org }) {
       const data = res?.data || res;
       const test = data?.test || {};
       if (!data?.ok) {
-        setTestNote(data?.error === "no_targets_yet" ? t.testEmpty : t.testFail);
-      } else if (Number(test.sent || 0) > 0) {
-        setTestNote(t.testSent);
-      } else if (Number(test.failed || 0) > 0) {
-        setTestNote(`${t.testFail}${test.first_error ? ` — ${test.first_error}` : ""}`);
+        setTestNote(data?.error === "no_targets" ? t.testEmpty : t.testFail);
       } else {
-        setTestNote(t.testNone);
+        const details = Array.isArray(test.details) ? test.details : [];
+        const total = details.length || (Number(test.sent || 0) + Number(test.failed || 0) + Number(test.skipped || 0));
+        const missing = details.filter((d) => d.status === "no_account").map((d) => String(d.name || "")).filter(Boolean);
+        const failed = details.find((d) => d.status === "failed");
+        const sent = Number(test.sent || 0);
+        if (sent > 0) setTestNote(t.testSent(sent, total, missing));
+        else if (failed) setTestNote(`${t.testFail}${failed.error || test.first_error ? ` — ${failed.error || test.first_error}` : ""}`);
+        else setTestNote(t.testNone(missing));
       }
     } catch (err) {
       const { payload } = presenceFailure(err);

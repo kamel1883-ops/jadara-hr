@@ -236,6 +236,51 @@ async function hydrate(base44: any, row: any) {
     };
 }
 
+// الموظفون الموجودون فعلياً في الدوام الآن داخل المنشأة — نفس منطق إصدار الطلب.
+// يُستخدم لإصدار الطلب وللدفع التجريبي حتى يستهدف الحاضرين في هذه اللحظة لا آخر طلب فقط.
+async function collectOnShift(base44: any, unified: string, org: any) {
+  const now = riyadhNow(new Date());
+  const workDays = parseWorkDays(org?.work_days);
+  const orgStart = String(org?.work_start_time || "08:00");
+  const orgEnd = String(org?.work_end_time || "17:00");
+  const branches = asList(
+    await base44.asServiceRole.entities.Branch.filter({ unified_number: unified }, "-created_date", 500).catch(() => [])
+  );
+  const branchById = new Map((branches || []).map((b: any) => [String(b?.id || ""), b]));
+  const employees = asList(
+    await base44.asServiceRole.entities.Employee.filter(
+      { unified_number: unified, status: "active" }, "-created_date", 5000
+    ).catch(() => [])
+  );
+  const ids = (employees || []).map((e: any) => String(e?.id || "")).filter(Boolean);
+  const attendanceByEmployee: Record<string, any> = {};
+  if (ids.length) {
+    try {
+      const att = asList(
+        await base44.asServiceRole.entities.Attendance.filter({ employee_id: { $in: ids } }, "-date", 5000)
+      );
+      for (const row of att || []) {
+        const key = String(row?.employee_id || "");
+        if (key && String(row?.date || "") === now.date && !attendanceByEmployee[key]) attendanceByEmployee[key] = row;
+      }
+    } catch {}
+  }
+  const targets = (employees || []).filter((emp: any) => {
+    const id = String(emp?.id || "");
+    if (!id) return false;
+    if (!workDays.includes(now.weekday)) return false;
+    const branch = emp?.branch_id ? branchById.get(String(emp.branch_id)) : null;
+    const schedule = resolveBranchSchedule(org || {}, branch || {});
+    const start = schedule.work_start_time || orgStart;
+    const end = schedule.work_end_time || orgEnd;
+    if (!inShift(start, end, now.minutes)) return false;
+    const status = String(attendanceByEmployee[id]?.status || "");
+    if (status === "leave" || status === "holiday" || status === "absent") return false;
+    return true;
+  });
+  return { now, employees, targets };
+}
+
 export default async function (req) {
   let body: any = {};
   try {
@@ -323,24 +368,53 @@ export default async function (req) {
     }
     if (!unified) return Response.json({ ok: false, error: "no_company" }, { status: 400 });
 
-    // دفع تجريبي للإدارة فقط: يرسل إشعار شاشة حقيقي لنسخ المتجر دون إنشاء طلب،
-    // للتحقق من وصول الإشعار والتطبيق مغلق قبل الاعتماد عليه.
+    // دفع تجريبي للإدارة فقط: يستهدف الموظفين الحاضرين في الدوام الآن داخل المنشأة
+    // (نفس منطق إصدار الطلب)، ويُظهر بالاسم من وصلته الدفعة ومن لا يملك حساب تطبيق مرتبط.
     if (action === "test_push") {
       const wantedId = String(body?.employee_id || "").trim();
+      const orgs = asList(
+        await base44.asServiceRole.entities.Organization.filter({ unified_number: unified }, "-created_date", 5).catch(() => [])
+      );
+      const org = orgs?.[0] || null;
       const rows = asList(
         await base44.asServiceRole.entities.PresenceProofRequest.filter({ unified_number: unified }, "-requested_at", 5).catch(() => [])
       );
       const latest = rows?.[0] || null;
-      let ids: string[] = wantedId ? [wantedId] : parseJsonArray(latest?.target_ids);
-      if (!ids.length) return Response.json({ ok: false, error: "no_targets_yet" }, { status: 400 });
-      const employees = asList(
-        await base44.asServiceRole.entities.Employee.filter({ unified_number: unified }, "-created_date", 5000).catch(() => [])
-      );
+      const { now, employees, targets: onShift } = await collectOnShift(base44, unified, org);
       const byId = new Map((employees || []).map((e: any) => [String(e?.id || ""), e]));
-      const test = { attempted: 0, sent: 0, failed: 0, skipped: 0, first_error: "" };
+      let ids: string[] = [];
+      let source = "on_shift";
+      if (wantedId) {
+        ids = [wantedId];
+        source = "employee";
+      } else if (onShift.length) {
+        ids = onShift.map((e: any) => String(e?.id || "")).filter(Boolean);
+      } else {
+        ids = parseJsonArray(latest?.target_ids);
+        source = ids.length ? "last_request" : "none";
+      }
+      if (!ids.length) {
+        return Response.json({ ok: false, error: "no_targets", date: now.date, clock: now.clock }, { status: 400 });
+      }
+      const test = {
+        attempted: 0,
+        sent: 0,
+        failed: 0,
+        skipped: 0,
+        first_error: "",
+        source,
+        date: now.date,
+        clock: now.clock,
+        details: [] as any[],
+      };
       for (const id of ids) {
         const emp = byId.get(String(id || ""));
-        if (!emp) continue;
+        if (!emp) {
+          test.skipped += 1;
+          test.details.push({ employee_id: id, name: "", status: "missing" });
+          continue;
+        }
+        const name = String((emp as any)?.full_name || (emp as any)?.employee_number || "");
         let userId = String((emp as any)?.user_id || "").trim();
         if (!userId) {
           const key = String((emp as any)?.email || "").trim().toLowerCase();
@@ -351,8 +425,15 @@ export default async function (req) {
               userId = String(hit?.id || "");
             } catch {}
           }
+          if (userId) {
+            try { await base44.asServiceRole.entities.Employee.update(String(emp.id || ""), { user_id: userId }); } catch {}
+          }
         }
-        if (!userId) { test.skipped += 1; continue; }
+        if (!userId) {
+          test.skipped += 1;
+          test.details.push({ employee_id: id, name, status: "no_account" });
+          continue;
+        }
         test.attempted += 1;
         try {
           await base44.asServiceRole.integrations.Core.SendPushNotification({
@@ -363,11 +444,13 @@ export default async function (req) {
             action_url: "/portal",
           });
           test.sent += 1;
+          test.details.push({ employee_id: id, name, status: "sent" });
         } catch (err) {
           test.failed += 1;
-          if (!test.first_error) {
-            try { test.first_error = String(err?.message || err?.code || "send_failed").slice(0, 160); } catch {}
-          }
+          let message = "send_failed";
+          try { message = String(err?.message || err?.code || "send_failed").slice(0, 160); } catch {}
+          if (!test.first_error) test.first_error = message;
+          test.details.push({ employee_id: id, name, status: "failed", error: message });
         }
       }
       return Response.json({ ok: true, test });
@@ -389,34 +472,7 @@ export default async function (req) {
         return Response.json({ ok: false, error: "active_exists", request: await hydrate(base44, active) }, { status: 409 });
       }
 
-      const now = riyadhNow(new Date(nowMs));
-      const workDays = parseWorkDays(org?.work_days);
-      const orgStart = String(org?.work_start_time || "08:00");
-      const orgEnd = String(org?.work_end_time || "17:00");
-      const branches = asList(
-        await base44.asServiceRole.entities.Branch.filter({ unified_number: unified }, "-created_date", 500).catch(() => [])
-      );
-      const branchById = new Map((branches || []).map((b: any) => [String(b?.id || ""), b]));
-      const employees = asList(
-        await base44.asServiceRole.entities.Employee.filter(
-          { unified_number: unified, status: "active" }, "-created_date", 5000
-        ).catch(() => [])
-      );
-      const ids = (employees || []).map((e: any) => String(e?.id || "")).filter(Boolean);
-      let attendanceByEmployee: Record<string, any> = {};
-      if (ids.length) {
-        try {
-          const att = asList(
-            await base44.asServiceRole.entities.Attendance.filter({ employee_id: { $in: ids } }, "-date", 5000)
-          );
-          for (const row of att || []) {
-            const key = String(row?.employee_id || "");
-            if (key && String(row?.date || "") === now.date && !attendanceByEmployee[key]) attendanceByEmployee[key] = row;
-          }
-        } catch {
-          attendanceByEmployee = {};
-        }
-      }
+      const { now, employees, targets: onShift } = await collectOnShift(base44, unified, org);
 
       let issuerEmpId = issuerEmployeeId;
       if (!issuerEmpId) {
@@ -430,20 +486,8 @@ export default async function (req) {
         } catch {}
       }
 
-      const targets = (employees || []).filter((emp: any) => {
-        const id = String(emp?.id || "");
-        if (!id || (issuerEmpId && id === issuerEmpId)) return false;
-        if (!workDays.includes(now.weekday)) return false;
-        const branch = emp?.branch_id ? branchById.get(String(emp.branch_id)) : null;
-        const schedule = resolveBranchSchedule(org || {}, branch || {});
-        const start = schedule.work_start_time || orgStart;
-        const end = schedule.work_end_time || orgEnd;
-        if (!inShift(start, end, now.minutes)) return false;
-        const today = attendanceByEmployee[id];
-        const status = String(today?.status || "");
-        if (status === "leave" || status === "holiday" || status === "absent") return false;
-        return true;
-      });
+      // من أصدر الطلب لا يُستهدف هو نفسه.
+      const targets = (onShift || []).filter((emp: any) => !(issuerEmpId && String(emp?.id || "") === issuerEmpId));
       if (!targets.length) {
         return Response.json({ ok: false, error: "no_targets", date: now.date, clock: now.clock }, { status: 400 });
       }
