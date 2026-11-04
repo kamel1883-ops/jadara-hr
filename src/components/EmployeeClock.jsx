@@ -23,6 +23,15 @@ const distanceMeters = (lat1, lng1, lat2, lng2) => {
   const a = Math.sin(dLat / 2) ** 2 + Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) * Math.sin(dLng / 2) ** 2;
   return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
 };
+// نفس معادلة الخادم تماماً حتى لا تقبل الواجهة قراءة ثم يرفضها الخادم عند نطاق صغير.
+const GPS_MAX_ACCURACY_M = 100;
+const GPS_SAFETY_MARGIN_M = 15;
+const GPS_FALLBACK_ACCURACY_M = 25;
+const gpsTolerance = (acc) => {
+  const reported = Number(acc);
+  const reliable = Number.isFinite(reported) && reported > 0 ? reported : GPS_FALLBACK_ACCURACY_M;
+  return Math.min(reliable, GPS_MAX_ACCURACY_M) + GPS_SAFETY_MARGIN_M;
+};
 // التقاط عدة قراءات GPS متتالية لتمييز الموقع الحقيقي عن الموقع المُزيَّف:
 // قراءات GPS الحقيقية تتذبذب دائماً بأمتار قليلة بين القراءات، أما المُزيّف
 // فيُعيد نفس الإحداثيات تماماً بدقة مثالية. نُرجع مصفوفة القراءات للتحليل.
@@ -116,7 +125,7 @@ export default function EmployeeClock({ employee, org, branch, branches, onChang
     setBusy(true);
     try {
       const inRange = (r) =>
-        distanceMeters(r.lat, r.lng, wp.lat, wp.lng) <= radius + Math.min(Number(r.acc) || 25, 150) + 15;
+        distanceMeters(r.lat, r.lng, wp.lat, wp.lng) <= radius + gpsTolerance(r.acc);
       const { readings, error } = await captureGPS(t, inRange);
       if (error) { setMsg({ type: "err", text: error }); setBusy(false); return; }
       if (!readings.length) { setMsg({ type: "err", text: t.noAccess }); setBusy(false); return; }
@@ -141,8 +150,8 @@ export default function EmployeeClock({ employee, org, branch, branches, onChang
         distanceMeters(r.lat, r.lng, wp.lat, wp.lng) < distanceMeters(a.lat, a.lng, wp.lat, wp.lng) ? r : a, readings[0]);
       const chosen = best;
       const dist = distanceMeters(chosen.lat, chosen.lng, wp.lat, wp.lng);
-      // هامش تسامح = دقة القراءة (حتى 150م) + 15م لتجاوز خطأ التحديد على الهواتف
-      const tolerance = Math.min(Number(chosen.acc) || 25, 150) + 15;
+      // هامش التسامح يطابق الخادم: دقة القراءة (حتى 100م) + 15م أماناً.
+      const tolerance = gpsTolerance(chosen.acc);
       if (dist > radius + tolerance) {
         setMsg({ type: "err", text: `${t.outRange(Math.round(dist), radius)} ${lang === "ar" ? `(دقة الموقع ±${Math.round(chosen.acc)}م)` : `(location accuracy ±${Math.round(chosen.acc)}m)`}` });
         setBusy(false); return;

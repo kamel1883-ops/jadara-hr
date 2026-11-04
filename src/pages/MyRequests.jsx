@@ -223,16 +223,25 @@ export default function MyRequests() {
       return res?.data?.today || null;
     },
     clockIn: async (lat, lng, accuracy, branchId) => {
-      const res = await base44.functions.invoke("portalData", {
-        ...portalArgs, action: "clock_in", check_in: nowHM(), lat, lng, accuracy, branch_id: branchId || "",
-      });
+      const outOfRangeMessage = (payload = {}) => {
+        const allowed = payload.allowed ?? payload.radius ?? "";
+        return isAr
+          ? `الموقع المرصود بعيد عن مقر العمل (${payload.dist ?? "?"}م) — الحد المقبول حالياً ${allowed}م (نطاق الإدارة ${payload.radius ?? ""}م + هامش دقة الهاتف). اقترب من نقطة البصمة، فعّل الدقة العالية، وانتظر لحظات ثم أعد المحاولة.`
+          : `The detected location is ${payload.dist ?? "?"}m from the workplace — the currently accepted limit is ${allowed}m (your ${payload.radius ?? ""}m policy radius plus phone-accuracy tolerance). Move closer to the check-in point, turn on high accuracy, wait a moment, then retry.`;
+      };
+      let res;
+      try {
+        res = await base44.functions.invoke("portalData", {
+          ...portalArgs, action: "clock_in", check_in: nowHM(), lat, lng, accuracy, branch_id: branchId || "",
+        });
+      } catch (err) {
+        const payload = err?.response?.data;
+        if (payload?.error === "out_of_range") throw new Error(outOfRangeMessage(payload));
+        throw new Error(payload?.error || err?.message || "fail");
+      }
       const data = res?.data || res;
       if (!data?.ok) {
-        if (data?.error === "out_of_range") {
-          throw new Error(isAr
-            ? `موقعك بعيد عن مقر العمل (${data.dist ?? "?"}م) — خارج النطاق المحدد (${data.radius ?? ""}م)`
-            : `You are ${data.dist ?? "?"}m from the workplace — outside the allowed ${data.radius ?? ""}m radius`);
-        }
+        if (data?.error === "out_of_range") throw new Error(outOfRangeMessage(data));
         throw new Error(data?.error || "fail");
       }
       setTodayAtt(data.today);

@@ -32,6 +32,18 @@ const haversineMeters = (lat1: number, lng1: number, lat2: number, lng2: number)
   return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
 };
 
+// هامش دقة GPS يطابق منطق الواجهة تماماً: النطاقات الصغيرة (مثل 6 أو 10 أمتار)
+// لا يمكن فرضها حرفياً لأن هواتف الموظفين داخل المباني تنحرف عادة 10-30 متراً.
+// لذلك يُقبل القياس ضمن النطاق + دقة القراءة المعلنة (حتى 100م) + 15م أماناً.
+const GPS_MAX_ACCURACY_M = 100;
+const GPS_SAFETY_MARGIN_M = 15;
+const GPS_FALLBACK_ACCURACY_M = 25;
+const locationToleranceMeters = (accuracy: any) => {
+  const reported = Number(accuracy);
+  const reliable = Number.isFinite(reported) && reported > 0 ? reported : GPS_FALLBACK_ACCURACY_M;
+  return Math.min(reliable, GPS_MAX_ACCURACY_M) + GPS_SAFETY_MARGIN_M;
+};
+
 export default async function (req) {
   try {
     const base44 = createClientFromRequest(req);
@@ -1144,9 +1156,10 @@ export default async function (req) {
       }
       if (hasCoords && wpLat != null && wpLng != null) {
         const d = haversineMeters(sentLat, sentLng, wpLat, wpLng);
-        const tol = Math.min(isFinite(sentAcc) && sentAcc > 0 ? sentAcc : 0, wpRadius * 0.5) + 5;
-        if (d > wpRadius + tol) {
-          return Response.json({ ok: false, error: "out_of_range", dist: Math.round(d), radius: wpRadius }, { status: 400 });
+        const tol = locationToleranceMeters(sentAcc);
+        const allowed = wpRadius + tol;
+        if (d > allowed) {
+          return Response.json({ ok: false, error: "out_of_range", dist: Math.round(d), radius: wpRadius, allowed: Math.round(allowed), accuracy: Math.round(sentAcc) || 0 }, { status: 400 });
         }
       }
 

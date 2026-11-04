@@ -5,7 +5,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Image as ImageIcon, Plus, Trash2, Star, Loader2, Building2, MapPin, Upload, Pencil, Crosshair } from "lucide-react";
+import { Image as ImageIcon, Plus, Star, Loader2, Building2, MapPin, Upload, Pencil, Crosshair } from "lucide-react";
 import { base44 } from "@/api/base44Client";
 import { Image } from "@/components/ui/image";
 import { useI18n } from "@/lib/i18n";
@@ -26,7 +26,7 @@ export default function BranchManager({ open, onClose, onSaved }) {
     add: "إضافة فرع", edit: "تعديل", name: "اسم الفرع *", city: "المدينة", address: "العنوان", phone: "الهاتف",
     logo: "شعار الفرع", uploadLogo: "رفع شعار", lat: "خط العرض", lng: "خط الطول", radius: "نطاق البصمة (متر)",
     geo: "استخدام موقعي الحالي", fetching: "جارٍ تحديد الموقع…", geoErr: "تعذر تحديد الموقع — فعّل صلاحية الموقع",
-    geofenceHint: "اترك الإحداثيات فارغة لاعتماد المقر الرئيسي للمنشأة كبديل.",
+    geofenceHint: "اترك الإحداثيات فارغة لاعتماد المقر الرئيسي للمنشأة كبديل. النطاقات الصغيرة جداً قد ترفض البصمة داخل المباني بسبب دقة الهاتف؛ ضع الإحداثيات عند نقطة البصمة الفعلية ويُفضَّل 25 متراً فأكثر.",
     main: "الفرع الرئيسي", setMain: "تعيين كفرع رئيسي", mainBadge: "رئيسي", del: (n) => `حذف الفرع «${n}»؟`,
     empty: "لا توجد فروع بعد — أضف أول فرع الآن.", save: "حفظ", cancel: "إلغاء", saving: "جارٍ الحفظ…", new: "فرع جديد",
     delMainErr: "لا يمكن حذف الفرع الرئيسي. عيّن فرعاً رئيسياً آخر أولاً.",
@@ -43,7 +43,7 @@ export default function BranchManager({ open, onClose, onSaved }) {
     add: "Add branch", edit: "Edit", name: "Branch name *", city: "City", address: "Address", phone: "Phone",
     logo: "Branch logo", uploadLogo: "Upload logo", lat: "Latitude", lng: "Longitude", radius: "Fingerprint radius (m)",
     geo: "Use my current location", fetching: "Locating…", geoErr: "Could not get location — enable location permission",
-    geofenceHint: "Leave coordinates empty to fall back to the main workplace.",
+    geofenceHint: "Leave coordinates empty to fall back to the main workplace. Very small radii can fail indoors because of phone accuracy; use the actual check-in spot and preferably 25m or more.",
     main: "Main branch", setMain: "Set as main", mainBadge: "Main", del: (n) => `Delete branch “${n}”?`,
     empty: "No branches yet — add your first branch.", save: "Save", cancel: "Cancel", saving: "Saving…", new: "New branch",
     delMainErr: "Cannot delete the main branch. Set another branch as main first.",
