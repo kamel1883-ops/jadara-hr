@@ -79,25 +79,6 @@
       "type": "number",
       "default": 0,
       "title": "عدد المستهدفين بلا حساب تطبيق مرتبط"
-    },
-    "voice_status": {
-      "type": "string",
-      "title": "حالة المكالمة الصوتية: not_needed/disabled/called/partial/failed/no_phone"
-    },
-    "voice_called_count": {
-      "type": "number",
-      "default": 0,
-      "title": "عدد المكالمات الصوتية التي بدأت"
-    },
-    "voice_failed_count": {
-      "type": "number",
-      "default": 0,
-      "title": "عدد المكالمات الصوتية المتعذرة"
-    },
-    "voice_skipped_count": {
-      "type": "number",
-      "default": 0,
-      "title": "عدد المستهدفين بلا رقم جوال صالح للمكالمة الصوتية"
     }
   },
   "required": [

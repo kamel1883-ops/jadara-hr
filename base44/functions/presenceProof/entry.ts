@@ -1,7 +1,6 @@
 import { createClientFromRequest } from "npm:@base44/sdk@0.8.54";
 import { verifyToken } from "../../shared/portalToken.ts";
 import { resolveBranchSchedule } from "../../shared/branchSchedule.ts";
-import { callTargetsWithoutAppPush } from "./voiceFallback.ts";
 
 // طلب إثبات الحضور الفوري — نطاق المنشأة فقط.
 // يصدر طلباً واحداً نشطاً لكل منشأة، ويستهدف الموجودين في الدوام حالياً فقط.
@@ -234,11 +233,7 @@ async function hydrate(base44: any, row: any) {
     push_sent_count: Number(row?.push_sent_count || 0),
     push_failed_count: Number(row?.push_failed_count || 0),
     push_skipped_count: Number(row?.push_skipped_count || 0),
-    voice_status: String(row?.voice_status || ""),
-    voice_called_count: Number(row?.voice_called_count || 0),
-    voice_failed_count: Number(row?.voice_failed_count || 0),
-    voice_skipped_count: Number(row?.voice_skipped_count || 0),
-  };
+    };
 }
 
 export default async function (req) {
@@ -306,7 +301,6 @@ export default async function (req) {
     let issuerUserId = "";
     let issuerEmployeeId = "";
     let issuerName = "";
-    let issuerAuth: { kind: "user"; user: any } | { kind: "portal"; emp: any } | null = null;
     const portal = await portalContext(base44, body);
     if (portal) {
       const perms = parsePermissions(portal.emp?.permissions);
@@ -316,7 +310,6 @@ export default async function (req) {
       unified = portal.unified;
       issuerEmployeeId = String(portal.emp.id || "");
       issuerName = String(portal.emp.full_name || "");
-      issuerAuth = { kind: "portal", emp: portal.emp };
     } else {
       let user: any = null;
       try { user = await base44.auth.me(); } catch { user = null; }
@@ -327,7 +320,6 @@ export default async function (req) {
       if (!unified) return Response.json({ ok: false, error: "no_company" }, { status: 400 });
       issuerUserId = String(user.id || "");
       issuerName = String(user.full_name || user.email || "");
-      issuerAuth = { kind: "user", user };
     }
     if (!unified) return Response.json({ ok: false, error: "no_company" }, { status: 400 });
 
@@ -428,8 +420,8 @@ export default async function (req) {
         confirmed_log: JSON.stringify([]),
       });
 
-      // إن كان الموظف يملك حساب تطبيق بالبريد المهني نفسه ولم يُخزَّن معرّفه بعد،
-      // يُربط تلقائياً هنا حتى يصله تنبيه الجوال دون خطوة يدوية إضافية.
+      // ربط احتياطي لحساب التطبيق عند توفر بريد العمل المطابق فقط.
+      // الاستهداف نفسه يبقى بسجل هوية الموظف داخل نفس المنشأة، ولا يُستخدم البريد للتعريف.
       const findAppUserId = async (email: string) => {
         const key = String(email || "").trim().toLowerCase();
         if (!key) return "";
@@ -481,9 +473,7 @@ export default async function (req) {
         skipped: 0,
         status: "skipped_no_user",
       };
-      const failedPushIds = new Set<string>();
       for (const emp of targets) {
-        const employeeId = String(emp?.id || "").trim();
         const userId = String(emp?.user_id || "").trim();
         if (!userId) {
           push.skipped += 1;
@@ -500,43 +490,26 @@ export default async function (req) {
           push.sent += 1;
         } catch {
           push.failed += 1;
-          if (employeeId) failedPushIds.add(employeeId);
         }
       }
       if (push.sent > 0 && push.failed === 0) push.status = "sent";
       else if (push.sent > 0) push.status = "partial";
       else if (push.failed > 0) push.status = "failed";
-      // المكالمة الصوتية احتياط مرتبط برقم الجوال والهوية، لا بالبريد.
-      // تُستخدم لمن لا يملك حساب تطبيق أو تعذّر دفع التنبيه له فقط.
-      const voice = await callTargetsWithoutAppPush(
-        base44,
-        targets,
-        failedPushIds,
-        issuerAuth,
-        deadlineClock,
-        String(org?.name || "")
-      );
+      // تنبيه التطبيق فقط — دون أي اتصال صوتي.
+      // يُرسل للحساب المرتبط بهوية الموظف في نفس المنشأة فقط.
       try {
         await base44.asServiceRole.entities.PresenceProofRequest.update(created.id, {
           push_status: push.status,
           push_sent_count: push.sent,
           push_failed_count: push.failed,
           push_skipped_count: push.skipped,
-          voice_status: voice.status,
-          voice_called_count: voice.called,
-          voice_failed_count: voice.failed,
-          voice_skipped_count: voice.skipped,
         });
         created.push_status = push.status;
         created.push_sent_count = push.sent;
         created.push_failed_count = push.failed;
         created.push_skipped_count = push.skipped;
-        created.voice_status = voice.status;
-        created.voice_called_count = voice.called;
-        created.voice_failed_count = voice.failed;
-        created.voice_skipped_count = voice.skipped;
       } catch {}
-      return Response.json({ ok: true, request: await hydrate(base44, created), push, voice });
+      return Response.json({ ok: true, request: await hydrate(base44, created), push });
     }
 
     if (action === "status") {
