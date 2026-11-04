@@ -2,17 +2,20 @@
 // الاستخدام: verifyEmployeePortal يُوقّع الرمز بعد نجاح مطابقة الهوية + الميلاد،
 // و portalData / approvalQueue / approvalAction يتحققون منه لاحقاً.
 
-const SECRET = Deno.env.get("CRON_SECRET") || "";
-if (!SECRET) {
-  // لا يُسمح بتشغيل البوابة بدون مفتاح توقيع سري — يمنع رمز جلسة قابل للتزوير
-  throw new Error("CRON_SECRET is not configured");
-}
-
 const enc = new TextEncoder();
+
+function portalSecret() {
+  const secret = Deno.env.get("CRON_SECRET") || "";
+  if (!secret) {
+    // لا يُسمح بتوقيع/تحقّق رمز البوابة بدون مفتاح سري — يمنع رمز جلسة قابل للتزوير
+    throw new Error("CRON_SECRET is not configured");
+  }
+  return secret;
+}
 
 async function hmac(value) {
   const key = await crypto.subtle.importKey(
-    "raw", enc.encode(SECRET),
+    "raw", enc.encode(portalSecret()),
     { name: "HMAC", hash: "SHA-256" }, false, ["sign"]
   );
   const sig = await crypto.subtle.sign("HMAC", key, enc.encode(value));

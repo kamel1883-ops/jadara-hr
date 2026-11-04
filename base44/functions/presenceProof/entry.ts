@@ -233,9 +233,10 @@ async function hydrate(base44: any, row: any) {
 }
 
 export default async function (req) {
+  let body: any = {};
   try {
     const base44 = createClientFromRequest(req);
-    const body = await req.json().catch(() => ({}));
+    body = await req.json().catch(() => ({}));
     const action = String(body?.action || "");
     if (!action) return Response.json({ ok: false, error: "missing" }, { status: 400 });
 
@@ -447,6 +448,6 @@ export default async function (req) {
     return Response.json({ ok: false, error: "unknown_action" }, { status: 400 });
   } catch (error) {
     console.error("presenceProof failed", { action: String(body?.action || "") });
-    return Response.json({ ok: false, error: error.message }, { status: 500 });
+    return Response.json({ ok: false, error: error?.message || "server_error", action: String(body?.action || "") }, { status: 500 });
   }
 }
