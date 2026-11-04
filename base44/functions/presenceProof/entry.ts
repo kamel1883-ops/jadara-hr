@@ -162,8 +162,8 @@ function proofMessages(deadlineClock: string) {
 
 async function expireOverdue(base44: any, unified: string, nowMs: number) {
   const rows = asList(
-    await base44.asServiceRole.entities.PresenceProofRequest.filter({ unified_number: unified }, "-requested_at", 100)
-  ).catch(() => []);
+    await base44.asServiceRole.entities.PresenceProofRequest.filter({ unified_number: unified }, "-requested_at", 100).catch(() => [])
+  );
   for (const row of rows || []) {
     if (String(row?.status || "") === "active" && Number(row?.deadline_at || 0) <= nowMs) {
       try {
@@ -195,11 +195,11 @@ function summarize(row: any) {
 async function hydrate(base44: any, row: any) {
   const { targetIds, confirmedAt } = summarize(row);
   const employees = asList(
-    await base44.asServiceRole.entities.Employee.filter({ unified_number: row.unified_number }, "-created_date", 5000)
-  ).catch(() => []);
+    await base44.asServiceRole.entities.Employee.filter({ unified_number: row.unified_number }, "-created_date", 5000).catch(() => [])
+  );
   const branches = asList(
-    await base44.asServiceRole.entities.Branch.filter({ unified_number: row.unified_number }, "-created_date", 500)
-  ).catch(() => []);
+    await base44.asServiceRole.entities.Branch.filter({ unified_number: row.unified_number }, "-created_date", 500).catch(() => [])
+  );
   const employeeById = new Map((employees || []).map((e: any) => [String(e?.id || ""), e]));
   const branchById = new Map((branches || []).map((b: any) => [String(b?.id || ""), b]));
   const targets = targetIds.map((id) => {
@@ -250,8 +250,8 @@ export default async function (req) {
       const rows = asList(
         await base44.asServiceRole.entities.PresenceProofRequest.filter(
           { unified_number: ctx.unified }, "-requested_at", 20
-        )
-      ).catch(() => []);
+        ).catch(() => [])
+      );
       const active = (rows || []).find((r: any) => String(r?.status || "") === "active");
       if (!active) return Response.json({ ok: true, active: null });
 
@@ -321,8 +321,8 @@ export default async function (req) {
 
     if (action === "request") {
       const orgs = asList(
-        await base44.asServiceRole.entities.Organization.filter({ unified_number: unified }, "-created_date", 5)
-      ).catch(() => []);
+        await base44.asServiceRole.entities.Organization.filter({ unified_number: unified }, "-created_date", 5).catch(() => [])
+      );
       const org = orgs?.[0] || null;
       if (org && org.presence_proof_enabled === false) {
         return Response.json({ ok: false, error: "proof_disabled" }, { status: 403 });
@@ -340,14 +340,14 @@ export default async function (req) {
       const orgStart = String(org?.work_start_time || "08:00");
       const orgEnd = String(org?.work_end_time || "17:00");
       const branches = asList(
-        await base44.asServiceRole.entities.Branch.filter({ unified_number: unified }, "-created_date", 500)
-      ).catch(() => []);
+        await base44.asServiceRole.entities.Branch.filter({ unified_number: unified }, "-created_date", 500).catch(() => [])
+      );
       const branchById = new Map((branches || []).map((b: any) => [String(b?.id || ""), b]));
       const employees = asList(
         await base44.asServiceRole.entities.Employee.filter(
           { unified_number: unified, status: "active" }, "-created_date", 5000
-        )
-      ).catch(() => []);
+        ).catch(() => [])
+      );
       const ids = (employees || []).map((e: any) => String(e?.id || "")).filter(Boolean);
       let attendanceByEmployee: Record<string, any> = {};
       if (ids.length) {
