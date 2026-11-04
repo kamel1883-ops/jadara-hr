@@ -67,7 +67,7 @@ export default function PresenceProofManager({ org }) {
     pushSent: (sent, total) => `تم إرسال تنبيه الجوال إلى ${sent} من ${total} موظفاً مستهدفاً.`,
     pushPartial: (sent, failed, skipped) => `تم إرسال تنبيه الجوال إلى ${sent} وتعذّر ${failed}${skipped ? ` — ${skipped} بلا حساب تطبيق مرتبط` : ""}. تحقق من نسخة المتجر وإعدادات الإشعارات وربط الحسابات.`,
     pushFailed: "تعذّر إرسال تنبيه الجوال للموظفين — تحقق من تفعيل التنبيهات في نسخة المتجر وربط حسابات التطبيق.",
-    pushNoUser: "لم يُرسل تنبيه الجوال: لا يوجد حساب تطبيق مرتبط بالموظفين المستهدفين — اربط سجلات الموظفين بحسابات التطبيق.",
+    pushNoUser: "لم يُرسل تنبيه الجوال لأن الموظفين المستهدفين لا يملكون حساب تطبيق مطابقاً لبريدهم المهني. ادعُهم إلى مستخدمي التطبيق بالبريد نفسه، ثم اطلب من كل موظف تثبيت نسخة المتجر وتسجيل الدخول بذلك البريد وتفعيل التنبيهات؛ وسيربط النظام الحساب تلقائياً في الطلب التالي.",
   } : {
     title: "Instant presence proof",
     desc: "An urgent check for employees currently on shift only — confirm within 5 minutes. A missed confirmation appears only in follow-up; it is never automatic absence or deduction.",
@@ -100,7 +100,7 @@ export default function PresenceProofManager({ org }) {
     pushSent: (sent, total) => `Mobile push was sent to ${sent} of ${total} targeted employees.`,
     pushPartial: (sent, failed, skipped) => `Mobile push reached ${sent} but failed for ${failed}${skipped ? ` — ${skipped} have no linked app account` : ""}. Check the store build, notification settings, and account linking.`,
     pushFailed: "Mobile push could not be sent — check push setup in the store build and linked app accounts.",
-    pushNoUser: "Mobile push was not sent: targeted employees have no linked app account — link employee records to app accounts.",
+    pushNoUser: "Mobile push was not sent because the targeted employees have no app account matching their work email. Invite them with the same email, ask each one to install the store build, sign in with that email, enable notifications, and the next request will link the account automatically.",
   };
 
   const portalArgs = useMemo(() => {

@@ -420,6 +420,29 @@ export default async function (req) {
         confirmed_log: JSON.stringify([]),
       });
 
+      // إن كان الموظف يملك حساب تطبيق بالبريد المهني نفسه ولم يُخزَّن معرّفه بعد،
+      // يُربط تلقائياً هنا حتى يصله تنبيه الجوال دون خطوة يدوية إضافية.
+      const findAppUserId = async (email: string) => {
+        const key = String(email || "").trim().toLowerCase();
+        if (!key) return "";
+        try {
+          const rows = asList(await base44.asServiceRole.entities.User.filter({ email: key }, undefined, 5));
+          const hit = (rows || []).find((u: any) => String(u?.email || "").trim().toLowerCase() === key);
+          return String(hit?.id || "");
+        } catch {
+          return "";
+        }
+      };
+      for (const emp of targets) {
+        if (String(emp?.user_id || "").trim()) continue;
+        const appUserId = await findAppUserId(emp?.email);
+        if (!appUserId) continue;
+        try {
+          await base44.asServiceRole.entities.Employee.update(String(emp.id || ""), { user_id: appUserId });
+          emp.user_id = appUserId;
+        } catch {}
+      }
+
       const notifications = targets.map((emp: any) => ({
         title: messages.ar.title,
         body: messages.ar.body,
