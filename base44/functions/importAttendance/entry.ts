@@ -1,4 +1,5 @@
 import { createClientFromRequest } from 'npm:@base44/sdk@0.8.40';
+import { requiredNetHours, resolveBranchHours } from '../../shared/payrollCompute.ts';
 
 const pad = (n) => String(n).padStart(2, '0');
 
@@ -148,13 +149,11 @@ export default async function (req) {
       const brs = await base44.asServiceRole.entities.Branch.filter({ unified_number: myUnified }, '-created_date', 500);
       for (const b of (brs || [])) branchById[b.id] = b;
     } catch {}
+    const orgSchedule = { work_start_time: '', work_end_time: '', work_hours_per_day: orgHoursPerDay, late_grace_minutes: orgGrace };
     const requiredFor = (emp) => {
       const b = emp?.branch_id ? branchById[emp.branch_id] : null;
-      const useBh = !!(b && b.custom_hours && String(b.work_start_time || '').trim() && String(b.work_end_time || '').trim());
-      const hpd = useBh ? (Number(b.work_hours_per_day) || 0) : orgHoursPerDay;
-      const grace = useBh ? (Number(b.late_grace_minutes) || 0) : orgGrace;
-      const req = hpd > 8 ? 8 : hpd;
-      return { req, grace };
+      const schedule = resolveBranchHours(orgSchedule, emp, b ? [b] : []);
+      return { req: requiredNetHours(schedule.work_hours_per_day), grace: schedule.late_grace_minutes };
     };
 
     let created = 0, updated = 0;

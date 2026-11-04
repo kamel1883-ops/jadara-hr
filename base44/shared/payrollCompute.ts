@@ -1,3 +1,5 @@
+import { resolveBranchSchedule } from "./branchSchedule.ts";
+
 // دوال احتساب الرواتب بحسب الحضور الفعلي — مرآة خادمية لـ src/lib/payrollCompute.js
 // (تُستخدم في إجراءات بوابة الموظف المُفوّضة بصلاحية الرواتب لتفادي قيود RLS).
 
@@ -51,19 +53,21 @@ export const computeDeductibleShortfall = (workHoursPerDay: number, actualHours:
 };
 
 /**
- * دوام الموظف المعتمد: فرعه إن كان الفرع له ساعات عمل خاصة، وإلا إعدادات المنشأة العامة.
+ * دوام الموظف المعتمد: أي قيمة مضبوطة لفرعه تُعتمد، وأي حقل فارغ يعود لإعدادات المنشأة.
  * مرآة لـ src/lib/branchHours.js لتُستخدم داخل الدوال الخادمية (بوابة الموظف المُفوّض).
  */
-export const hasBranchHours = (branch: any) =>
-  !!(branch && branch.custom_hours && String(branch.work_start_time || "").trim() && String(branch.work_end_time || "").trim());
+export const hasBranchHours = (branch: any) => resolveBranchSchedule({}, branch).custom;
 
 export const resolveBranchHours = (org: any, employee: any, branches: any[] = []) => {
   const branch = employee?.branch_id ? (branches || []).find((b) => b.id === employee.branch_id) : null;
-  const src = hasBranchHours(branch) ? branch : (org || {});
+  const schedule = resolveBranchSchedule(org, branch);
   return {
-    custom: hasBranchHours(branch),
-    work_hours_per_day: Number(src.work_hours_per_day) || 0,
-    late_grace_minutes: Number(src.late_grace_minutes) || 0,
+    custom: schedule.custom,
+    branch_name: schedule.custom ? String((branch as any)?.name || "") : "",
+    work_start_time: schedule.work_start_time,
+    work_end_time: schedule.work_end_time,
+    work_hours_per_day: schedule.work_hours_per_day,
+    late_grace_minutes: schedule.late_grace_minutes,
   };
 };
 

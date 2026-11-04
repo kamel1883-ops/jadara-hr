@@ -1,5 +1,6 @@
 import { createClientFromRequest } from "npm:@base44/sdk@0.8.54";
 import { verifyToken } from "../../shared/portalToken.ts";
+import { resolveBranchSchedule } from "../../shared/branchSchedule.ts";
 
 // طلب إثبات الحضور الفوري — نطاق المنشأة فقط.
 // يصدر طلباً واحداً نشطاً لكل منشأة، ويستهدف الموجودين في الدوام حالياً فقط.
@@ -74,15 +75,6 @@ function parseWorkDays(raw: any): number[] {
   } catch {
     return fallback;
   }
-}
-
-function hasBranchHours(branch: any): boolean {
-  return !!(
-    branch &&
-    branch.custom_hours &&
-    String(branch.work_start_time || "").trim() &&
-    String(branch.work_end_time || "").trim()
-  );
 }
 
 function parsePermissions(raw: any): string[] {
@@ -388,8 +380,9 @@ export default async function (req) {
         if (!id || (issuerEmpId && id === issuerEmpId)) return false;
         if (!workDays.includes(now.weekday)) return false;
         const branch = emp?.branch_id ? branchById.get(String(emp.branch_id)) : null;
-        const start = hasBranchHours(branch) ? String(branch.work_start_time) : orgStart;
-        const end = hasBranchHours(branch) ? String(branch.work_end_time) : orgEnd;
+        const schedule = resolveBranchSchedule(org || {}, branch || {});
+        const start = schedule.work_start_time || orgStart;
+        const end = schedule.work_end_time || orgEnd;
         if (!inShift(start, end, now.minutes)) return false;
         const today = attendanceByEmployee[id];
         const status = String(today?.status || "");

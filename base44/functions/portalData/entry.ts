@@ -212,6 +212,7 @@ export default async function (req) {
               lat: br.lat ?? null, lng: br.lng ?? null, radius: br.radius ?? null,
               custom_hours: !!br.custom_hours,
               work_start_time: br.work_start_time || "", work_end_time: br.work_end_time || "",
+              work_hours_per_day: br.work_hours_per_day ?? null,
               late_grace_minutes: br.late_grace_minutes ?? null,
             });
           } catch {}

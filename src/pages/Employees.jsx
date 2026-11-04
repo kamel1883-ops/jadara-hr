@@ -365,7 +365,7 @@ export default function Employees() {
 
       <EmployeeForm open={formOpen} onClose={() => setFormOpen(false)} onSaved={load} employee={editTarget} unifiedNumber={myUnified} />
       <EmployeeImport open={importOpen} onClose={() => setImportOpen(false)} onSaved={load} />
-      <BranchManager open={branchOpen} onClose={() => setBranchOpen(false)} onSaved={load} />
+      <BranchManager open={branchOpen} onClose={() => setBranchOpen(false)} onSaved={load} org={org} />
       <EmployeeTripsDialog open={tripsOpen} onClose={() => setTripsOpen(false)} employee={tripsEmp} />
       <EmployeeProfileDialog open={profileOpen} onClose={() => setProfileOpen(false)} employee={profileEmp} org={org} onOpenTrips={() => { setProfileOpen(false); setTripsOpen(true); }} />
       <TerminateEmployeeDialog open={termOpen} onClose={() => setTermOpen(false)} employee={termEmp} onSaved={load} />

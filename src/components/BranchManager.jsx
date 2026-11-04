@@ -10,14 +10,14 @@ import { base44 } from "@/api/base44Client";
 import { Image } from "@/components/ui/image";
 import { useI18n } from "@/lib/i18n";
 import { cn } from "@/lib/utils";
-import { branchHoursLabel } from "@/lib/branchHours";
+import { branchHoursLabel, resolveBranchSchedule } from "@/lib/branchHours";
 
 const emptyForm = {
   name: "", city: "", address: "", phone: "", is_main: false, logo_url: "", lat: "", lng: "", radius: 50,
-  custom_hours: false, work_start_time: "", work_end_time: "", work_hours_per_day: "", late_grace_minutes: 15,
+  custom_hours: false, work_start_time: "", work_end_time: "", work_hours_per_day: "", late_grace_minutes: "",
 };
 
-export default function BranchManager({ open, onClose, onSaved }) {
+export default function BranchManager({ open, onClose, onSaved, org }) {
   const { lang } = useI18n();
   const isAr = lang === "ar";
   const t = isAr ? {
@@ -34,7 +34,7 @@ export default function BranchManager({ open, onClose, onSaved }) {
     geoBadge: (r) => `نطاق ${r} م`,
     hoursQ: "هل هذا الفرع لديه ساعات عمل مختلفة تُعتمد في الرواتب؟",
     yes: "نعم", no: "لا",
-    hoursYes: "يُعتمد الدوام المضبوط أدناه على موظفي هذا الفرع في البصمة واحتساب التأخير والغياب في الرواتب. ما زاد عن 8 ساعات فهو راحة غير مدفوعة (المطلوب 8 صافية) — والتأخير يُحدَّد عند الانصراف فقط.",
+    hoursYes: "تُعتمد القيم المضبوطة أدناه لهذا الفرع في البصمة واحتساب التأخير والغياب في الرواتب، وأي حقل يُترك فارغاً يعتمد قيمة المنشأة تلقائياً. ما زاد عن 8 ساعات فهو راحة غير مدفوعة (المطلوب 8 صافية) — والتأخير يُحدَّد عند الانصراف فقط.",
     hoursNo: "يُعتمد على موظفي هذا الفرع دوام المنشأة العام المضبوط في الإعدادات.",
     start: "بداية الدوام", end: "نهاية الدوام", hoursPerDay: "ساعات العمل اليومية", grace: "سماح التأخير (دقيقة)",
     hoursBadge: (s) => `دوام الفرع ${s}`,
@@ -51,7 +51,7 @@ export default function BranchManager({ open, onClose, onSaved }) {
     geoBadge: (r) => `${r} m radius`,
     hoursQ: "Does this branch have different working hours adopted in payroll?",
     yes: "Yes", no: "No",
-    hoursYes: "The hours below are adopted for this branch's employees in clocking, lateness and payroll absence. Above 8 is an unpaid break (8 net required) — lateness is decided at check-out only.",
+    hoursYes: "The values set below are adopted for this branch in clocking, lateness and payroll absence; any blank field automatically falls back to the organization value. Above 8 is an unpaid break (8 net required) — lateness is decided at check-out only.",
     hoursNo: "This branch's employees follow the organization's general working hours from settings.",
     start: "Shift start", end: "Shift end", hoursPerDay: "Daily working hours", grace: "Late grace (minutes)",
     hoursBadge: (s) => `Branch hours ${s}`,
@@ -64,6 +64,7 @@ export default function BranchManager({ open, onClose, onSaved }) {
   const [geoBusy, setGeoBusy] = useState(false);
   const [err, setErr] = useState("");
   const fileRef = useRef(null);
+  const orgDefaults = resolveBranchSchedule(org || {}, {});
 
   const load = async () => {
     const list = await base44.entities.Branch.list("-is_main", 500);
@@ -85,7 +86,7 @@ export default function BranchManager({ open, onClose, onSaved }) {
       work_start_time: b.work_start_time || "",
       work_end_time: b.work_end_time || "",
       work_hours_per_day: b.work_hours_per_day != null && b.work_hours_per_day !== "" ? b.work_hours_per_day : "",
-      late_grace_minutes: b.late_grace_minutes != null && b.late_grace_minutes !== "" ? b.late_grace_minutes : 15,
+      late_grace_minutes: b.late_grace_minutes != null && b.late_grace_minutes !== "" ? b.late_grace_minutes : "",
       id: b.id,
     });
     setErr("");
@@ -136,8 +137,8 @@ export default function BranchManager({ open, onClose, onSaved }) {
         custom_hours: !!form.custom_hours,
         work_start_time: form.work_start_time || "",
         work_end_time: form.work_end_time || "",
-        work_hours_per_day: Number(form.work_hours_per_day) || 0,
-        late_grace_minutes: Number(form.late_grace_minutes) || 0,
+        work_hours_per_day: form.work_hours_per_day === "" ? null : Number(form.work_hours_per_day) || 0,
+        late_grace_minutes: form.late_grace_minutes === "" ? null : Number(form.late_grace_minutes) || 0,
       };
       if (form.is_main) {
         await base44.entities.Branch.updateMany({ is_main: true }, { $set: { is_main: false } });
@@ -254,19 +255,19 @@ export default function BranchManager({ open, onClose, onSaved }) {
                 <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
                   <div className="space-y-1.5">
                     <Label className="text-xs text-muted-foreground">{t.start}</Label>
-                    <Input type="time" value={form.work_start_time} onChange={(e) => set("work_start_time", e.target.value)} dir="ltr" />
+                    <Input type="time" value={form.work_start_time} placeholder={orgDefaults.work_start_time || "HH:MM"} onChange={(e) => set("work_start_time", e.target.value)} dir="ltr" />
                   </div>
                   <div className="space-y-1.5">
                     <Label className="text-xs text-muted-foreground">{t.end}</Label>
-                    <Input type="time" value={form.work_end_time} onChange={(e) => set("work_end_time", e.target.value)} dir="ltr" />
+                    <Input type="time" value={form.work_end_time} placeholder={orgDefaults.work_end_time || "HH:MM"} onChange={(e) => set("work_end_time", e.target.value)} dir="ltr" />
                   </div>
                   <div className="space-y-1.5">
                     <Label className="text-xs text-muted-foreground">{t.hoursPerDay}</Label>
-                    <Input type="number" min={0} step="0.5" value={form.work_hours_per_day} onChange={(e) => set("work_hours_per_day", e.target.value)} dir="ltr" />
+                    <Input type="number" min={0} step="0.5" value={form.work_hours_per_day} placeholder={orgDefaults.work_hours_per_day > 0 ? String(orgDefaults.work_hours_per_day) : "8"} onChange={(e) => set("work_hours_per_day", e.target.value)} dir="ltr" />
                   </div>
                   <div className="space-y-1.5">
                     <Label className="text-xs text-muted-foreground">{t.grace}</Label>
-                    <Input type="number" min={0} value={form.late_grace_minutes} onChange={(e) => set("late_grace_minutes", e.target.value)} dir="ltr" />
+                    <Input type="number" min={0} value={form.late_grace_minutes} placeholder={Number.isFinite(Number(orgDefaults.late_grace_minutes)) ? String(orgDefaults.late_grace_minutes) : "0"} onChange={(e) => set("late_grace_minutes", e.target.value)} dir="ltr" />
                   </div>
                 </div>
               )}

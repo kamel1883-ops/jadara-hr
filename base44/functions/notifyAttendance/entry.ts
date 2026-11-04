@@ -1,19 +1,13 @@
 import { createClientFromRequest } from "npm:@base44/sdk@0.8.40";
 import { verifyCronSecret } from "../../shared/renewal.ts";
 import { wrapEmailContent } from "../../shared/emailFooter.ts";
+import { requiredNetHours, resolveBranchHours } from "../../shared/payrollCompute.ts";
 
 // يُستدعى تلقائياً عبر workflow عند إنشاء/تعديل سجل حضور بحالة "متأخر" أو "غياب".
 // ينشئ إشعاراً موجّهاً للموظف (بكل لغات البوابة) ويرسل بريداً للعنوان المسجل لديه.
 // تعمل عبر service-role لتفادي قيود RLS (بدون مستخدم Base44 حقيقي).
 
 const LANGS = ["ar", "en", "hi", "ne", "bn", "fil", "ur"];
-
-// سياسة الدوام الصافي: المطلوب 8 ساعات كحد أقصى (الزيادة عنها راحة غير مدفوعة).
-function requiredNetHours(hpd: any): number {
-  const h = Number(hpd) || 0;
-  if (h <= 0) return 0;
-  return h > 8 ? 8 : h;
-}
 
 function toMinutes(hm: string): number | null {
   const m = String(hm || "").match(/^(\d{1,2}):(\d{2})/);
@@ -100,28 +94,22 @@ export default async function (req: Request): Promise<Response> {
 
     // جلب الدوام المعتمد (فرع الانصراف إن كان له دوام خاص، وإلا إعدادات منشأة الموظف نفسه فقط)
     // لحساب الصافي المطلوب (8 ساعات كحد أقصى) ومدة النقص المؤهلة للخصم.
-    let hpd = 0, graceMinutes = 0;
+    let schedule = { work_hours_per_day: 0, late_grace_minutes: 0 };
     const empUnified = String(emp?.unified_number || "").trim();
     try {
       const orgs: any[] = empUnified
         ? await base44.asServiceRole.entities.Organization.filter({ unified_number: empUnified }, "-created_date", 5)
         : [];
       const org = orgs?.[0] || {};
-      hpd = Number(org.work_hours_per_day) || 0;
-      graceMinutes = Number(org.late_grace_minutes) || 0;
+      let branch: any = null;
       if (att.branch_id) {
-        try {
-          const br: any = await base44.asServiceRole.entities.Branch.get(att.branch_id);
-          const useBh = !!(br && br.custom_hours && String(br.work_start_time || "").trim() && String(br.work_end_time || "").trim());
-          if (useBh) {
-            hpd = Number(br.work_hours_per_day) || hpd;
-            graceMinutes = Number(br.late_grace_minutes) || 0;
-          }
-        } catch {}
+        try { branch = await base44.asServiceRole.entities.Branch.get(att.branch_id); } catch {}
       }
+      schedule = resolveBranchHours(org, { branch_id: att.branch_id }, branch ? [branch] : []);
     } catch {}
 
-    const required = requiredNetHours(hpd);
+    const required = requiredNetHours(schedule.work_hours_per_day);
+    const graceMinutes = schedule.late_grace_minutes;
     const actual = Number(att.work_hours) || 0;
     const hasCheckout = !!att.check_out && actual > 0;
     // النقص المؤهل للخصم (بعد السماح) — هو ما يُعرض في الإشعار ويُحتسب في الرواتب
