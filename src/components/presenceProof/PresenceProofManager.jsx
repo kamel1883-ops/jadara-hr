@@ -64,10 +64,16 @@ export default function PresenceProofManager({ org }) {
     diagCode: "رمز التشخيص",
     loading: "جارٍ التحميل...",
     payrollNote: "تنبيه: هذا الإجراء لا يغيّر سجلات الحضور ولا مسير الرواتب.",
+    voiceNote: "ولمن لا يصله تنبيه التطبيق، تُجرى مكالمة صوتية عاجلة على رقم الجوال المسجل عند تفعيل الخدمة.",
     pushSent: (sent, total) => `تم إرسال تنبيه الجوال إلى ${sent} من ${total} موظفاً مستهدفاً.`,
     pushPartial: (sent, failed, skipped) => `تم إرسال تنبيه الجوال إلى ${sent} وتعذّر ${failed}${skipped ? ` — ${skipped} بلا حساب تطبيق مرتبط` : ""}. تحقق من نسخة المتجر وإعدادات الإشعارات وربط الحسابات.`,
     pushFailed: "تعذّر إرسال تنبيه الجوال للموظفين — تحقق من تفعيل التنبيهات في نسخة المتجر وربط حسابات التطبيق.",
-    pushNoUser: "لم يُرسل تنبيه الجوال لأن الموظفين المستهدفين لا يملكون حساب تطبيق مطابقاً لبريدهم المهني. ادعُهم إلى مستخدمي التطبيق بالبريد نفسه، ثم اطلب من كل موظف تثبيت نسخة المتجر وتسجيل الدخول بذلك البريد وتفعيل التنبيهات؛ وسيربط النظام الحساب تلقائياً في الطلب التالي.",
+    pushNoUser: "لم يُرسل تنبيه الجوال لأن الموظفين المستهدفين لا يملكون حساب تطبيق مطابقاً لبريدهم المهني — وستُستخدم المكالمة الصوتية المرتبطة برقم الجوال عند تفعيلها.",
+    voiceCalled: (called) => `بدأت المكالمة الصوتية العاجلة لـ${called} من الموظفين المستهدفين على أرقام جوالاتهم.`,
+    voicePartial: (called, failed, skipped) => `بدأت المكالمة الصوتية لـ${called} وتعذّرت لـ${failed}${skipped ? ` — ${skipped} بلا رقم جوال صالح` : ""}. أكمل أرقام الجوالات في سجلات الموظفين.`,
+    voiceFailed: "تعذّرت المكالمات الصوتية العاجلة — تحقق من بيانات الاتصال الصوتي ورصيد الخدمة وأرقام الجوالات.",
+    voiceDisabled: "المكالمات الصوتية غير مفعّلة بعد — أضف بيانات الاتصال الصوتي في أسرار التطبيق لتفعيل التنبيه المرتبط برقم الجوال.",
+    voiceNoPhone: "تعذّرت المكالمة الصوتية: لا يوجد رقم جوال صالح للموظفين المستهدفين — أكمل أرقام الجوالات في سجلات الموظفين.",
   } : {
     title: "Instant presence proof",
     desc: "An urgent check for employees currently on shift only — confirm within 5 minutes. A missed confirmation appears only in follow-up; it is never automatic absence or deduction.",
@@ -97,10 +103,16 @@ export default function PresenceProofManager({ org }) {
     diagCode: "Diagnostic code",
     loading: "Loading...",
     payrollNote: "Note: this action does not change attendance records or payroll.",
+    voiceNote: "Anyone not reached by app push receives an urgent voice call on the registered mobile number when the service is enabled.",
     pushSent: (sent, total) => `Mobile push was sent to ${sent} of ${total} targeted employees.`,
     pushPartial: (sent, failed, skipped) => `Mobile push reached ${sent} but failed for ${failed}${skipped ? ` — ${skipped} have no linked app account` : ""}. Check the store build, notification settings, and account linking.`,
     pushFailed: "Mobile push could not be sent — check push setup in the store build and linked app accounts.",
-    pushNoUser: "Mobile push was not sent because the targeted employees have no app account matching their work email. Invite them with the same email, ask each one to install the store build, sign in with that email, enable notifications, and the next request will link the account automatically.",
+    pushNoUser: "Mobile push was not sent because the targeted employees have no app account matching their work email — the identity-linked voice call is used when enabled.",
+    voiceCalled: (called) => `Urgent voice calls were started for ${called} targeted employees on their mobile numbers.`,
+    voicePartial: (called, failed, skipped) => `Voice calls started for ${called} but failed for ${failed}${skipped ? ` — ${skipped} have no valid mobile number` : ""}. Complete mobile numbers in employee records.`,
+    voiceFailed: "Urgent voice calls failed — check voice credentials, service balance, and mobile numbers.",
+    voiceDisabled: "Voice calls are not enabled yet — add voice credentials to app secrets to enable mobile-number alerts.",
+    voiceNoPhone: "Voice calls were not placed: the targeted employees have no valid mobile number — complete mobile numbers in employee records.",
   };
 
   const portalArgs = useMemo(() => {
@@ -217,6 +229,22 @@ export default function PresenceProofManager({ org }) {
           ? t.pushFailed
           : t.pushNoUser;
   const pushWarn = pushStatus === "partial" || pushStatus === "failed" || pushStatus === "skipped_no_user";
+  const voiceStatus = String(request?.voice_status || "");
+  const voiceCalledCount = Number(request?.voice_called_count || 0);
+  const voiceFailedCount = Number(request?.voice_failed_count || 0);
+  const voiceSkippedCount = Number(request?.voice_skipped_count || 0);
+  const voiceDetail = !voiceStatus || voiceStatus === "not_needed"
+    ? ""
+    : voiceStatus === "called"
+      ? t.voiceCalled(voiceCalledCount)
+      : voiceStatus === "partial"
+        ? t.voicePartial(voiceCalledCount, voiceFailedCount, voiceSkippedCount)
+        : voiceStatus === "failed"
+          ? t.voiceFailed
+          : voiceStatus === "disabled"
+            ? t.voiceDisabled
+            : t.voiceNoPhone;
+  const voiceWarn = voiceStatus === "partial" || voiceStatus === "failed" || voiceStatus === "disabled" || voiceStatus === "no_phone";
 
   return (
     <div className="bg-white rounded-2xl border border-border p-4 mb-5">
@@ -229,9 +257,15 @@ export default function PresenceProofManager({ org }) {
           <p className="text-[11px] text-muted-foreground mt-1 flex items-center gap-1">
             <ShieldCheck size={12} /> {t.payrollNote}
           </p>
+          <p className="text-[11px] text-muted-foreground mt-1">{t.voiceNote}</p>
           {pushDetail && (
             <p className={pushWarn ? "text-[11px] text-amber-700 mt-1" : "text-[11px] text-muted-foreground mt-1"}>
               {pushDetail}
+            </p>
+          )}
+          {voiceDetail && (
+            <p className={voiceWarn ? "text-[11px] text-amber-700 mt-1" : "text-[11px] text-muted-foreground mt-1"}>
+              {voiceDetail}
             </p>
           )}
         </div>
