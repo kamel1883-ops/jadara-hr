@@ -1060,6 +1060,7 @@ function Partners() {
     { n: "عيادة دكتور توم البيطرية", sub: "عيادات بيطريّة", logo: "https://media.base44.com/images/public/6a74edc8f347046365c2e1a4/5ae9d2097_Screenshot2026-08-05143830.png" },
     { n: "آل معيض", sub: "شركة آل معيض", logo: "https://media.base44.com/images/public/6a74edc8f347046365c2e1a4/40f72a492_image.png" },
     { n: "شركة ومصنع الفواكه المجففة (دي فروت)", sub: "تصنيع الفواكه المجففة", logo: "https://base44.app/api/apps/6a74edc8f347046365c2e1a4/files/mp/public/6a74edc8f347046365c2e1a4/3e3cb09aa_dfruit-logo.png" },
+    { n: "عيادة كفوف ميرا البيطرية", sub: "عيادات بيطريّة", logo: "/logos/kfofmera.png" },
   ];
   return (
     <Section tint="light" heading={<Heading icon={<Network />} title="شركاؤنا" sub="الشركات والجهات الفعلية التي نتعامل معها ونخدمها" />}>

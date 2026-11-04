@@ -8,6 +8,7 @@ const CLIENTS = [
   { name: "مصنع درز للخياطة الراقية", en: "Darz Tailoring Factory", logo: "https://media.base44.com/images/public/6a74edc8f347046365c2e1a4/64e527d78_Screenshot2026-08-09155842.png" },
   { name: "آل معيض", en: "Al Moied", logo: "https://media.base44.com/images/public/6a74edc8f347046365c2e1a4/40f72a492_image.png" },
   { name: "شركة ومصنع الفواكه المجففة (دي فروت)", en: "Dfruit Dried Fruits Co. & Factory", logo: "https://base44.app/api/apps/6a74edc8f347046365c2e1a4/files/mp/public/6a74edc8f347046365c2e1a4/3e3cb09aa_dfruit-logo.png" },
+  { name: "عيادة كفوف ميرا البيطرية", en: "Kfod Mera Veterinary Clinic", logo: "/logos/kfofmera.png" },
 ];
 
 export default function ClientMarquee() {
