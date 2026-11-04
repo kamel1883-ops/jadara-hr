@@ -1,0 +1,68 @@
+{
+  "name": "EmployeePushSubscription",
+  "type": "object",
+  "properties": {
+    "unified_number": {
+      "type": "string",
+      "title": "الرقم الموحّد للمنشأة (نطاق عزل البيانات)"
+    },
+    "employee_id": {
+      "type": "string",
+      "title": "معرّف سجل الموظف (الهوية)"
+    },
+    "endpoint": {
+      "type": "string",
+      "title": "عنوان اشتراك الدفع (endpoint)"
+    },
+    "p256dh": {
+      "type": "string",
+      "title": "مفتاح الجهاز العام p256dh"
+    },
+    "auth": {
+      "type": "string",
+      "title": "سر المصادقة للجهاز auth"
+    },
+    "user_agent": {
+      "type": "string",
+      "title": "جهاز/متصفح الموظف عند التفعيل"
+    },
+    "active": {
+      "type": "boolean",
+      "default": true,
+      "title": "اشتراك فعّال"
+    },
+    "subscribed_at": {
+      "type": "number",
+      "title": "وقت التفعيل (timestamp ms)"
+    }
+  },
+  "required": [
+    "unified_number",
+    "employee_id",
+    "endpoint",
+    "p256dh",
+    "auth"
+  ],
+  "rls": {
+    "create": {
+      "user_condition": {
+        "role": "admin"
+      }
+    },
+    "read": {
+      "user_condition": {
+        "role": "admin"
+      }
+    },
+    "update": {
+      "user_condition": {
+        "role": "admin"
+      }
+    },
+    "delete": {
+      "user_condition": {
+        "role": "admin"
+      }
+    }
+  }
+}

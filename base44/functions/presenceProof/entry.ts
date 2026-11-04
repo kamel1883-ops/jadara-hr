@@ -1,6 +1,7 @@
 import { createClientFromRequest } from "npm:@base44/sdk@0.8.54";
 import { verifyToken } from "../../shared/portalToken.ts";
 import { resolveBranchSchedule } from "../../shared/branchSchedule.ts";
+import webpush from "npm:web-push@3.6.7";
 
 // طلب إثبات الحضور الفوري — نطاق المنشأة فقط.
 // يصدر طلباً واحداً نشطاً لكل منشأة، ويستهدف الموجودين في الدوام حالياً فقط.
@@ -114,6 +115,74 @@ async function resolveTenantForUser(base44: any, user: any) {
     } catch {}
   }
   return tenant || null;
+}
+
+// إشعارات الويب (Web Push): تصل للجوال والتطبيق مغلق بلا حساب تطبيق ولا بريد.
+// الموظف يفعّلها مرة من بوابة الموظف بعد الدخول برقم هويته، ويُربط اشتراكه بسجل الموظف.
+function envVar(name: string): string {
+  try {
+    const deno: any = (globalThis as any).Deno;
+    if (deno?.env?.get) return String(deno.env.get(name) || "");
+  } catch {}
+  try { return String((globalThis as any)?.process?.env?.[name] || ""); } catch {}
+  return "";
+}
+
+async function getVapid(base44: any) {
+  const envPublic = envVar("VAPID_PUBLIC_KEY");
+  const envPrivate = envVar("VAPID_PRIVATE_KEY");
+  const envSubject = envVar("VAPID_SUBJECT") || "mailto:support@jadara.app";
+  if (envPublic && envPrivate) return { publicKey: envPublic, privateKey: envPrivate, subject: envSubject };
+  const rows = asList(await base44.asServiceRole.entities.PushServerKey.list("-created_date", 5).catch(() => []));
+  const row = rows?.[0];
+  if (row?.public_key && row?.private_key) {
+    return { publicKey: String(row.public_key), privateKey: String(row.private_key), subject: String(row.subject || envSubject) };
+  }
+  const keys = webpush.generateVAPIDKeys();
+  try {
+    await base44.asServiceRole.entities.PushServerKey.create({ public_key: keys.publicKey, private_key: keys.privateKey, subject: envSubject });
+  } catch {}
+  return { publicKey: keys.publicKey, privateKey: keys.privateKey, subject: envSubject };
+}
+
+async function sendWebPush(base44: any, employeeId: string, payload: any) {
+  let subs: any[] = [];
+  try {
+    subs = asList(
+      await base44.asServiceRole.entities.EmployeePushSubscription.filter(
+        { employee_id: String(employeeId || ""), active: true }, undefined, 50
+      )
+    );
+  } catch {
+    return { sent: 0, failed: 0, devices: 0 };
+  }
+  if (!subs.length) return { sent: 0, failed: 0, devices: 0 };
+  const vapid = await getVapid(base44);
+  try {
+    webpush.setVapidDetails(vapid.subject, vapid.publicKey, vapid.privateKey);
+  } catch {
+    return { sent: 0, failed: subs.length, devices: subs.length };
+  }
+  let sent = 0;
+  let failed = 0;
+  for (const sub of subs) {
+    try {
+      await webpush.sendNotification(
+        { endpoint: String(sub?.endpoint || ""), keys: { p256dh: String(sub?.p256dh || ""), auth: String(sub?.auth || "") } },
+        JSON.stringify(payload),
+        { TTL: 600, urgency: "high" }
+      );
+      sent += 1;
+    } catch (err) {
+      failed += 1;
+      const code = Number((err as any)?.statusCode || 0);
+      // 404/410 = اشتراك منتهٍ أو أُلغي من الجوال.
+      if (code === 404 || code === 410) {
+        try { await base44.asServiceRole.entities.EmployeePushSubscription.update(String(sub?.id || ""), { active: false }); } catch {}
+      }
+    }
+  }
+  return { sent, failed, devices: subs.length };
 }
 
 async function portalContext(base44: any, body: any) {
@@ -368,6 +437,60 @@ export default async function (req) {
     }
     if (!unified) return Response.json({ ok: false, error: "no_company" }, { status: 400 });
 
+    // مفاتيح دفع الويب العامة للجوال — تُقرأ بعد تسجيل دخول الموظف برقم هويته.
+    if (action === "push_key") {
+      const ctx = await portalContext(base44, body);
+      if (!ctx) return Response.json({ ok: false, error: "invalid_session" }, { status: 401 });
+      const vapid = await getVapid(base44);
+      return Response.json({ ok: true, public_key: vapid.publicKey });
+    }
+
+    // ربط جوال الموظف بسجل هويته: يُحفظ اشتراك الدفع على الموظف نفسه، لا على بريد.
+    if (action === "push_subscribe") {
+      const ctx = await portalContext(base44, body);
+      if (!ctx) return Response.json({ ok: false, error: "invalid_session" }, { status: 401 });
+      const sub = body?.subscription || {};
+      const endpoint = String(sub?.endpoint || "").trim();
+      const p256dh = String(sub?.keys?.p256dh || "").trim();
+      const auth = String(sub?.keys?.auth || "").trim();
+      if (!endpoint || !p256dh || !auth) {
+        return Response.json({ ok: false, error: "invalid_subscription" }, { status: 400 });
+      }
+      const existing = asList(
+        await base44.asServiceRole.entities.EmployeePushSubscription.filter({ endpoint }, undefined, 5).catch(() => [])
+      );
+      const data = {
+        unified_number: ctx.unified,
+        employee_id: String(ctx.emp.id),
+        endpoint,
+        p256dh,
+        auth,
+        user_agent: String(body?.user_agent || "").slice(0, 300),
+        active: true,
+        subscribed_at: Date.now(),
+      };
+      if (existing?.[0]) {
+        await base44.asServiceRole.entities.EmployeePushSubscription.update(String(existing[0].id), data);
+      } else {
+        await base44.asServiceRole.entities.EmployeePushSubscription.create(data);
+      }
+      return Response.json({ ok: true });
+    }
+
+    if (action === "push_unsubscribe") {
+      const ctx = await portalContext(base44, body);
+      if (!ctx) return Response.json({ ok: false, error: "invalid_session" }, { status: 401 });
+      const endpoint = String(body?.endpoint || "").trim();
+      if (!endpoint) return Response.json({ ok: true });
+      const rows = asList(
+        await base44.asServiceRole.entities.EmployeePushSubscription.filter({ endpoint }, undefined, 5).catch(() => [])
+      );
+      for (const row of rows || []) {
+        try { await base44.asServiceRole.entities.EmployeePushSubscription.update(String(row.id), { active: false }); } catch {}
+      }
+      return Response.json({ ok: true });
+    }
+
     // دفع تجريبي للإدارة فقط: يستهدف الموظفين الحاضرين في الدوام الآن داخل المنشأة
     // (نفس منطق إصدار الطلب)، ويُظهر بالاسم من وصلته الدفعة ومن لا يملك حساب تطبيق مرتبط.
     if (action === "test_push") {
@@ -406,6 +529,8 @@ export default async function (req) {
         date: now.date,
         clock: now.clock,
         total: ids.length,
+        web_sent: 0,
+        web_failed: 0,
         with_phone: ids.filter((id: string) => String((byId.get(String(id)) as any)?.phone || "").trim()).length,
         details: [] as any[],
       };
@@ -431,9 +556,17 @@ export default async function (req) {
             try { await base44.asServiceRole.entities.Employee.update(String(emp.id || ""), { user_id: userId }); } catch {}
           }
         }
+        const web = await sendWebPush(base44, id, {
+          title: "\uD83D\uDD14 دفع تجريبي — إثبات الحضور",
+          body: "إشعار تجريبي من الإدارة للتأكد من وصول التنبيه والجوال مقفل. اضغطه لفتح البوابة.",
+          url: "/portal",
+          tag: "presence-proof-test",
+        });
+        test.web_sent += web.sent;
+        test.web_failed += web.failed;
         if (!userId) {
           test.skipped += 1;
-          test.details.push({ employee_id: id, name, status: "no_account" });
+          test.details.push({ employee_id: id, name, status: web.sent > 0 ? "web" : "no_account" });
           continue;
         }
         test.attempted += 1;
@@ -571,9 +704,20 @@ export default async function (req) {
         skipped: 0,
         status: "skipped_no_user",
         first_error: "",
+        web_sent: 0,
+        web_failed: 0,
       };
       for (const emp of targets) {
         const userId = String(emp?.user_id || "").trim();
+        // إشعار الجوال بلا حساب تطبيق: يصل عبر اشتراك دفع الويب المسجّل باسم الموظف نفسه.
+        const web = await sendWebPush(base44, String(emp?.id || ""), {
+          title: pushTitle,
+          body: pushBody,
+          url: "/portal",
+          tag: `presence-proof-${String(created?.id || "")}`,
+        });
+        push.web_sent += web.sent;
+        push.web_failed += web.failed;
         if (!userId) {
           push.skipped += 1;
           continue;
@@ -594,22 +738,27 @@ export default async function (req) {
           }
         }
       }
-      if (push.sent > 0 && push.failed === 0) push.status = "sent";
-      else if (push.sent > 0) push.status = "partial";
-      else if (push.failed > 0) push.status = "failed";
+      const delivered = push.sent + push.web_sent;
+      const undelivered = push.failed + push.web_failed;
+      if (delivered > 0 && undelivered === 0) push.status = "sent";
+      else if (delivered > 0) push.status = "partial";
+      else if (undelivered > 0) push.status = "failed";
       // تنبيه التطبيق فقط — دون أي اتصال صوتي.
       // يُرسل للحساب المرتبط بهوية الموظف في نفس المنشأة فقط.
       try {
         await base44.asServiceRole.entities.PresenceProofRequest.update(created.id, {
           push_status: push.status,
-          push_sent_count: push.sent,
-          push_failed_count: push.failed,
+          push_sent_count: push.sent + push.web_sent,
+          push_failed_count: push.failed + push.web_failed,
           push_skipped_count: push.skipped,
+          push_web_count: push.web_sent,
+          push_web_failed_count: push.web_failed,
         });
         created.push_status = push.status;
-        created.push_sent_count = push.sent;
-        created.push_failed_count = push.failed;
+        created.push_sent_count = push.sent + push.web_sent;
+        created.push_failed_count = push.failed + push.web_failed;
         created.push_skipped_count = push.skipped;
+        created.push_web_count = push.web_sent;
       } catch {}
       return Response.json({ ok: true, request: await hydrate(base44, created), push });
     }

@@ -37,7 +37,7 @@ export default function PresenceProofManager({ org }) {
   const isAr = lang === "ar";
   const t = isAr ? {
     title: "إثبات الحضور الفوري",
-    desc: "تنبيه عاجل للموجودين في الدوام حالياً فقط — للتأكيد خلال 5 دقائق. يصل لحساب التطبيق المرتبط بهوية الموظف في نفس المنشأة فقط، ويظهر أعلى بوابة الموظف عند فتحها. وليصل الإشعار والتطبيق مقفل: ثبّت نسخة المتجر المحدّثة (جوجل بلاي/أبل ستور) وسجّل الدخول منها، وفعّل الإشعارات مع الصوت، وأوقف الكتم وعدم الإزعاج. استخدم زر «دفع تجريبي» للتأكد قبل الاعتماد عليه. عدم التأكيد يظهر في تقرير المتابعة فقط ولا يُحتسب غياباً أو خصماً.",
+    desc: "تنبيه عاجل للموجودين في الدوام حالياً فقط — للتأكيد خلال 5 دقائق. يصل لجهاز الموظف نفسه بعد تفعيله إشعارات الجوال من بوابة الموظف برقم هويته (بلا بريد وبلا حساب إضافي)، ويصل أيضاً لحساب التطبيق إن وُجد، ويظهر أعلى بوابة الموظف عند فتحها. على آيفون: تُضاف البوابة إلى الشاشة الرئيسية أولاً ثم تُفعّل الإشعارات. استخدم زر «دفع تجريبي» للتأكد قبل الاعتماد عليه. عدم التأكيد يظهر في تقرير المتابعة فقط ولا يُحتسب غياباً أو خصماً.",
     request: "طلب إثبات الحضور الآن",
     requesting: "جارٍ إرسال التنبيه...",
     active: "طلب نشط الآن",
@@ -70,14 +70,14 @@ export default function PresenceProofManager({ org }) {
     pushNoUser: "لم يُرسل تنبيه التطبيق لأن حسابات الموظفين المستهدفين غير مرتبطة بهوياتهم بعد — يرى الموظفون التنبيه أعلى بوابة الموظف عند فتحها برقم الهوية.",
     testPush: "دفع تجريبي للحاضرين الآن",
     testing: "جارٍ إرسال الدفع التجريبي...",
-    testSent: (sent, total, missing) => `الدفع التجريبي: أُرسل إلى ${sent} من ${total} موظفاً حاضراً الآن${missing?.length ? ` — بلا حساب تطبيق مرتبط: ${missing.join("، ")}` : ""}. أقفل التطبيق تماماً وراقب شاشة الإشعارات خلال ثوانٍ.`,
-    testNone: (missing) => `الدفع التجريبي: الموظفون الحاضرون الآن بلا حساب تطبيق مرتبط${missing?.length ? ` (${missing.join("، ")})` : ""} — يدخل الموظف من نسخة المتجر بنفس بريد العمل المسجّل في الموارد البشرية مرة واحدة، ثم أعد الضغط.`,
+    testSent: (sent, total, missing) => `الدفع التجريبي: أُرسل إلى ${sent} من ${total} موظفاً حاضراً الآن${missing?.length ? ` — لم يصل إلى: ${missing.join("، ")}` : ""}. أقفل التطبيق تماماً وراقب شاشة إشعارات الجوال خلال ثوانٍ.`,
+    testNone: (missing) => `الدفع التجريبي: لم يصل لأي جهاز بعد${missing?.length ? ` — بلا جوال مفعّل للتنبيه: ${missing.join("، ")}` : ""}. كل موظف حاضر يفتح بوابة الموظف برقم هويته ويضغط «تفعيل الإذن والإشعارات» على جواله مرة واحدة، ثم أعد الضغط.`,
     testFail: "الدفع التجريبي: فشل الإرسال",
     testEmpty: "الدفع التجريبي: لا يوجد موظف في الدوام الآن — الزر يستهدف الحاضرين في هذه اللحظة فقط.",
     phoneCoverage: (withPhone, total) => `وللعلم: ${withPhone} من ${total} من هؤلاء لديهم رقم جوال مسجّل في ملف الموظف.`,
   } : {
     title: "Instant presence proof",
-    desc: "An urgent check for employees currently on shift only — confirm within 5 minutes. It reaches only the app account linked to the employee identity in the same organization, and appears at the top of the employee portal when opened. For the alert to arrive while the app is closed: install the updated store build (Google Play / App Store), sign in from it, enable notifications with sound, and turn off silent mode and Do Not Disturb. Use “Test push” to verify it before relying on it. A missed confirmation appears only in follow-up; it is never automatic absence or deduction.",
+    desc: "An urgent check for employees currently on shift only — confirm within 5 minutes. It reaches the employee’s own device once they enable phone notifications from the portal with their national ID (no email, no extra account), and also the app account if one exists; the alert also appears at the top of the employee portal. On iPhone the portal must be added to the Home Screen first. Use “Test push” to verify it before relying on it. A missed confirmation appears only in follow-up; it is never automatic absence or deduction.",
     request: "Request presence proof now",
     requesting: "Sending the urgent alert...",
     active: "Active request",
@@ -110,8 +110,8 @@ export default function PresenceProofManager({ org }) {
     pushNoUser: "App alerts were not sent because the targeted employees have no app account linked to their identities yet — they still see the alert at the top of the employee portal when opened with their national ID.",
     testPush: "Test push to on-shift staff",
     testing: "Sending the test push...",
-    testSent: (sent, total, missing) => `Test push: delivered to ${sent} of ${total} employees currently on shift${missing?.length ? ` — no linked app account: ${missing.join(", ")}` : ""}. Force-close the app and watch the notification shade within seconds.`,
-    testNone: (missing) => `Test push: the employees on shift now have no linked app account${missing?.length ? ` (${missing.join(", ")})` : ""} — each signs in once from the store app with the work email on their HR record, then retry.`,
+    testSent: (sent, total, missing) => `Test push: delivered to ${sent} of ${total} employees currently on shift${missing?.length ? ` — not delivered to: ${missing.join(", ")}` : ""}. Force-close the app and watch the phone notification shade within seconds.`,
+    testNone: (missing) => `Test push: no device received it yet${missing?.length ? ` — no notifications enabled: ${missing.join(", ")}` : ""}. Each employee on shift opens the portal with their national ID and taps “Allow notifications” once on their phone, then retry.`,
     testFail: "Test push failed",
     testEmpty: "Test push: no employee is on shift right now — this button targets only those present at this moment.",
     phoneCoverage: (withPhone, total) => `Note: ${withPhone} of ${total} of them have a phone number on file.`,
@@ -229,9 +229,12 @@ export default function PresenceProofManager({ org }) {
       } else {
         const details = Array.isArray(test.details) ? test.details : [];
         const total = details.length || (Number(test.sent || 0) + Number(test.failed || 0) + Number(test.skipped || 0));
-        const missing = details.filter((d) => d.status === "no_account").map((d) => String(d.name || "")).filter(Boolean);
+        const missing = details
+          .filter((d) => d.status === "no_account" || d.status === "missing")
+          .map((d) => String(d.name || ""))
+          .filter(Boolean);
         const failed = details.find((d) => d.status === "failed");
-        const sent = Number(test.sent || 0);
+        const sent = Number(test.sent || 0) + Number(test.web_sent || 0);
         if (sent > 0) setTestNote(t.testSent(sent, total, missing));
         else if (failed) setTestNote(`${t.testFail}${failed.error || test.first_error ? ` — ${failed.error || test.first_error}` : ""}`);
         else {

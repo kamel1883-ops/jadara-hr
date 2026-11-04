@@ -21,6 +21,7 @@ import PortalLanguageSelector from "@/components/portal/PortalLanguageSelector";
 import PortalNotificationsBell from "@/components/portal/PortalNotificationsBell";
 import PortalNotificationsSection from "@/components/portal/PortalNotificationsSection";
 import PresenceProofPrompt from "@/components/portal/PresenceProofPrompt";
+import WebPushEnabler from "@/components/portal/WebPushEnabler";
 import PortalAuthCard from "@/components/portal/PortalAuthCard";
 import { Image } from "@/components/ui/image";
 import { usePortalI18n, usePortalT, portalDir } from "@/lib/portalI18n";
@@ -396,6 +397,9 @@ export default function MyRequests() {
             </div>
 
             <PresenceProofPrompt session={session} />
+            <div className="mb-6">
+              <WebPushEnabler session={session} />
+            </div>
             {can("attendance") && (
               <EmployeeClock employee={employee} org={org} branch={branch} branches={branches} onChanged={() => load(session)} clockApi={clockApi} initialToday={todayAtt} />
             )}

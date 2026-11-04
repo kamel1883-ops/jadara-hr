@@ -1,0 +1,44 @@
+{
+  "name": "PushServerKey",
+  "type": "object",
+  "properties": {
+    "public_key": {
+      "type": "string",
+      "title": "مفتاح VAPID العام"
+    },
+    "private_key": {
+      "type": "string",
+      "title": "مفتاح VAPID الخاص (لا يخرج للواجهة)"
+    },
+    "subject": {
+      "type": "string",
+      "title": "جهة الاتصال في مفتاح VAPID"
+    }
+  },
+  "required": [
+    "public_key",
+    "private_key"
+  ],
+  "rls": {
+    "create": {
+      "user_condition": {
+        "role": "admin"
+      }
+    },
+    "read": {
+      "user_condition": {
+        "role": "admin"
+      }
+    },
+    "update": {
+      "user_condition": {
+        "role": "admin"
+      }
+    },
+    "delete": {
+      "user_condition": {
+        "role": "admin"
+      }
+    }
+  }
+}

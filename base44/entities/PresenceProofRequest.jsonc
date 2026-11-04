@@ -79,6 +79,16 @@
       "type": "number",
       "default": 0,
       "title": "عدد المستهدفين بلا حساب تطبيق مرتبط"
+    },
+    "push_web_count": {
+      "type": "number",
+      "default": 0,
+      "title": "عدد إشعارات الجوال المرسلة عبر اشتراك دفع الويب"
+    },
+    "push_web_failed_count": {
+      "type": "number",
+      "default": 0,
+      "title": "عدد إشعارات دفع الويب المتعذرة"
     }
   },
   "required": [
