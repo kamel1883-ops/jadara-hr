@@ -37,7 +37,7 @@ export default function PresenceProofManager({ org }) {
   const isAr = lang === "ar";
   const t = isAr ? {
     title: "إثبات الحضور الفوري",
-    desc: "تنبيه عاجل للموجودين في الدوام حالياً فقط — للتأكيد خلال 5 دقائق. يصل لحساب التطبيق المرتبط بهوية الموظف في نفس المنشأة فقط، ويظهر أعلى بوابة الموظف عند فتحها. وليصلك الصوت والتطبيق مغلق: ثبّت نسخة المتجر وحدّثها، وفعّل الإشعارات مع الصوت، وأوقف الكتم وعدم الإزعاج. عدم التأكيد يظهر في تقرير المتابعة فقط ولا يُحتسب غياباً أو خصماً.",
+    desc: "تنبيه عاجل للموجودين في الدوام حالياً فقط — للتأكيد خلال 5 دقائق. يصل لحساب التطبيق المرتبط بهوية الموظف في نفس المنشأة فقط، ويظهر أعلى بوابة الموظف عند فتحها. وليصل الإشعار والتطبيق مقفل: ثبّت نسخة المتجر المحدّثة (جوجل بلاي/أبل ستور) وسجّل الدخول منها، وفعّل الإشعارات مع الصوت، وأوقف الكتم وعدم الإزعاج. استخدم زر «دفع تجريبي» للتأكد قبل الاعتماد عليه. عدم التأكيد يظهر في تقرير المتابعة فقط ولا يُحتسب غياباً أو خصماً.",
     request: "طلب إثبات الحضور الآن",
     requesting: "جارٍ إرسال التنبيه...",
     active: "طلب نشط الآن",
@@ -68,9 +68,15 @@ export default function PresenceProofManager({ org }) {
     pushPartial: (sent, failed, skipped, firstError) => `تم إرسال تنبيه التطبيق إلى ${sent} وتعذّر ${failed}${skipped ? ` — ${skipped} بلا حساب تطبيق مرتبط بهويته` : ""}${firstError ? ` — التشخيص: ${firstError}` : ""}. للتطبيق المغلق: نسخة المتجر المحدّثة + الإشعارات والصوت مفعّلة + إيقاف الكتم وعدم الإزعاج.`,
     pushFailed: "تعذّر إرسال تنبيه التطبيق للموظفين — تحقق من نسخة المتجر المحدّثة وتفعيل الإشعارات مع الصوت وربط الحسابات بالهويات، وأوقف الكتم وعدم الإزعاج.",
     pushNoUser: "لم يُرسل تنبيه التطبيق لأن حسابات الموظفين المستهدفين غير مرتبطة بهوياتهم بعد — يرى الموظفون التنبيه أعلى بوابة الموظف عند فتحها برقم الهوية.",
+    testPush: "دفع تجريبي للشاشة المقفلة",
+    testing: "جارٍ إرسال الدفع التجريبي...",
+    testSent: "الدفع التجريبي: تم الإرسال — أقفل التطبيق تماماً وراقب شاشة إشعارات الجوال خلال ثوانٍ.",
+    testNone: "الدفع التجريبي: لا يوجد حساب تطبيق مرتبط — سجّل الموظف دخوله من نسخة المتجر أولاً.",
+    testFail: "الدفع التجريبي: فشل الإرسال",
+    testEmpty: "الدفع التجريبي: لا يوجد مستهدفون بعد — أصدر طلباً أولاً ثم جرّب.",
   } : {
     title: "Instant presence proof",
-    desc: "An urgent check for employees currently on shift only — confirm within 5 minutes. It reaches only the app account linked to the employee identity in the same organization, and appears at the top of the employee portal when opened. To hear it with the app closed: install/update the store app, enable notifications with sound, and turn off silent mode and Do Not Disturb. A missed confirmation appears only in follow-up; it is never automatic absence or deduction.",
+    desc: "An urgent check for employees currently on shift only — confirm within 5 minutes. It reaches only the app account linked to the employee identity in the same organization, and appears at the top of the employee portal when opened. For the alert to arrive while the app is closed: install the updated store build (Google Play / App Store), sign in from it, enable notifications with sound, and turn off silent mode and Do Not Disturb. Use “Test push” to verify it before relying on it. A missed confirmation appears only in follow-up; it is never automatic absence or deduction.",
     request: "Request presence proof now",
     requesting: "Sending the urgent alert...",
     active: "Active request",
@@ -101,6 +107,12 @@ export default function PresenceProofManager({ org }) {
     pushPartial: (sent, failed, skipped, firstError) => `App alerts reached ${sent} but failed for ${failed}${skipped ? ` — ${skipped} have no app account linked to their identity` : ""}${firstError ? ` — diagnostic: ${firstError}` : ""}. For closed-app sound: updated store app + notifications with sound on + silent/DND off.`,
     pushFailed: "App alerts could not be sent — check the updated store build, notifications with sound, identity-linked app accounts, and turn off silent mode / Do Not Disturb.",
     pushNoUser: "App alerts were not sent because the targeted employees have no app account linked to their identities yet — they still see the alert at the top of the employee portal when opened with their national ID.",
+    testPush: "Test push to locked screen",
+    testing: "Sending the test push...",
+    testSent: "Test push sent — force-close the app and watch the phone notification shade within seconds.",
+    testFail: "Test push failed",
+    testNone: "Test push: no linked app account — the employee must sign in from the store app first.",
+    testEmpty: "Test push: no targets yet — issue a request first, then try.",
   };
 
   const portalArgs = useMemo(() => {
@@ -116,6 +128,8 @@ export default function PresenceProofManager({ org }) {
 
   const [request, setRequest] = useState(null);
   const [pushInfo, setPushInfo] = useState(null);
+  const [testBusy, setTestBusy] = useState(false);
+  const [testNote, setTestNote] = useState("");
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
@@ -201,6 +215,30 @@ export default function PresenceProofManager({ org }) {
     }
   };
 
+  const sendTestPush = async () => {
+    setTestBusy(true);
+    setTestNote("");
+    try {
+      const res = await base44.functions.invoke("presenceProof", { ...portalArgs, action: "test_push" });
+      const data = res?.data || res;
+      const test = data?.test || {};
+      if (!data?.ok) {
+        setTestNote(data?.error === "no_targets_yet" ? t.testEmpty : t.testFail);
+      } else if (Number(test.sent || 0) > 0) {
+        setTestNote(t.testSent);
+      } else if (Number(test.failed || 0) > 0) {
+        setTestNote(`${t.testFail}${test.first_error ? ` — ${test.first_error}` : ""}`);
+      } else {
+        setTestNote(t.testNone);
+      }
+    } catch (err) {
+      const { payload } = presenceFailure(err);
+      setTestNote(`${t.testFail}${payload?.error ? ` — ${payload.error}` : ""}`);
+    } finally {
+      setTestBusy(false);
+    }
+  };
+
   const proofDisabled = org && org.presence_proof_enabled === false;
   const active = request && request.status === "active";
   const remaining = active ? Math.max(0, Number(request.deadline_at || 0) - nowMs) : 0;
@@ -238,11 +276,21 @@ export default function PresenceProofManager({ org }) {
             </p>
           )}
         </div>
-        <Button onClick={sendRequest} disabled={busy || active || proofDisabled} className="gap-2 shrink-0">
-          {busy ? <Loader2 size={16} className="animate-spin" /> : <AlarmCheck size={16} />}
-          {busy ? t.requesting : t.request}
-        </Button>
+        <div className="flex flex-col gap-2 shrink-0">
+          <Button onClick={sendRequest} disabled={busy || active || proofDisabled} className="gap-2">
+            {busy ? <Loader2 size={16} className="animate-spin" /> : <AlarmCheck size={16} />}
+            {busy ? t.requesting : t.request}
+          </Button>
+          <Button onClick={sendTestPush} disabled={testBusy || proofDisabled} variant="outline" className="gap-2">
+            {testBusy ? <Loader2 size={16} className="animate-spin" /> : <BellRing size={16} />}
+            {testBusy ? t.testing : t.testPush}
+          </Button>
+        </div>
       </div>
+
+      {testNote && (
+        <p className="mt-2 text-[11px] text-muted-foreground">{testNote}</p>
+      )}
 
       {error && (
         <div className="mt-3 text-sm text-rose-700 bg-rose-50 border border-rose-200 rounded-xl px-3 py-2">

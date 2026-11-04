@@ -323,6 +323,56 @@ export default async function (req) {
     }
     if (!unified) return Response.json({ ok: false, error: "no_company" }, { status: 400 });
 
+    // دفع تجريبي للإدارة فقط: يرسل إشعار شاشة حقيقي لنسخ المتجر دون إنشاء طلب،
+    // للتحقق من وصول الإشعار والتطبيق مغلق قبل الاعتماد عليه.
+    if (action === "test_push") {
+      const wantedId = String(body?.employee_id || "").trim();
+      const rows = asList(
+        await base44.asServiceRole.entities.PresenceProofRequest.filter({ unified_number: unified }, "-requested_at", 5).catch(() => [])
+      );
+      const latest = rows?.[0] || null;
+      let ids: string[] = wantedId ? [wantedId] : parseJsonArray(latest?.target_ids);
+      if (!ids.length) return Response.json({ ok: false, error: "no_targets_yet" }, { status: 400 });
+      const employees = asList(
+        await base44.asServiceRole.entities.Employee.filter({ unified_number: unified }, "-created_date", 5000).catch(() => [])
+      );
+      const byId = new Map((employees || []).map((e: any) => [String(e?.id || ""), e]));
+      const test = { attempted: 0, sent: 0, failed: 0, skipped: 0, first_error: "" };
+      for (const id of ids) {
+        const emp = byId.get(String(id || ""));
+        if (!emp) continue;
+        let userId = String((emp as any)?.user_id || "").trim();
+        if (!userId) {
+          const key = String((emp as any)?.email || "").trim().toLowerCase();
+          if (key) {
+            try {
+              const users = asList(await base44.asServiceRole.entities.User.filter({ email: key }, undefined, 5));
+              const hit = (users || []).find((u: any) => String(u?.email || "").trim().toLowerCase() === key);
+              userId = String(hit?.id || "");
+            } catch {}
+          }
+        }
+        if (!userId) { test.skipped += 1; continue; }
+        test.attempted += 1;
+        try {
+          await base44.asServiceRole.integrations.Core.SendPushNotification({
+            user_id: userId,
+            title: "🔔 دفع تجريبي — إثبات الحضور",
+            content: "هذا إشعار تجريبي من الإدارة للتأكد من وصول التنبيه وشاشة الجوال مغلقة. اضغطه لفتح التطبيق.",
+            action_label: "افتح التطبيق الآن",
+            action_url: "/portal",
+          });
+          test.sent += 1;
+        } catch (err) {
+          test.failed += 1;
+          if (!test.first_error) {
+            try { test.first_error = String(err?.message || err?.code || "send_failed").slice(0, 160); } catch {}
+          }
+        }
+      }
+      return Response.json({ ok: true, test });
+    }
+
     if (action === "request") {
       const orgs = asList(
         await base44.asServiceRole.entities.Organization.filter({ unified_number: unified }, "-created_date", 5).catch(() => [])
