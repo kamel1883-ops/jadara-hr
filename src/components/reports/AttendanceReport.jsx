@@ -7,7 +7,7 @@ import { printReport } from "@/lib/reportPrint";
 import DocApprovalMark from "@/components/docs/DocApprovalMark";
 import { useToast } from "@/components/ui/use-toast";
 import { cn } from "@/lib/utils";
-import { attendanceStatusLabel, isOrgWeeklyOff, todayISO } from "@/lib/hr";
+import { attendanceDisplayStatus, isOrgWeeklyOff, todayISO } from "@/lib/hr";
 import { useI18n } from "@/lib/i18n";
 
 const MONTHS = {
@@ -256,7 +256,7 @@ export default function AttendanceReport({ org }) {
           </TableHeader>
           <TableBody>
           {sel.rows.map((r) => {
-            const s = attendanceStatusLabel(r.status);
+            const s = attendanceDisplayStatus(r);
             const dStr = String(r.date || "").slice(0, 10);
             const weeklyOff = isOrgWeeklyOff(dStr, org);
             return (

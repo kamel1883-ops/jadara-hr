@@ -29,7 +29,7 @@ import {
   CalendarPlus, Wallet, Loader2, BadgeCheck, Clock, Banknote, CalendarCheck, Plane, LogOut, Crown, ArrowRight, Building2, Package, MessageSquareWarning
 } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { leaveTypeLabel, formatCurrency, attendanceStatusLabel } from "@/lib/hr";
+import { leaveTypeLabel, formatCurrency, attendanceDisplayStatus } from "@/lib/hr";
 import { badge } from "@/lib/approvals";
 import { entitledLeaveDays, usedLeaveTotal } from "@/lib/leaveBalance";
 import { computeSettlement } from "@/lib/eos";
@@ -434,7 +434,7 @@ export default function MyRequests() {
                         </thead>
                         <tbody>
                           {attendance.map((a) => {
-                            const st = attendanceStatusLabel(a.status);
+                            const st = attendanceDisplayStatus(a);
                             return (
                               <tr key={a.id} className="border-t border-border">
                                 <td className="py-2">{a.date}</td>

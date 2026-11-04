@@ -10,7 +10,9 @@ import {
 } from "@/components/ui/select";
 import { CalendarCheck, Plus, CalendarOff } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { todayISO, attendanceStatusLabel, isOrgWeeklyOff, dayNameAr } from "@/lib/hr";
+import { todayISO, attendanceDisplayStatus, isOrgWeeklyOff, dayNameAr } from "@/lib/hr";
+import { resolveWorkHours } from "@/lib/branchHours";
+import { requiredNetHours } from "@/lib/payrollCompute";
 // dayNameAr يُستخدم فقط في الفرع العربي للإجازة الأسبوعية؛ الفرع الإنجليزي يستخدم toLocaleDateString داخل العنصر.
 import { useI18n } from "@/lib/i18n";
 import AttendanceReport from "@/components/reports/AttendanceReport";
@@ -225,7 +227,7 @@ export default function Attendance() {
                         {branchFilter !== "all" && <td className="px-4 py-3 text-xs text-muted-foreground">{r.branch_name || "—"}</td>}
                         <td className="px-4 py-3 tabular-nums">{r.check_in || "-"}</td>
                         <td className="px-4 py-3 tabular-nums">{r.check_out || "-"}</td>
-                        <td className="px-4 py-3"><StatusBadge status={r.status} /></td>
+                        <td className="px-4 py-3"><StatusBadge record={r} employees={employees} branches={branches} org={org} isAr={isAr} /></td>
                         <td className="px-4 py-3">
                           <Select value={r.status} onValueChange={(v) => updateStatus(r, v)}>
                             <SelectTrigger className="w-32 h-8 text-xs"><SelectValue /></SelectTrigger>
@@ -258,7 +260,33 @@ export default function Attendance() {
   );
 }
 
-function StatusBadge({ status }) {
-  const s = attendanceStatusLabel(status);
-  return <span className={cn("text-xs px-2.5 py-1 rounded-full font-medium", s.cls)}>{s.label}</span>;
+function StatusBadge({ record, employees, branches, org, isAr }) {
+  const s = attendanceDisplayStatus(record);
+  const employee = (employees || []).find((e) => e.id === record?.employee_id);
+  const branch = (branches || []).find((b) => String(b.id) === String(record?.branch_id || employee?.branch_id || ""));
+  const hours = resolveWorkHours(org || {}, branch);
+  const required = requiredNetHours(hours.work_hours_per_day);
+  const grace = Number(hours.late_grace_minutes) || 0;
+  const open = record?.status === "present" && record?.check_in && !record?.check_out;
+  const closedNet = record?.check_out ? Number(record?.work_hours) || 0 : 0;
+  const title = isAr
+    ? "الصافي = الانصراف − الحضور − الاستراحات المسجلة. يُحدَّد التأخير عند الانصراف فقط."
+    : "Net = check-out − check-in − recorded breaks. Lateness is decided at check-out only.";
+  return (
+    <div>
+      <span title={title} className={cn("text-xs px-2.5 py-1 rounded-full font-medium", s.cls)}>{s.label}</span>
+      {open && required > 0 && (
+        <div className="mt-1 text-[11px] text-muted-foreground tabular-nums">
+          {isAr
+            ? `المطلوب الصافي: ${required.toFixed(1)} س${grace ? ` · السماح: ${grace} د` : ""}`
+            : `Required net: ${required.toFixed(1)} h${grace ? ` · Grace: ${grace} min` : ""}`}
+        </div>
+      )}
+      {record?.check_out && closedNet > 0 && required > 0 && (
+        <div className="mt-1 text-[11px] text-muted-foreground tabular-nums">
+          {isAr ? `الصافي: ${closedNet.toFixed(1)} / ${required.toFixed(1)} س` : `Net: ${closedNet.toFixed(1)} / ${required.toFixed(1)} h`}
+        </div>
+      )}
+    </div>
+  );
 }

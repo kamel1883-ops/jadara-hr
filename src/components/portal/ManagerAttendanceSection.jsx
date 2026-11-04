@@ -1,9 +1,10 @@
 import React, { useState, useMemo } from "react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
-import { Calendar, Printer, Search, Fingerprint } from "lucide-react";
+import { Calendar, Printer, Search } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { usePortalI18n, usePortalT, portalDir } from "@/lib/portalI18n";
+import { usePortalI18n, portalDir } from "@/lib/portalI18n";
+import { attendanceDisplayStatus } from "@/lib/hr";
 
 const STATUS_CLS = {
   present: "bg-emerald-50 text-emerald-700",
@@ -25,13 +26,7 @@ export default function ManagerAttendanceSection({ records = [], subs = [] }) {
     return sorted.filter((r) => (r.national_id || "").includes(term) || (r.employee_name || "").includes(term));
   }, [records, q]);
 
-  const statusLabel = (s) => ({
-    present: isAr ? "حاضر" : "Present",
-    late: isAr ? "متأخر" : "Late",
-    leave: isAr ? "إجازة" : "Leave",
-    absent: isAr ? "غائب" : "Absent",
-    holiday: isAr ? "عطلة" : "Holiday",
-  })[s] || s;
+  const statusLabel = (record) => attendanceDisplayStatus(record).label;
 
   const print = () => window.print();
 
@@ -86,7 +81,7 @@ export default function ManagerAttendanceSection({ records = [], subs = [] }) {
             <div className="col-span-1 tabular-nums">{Number(r.work_hours || 0).toFixed(1)}</div>
             <div className="col-span-2">
               <span className={cn("px-1.5 py-0.5 rounded-full text-[11px]", STATUS_CLS[r.status] || "bg-slate-100 text-slate-600")}>
-                {statusLabel(r.status)}
+                {statusLabel(r)}
               </span>
             </div>
           </div>

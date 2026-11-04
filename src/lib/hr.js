@@ -142,6 +142,26 @@ export function attendanceStatusLabel(status) {
   return map[status] || { label: status, cls: "bg-slate-100 text-slate-600" };
 }
 
+// عرض السجل المفتوح (بصمة حضور بلا انصراف) كـ «موجود بالعمل» مع بقاء الحالة
+// المخزنة present لضمان توافق التقارير والرواتب — يُقبل سجلاً أو حالة نصية.
+export function attendanceDisplayStatus(recordOrStatus) {
+  const record = recordOrStatus && typeof recordOrStatus === "object" ? recordOrStatus : null;
+  const stored = String(record?.status ?? recordOrStatus ?? "");
+  const open = stored === "present" && record?.check_in && !record?.check_out;
+  if (!open) return attendanceStatusLabel(stored);
+  const lang = activeLang();
+  const map = {
+    ar: "موجود بالعمل",
+    en: "On duty",
+    hi: "ड्यूटी पर मौजूद",
+    ne: "ड्युटीमा उपस्थित",
+    bn: "ডিউটিতে উপস্থিত",
+    fil: "Nasa duty",
+    ur: "ڈیوٹی پر موجود",
+  };
+  return { key: "on_duty", label: map[lang] || map.en, cls: "bg-emerald-50 text-emerald-700" };
+}
+
 // أسماء أيام الأسبوع بالعربية مفهرسة حسب getDay() (0=الأحد ... 6=السبت)
 export const WEEK_DAYS_AR = ["الأحد", "الاثنين", "الثلاثاء", "الأربعاء", "الخميس", "الجمعة", "السبت"];
 
