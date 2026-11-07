@@ -34,7 +34,7 @@ export default function EndOfService() {
     empInfo: (e) => `الراتب الأساسي: ${formatCurrency(e.base_salary)} • بدل السكن: ${formatCurrency(e.housing_allowance)} • رصيد الإجازات: محسوب تلقائياً (21 يوماً لأول 5 سنوات + 30 يوماً بعدها) • استحقاق التذكرة: ${e.ticket_entitlement === "yearly" ? "سنوي" : e.ticket_entitlement === "biennial" ? "كل سنتين" : "لا يستحق"}`,
     loading: "جارٍ التحميل...", preview: "معاينة المخالصة", savePrint: "حفظ وطباعة", saving: "جارٍ الحفظ...", printOnly: "طباعة فقط",
     savedH: "المخالصات المحفوظة", print: "طباعة",
-    note: "نصف شهر عن كل سنة من أول 5 سنوات ثم شهر كامل عن كل سنة بعدها. الاستقالة تُخفض المكافأة حسب المدة (مادة 85). الفصل لأسباب مشروعة (مادة 80) لا يستحق مكافأة. المخالصة تحسب مكافأة نهاية الخدمة + تصفية رصيد الإجازات المتبقي، وقيمة التذكرة مفتوحة (اختيارية) يضيفها المسؤول يدوياً إن رغبت الشركة. تُطبع المخالصة بشعار المنشأة المُعرّف في الإعدادات.",
+    note: "نصف شهر عن كل سنة من أول 5 سنوات ثم شهر كامل عن كل سنة بعدها. الاستقالة تُخفض المكافأة حسب المدة (مادة 85). الفصل لأسباب مشروعة (مادة 80) لا يستحق مكافأة. المخالصة تحسب مكافأة نهاية الخدمة + تصفية رصيد الإجازات المتبقي + البنود الإضافية المعبأة، وقيمة التذكرة مفتوحة (اختيارية) يضيفها المسؤول يدوياً إن رغبت الشركة. تُطبع المخالصة بشعار المنشأة المُعرّف في الإعدادات.",
     eosFlow: "مسار الموافقة: الموارد البشرية ← المالية (تأكيد السداد بإثبات) ← إقفال الموظف نهائياً",
     stDraft: "مسودة", stFin: "بانتظار المالية", stDone: "تم الصرف وإقفال الموظف", stRejected: "مرفوض", stSettled: "مُحوّلة",
     hrApprove: "اعتماد وتحويل للمالية", pay: "تأكيد الصرف + إثبات", reject: "رفض",
@@ -45,6 +45,10 @@ export default function EndOfService() {
     hrWarn: "عند الاعتماد تُحوّل المخالصة إلى المالية لإثبات السداد ثم الإقفال النهائي.",
     payWarn: "عند التأكيد يُسجّل إثبات التحويل ويُقفل الموظف نهائياً (حالته تُحدّث إلى منتهي/مستقيل).",
     deductionLabel: "مستحقات دائنة (تُخصم)", deductionPh: "بيان الخصم", additionLabel: "مستحقات إضافية (تُضاف للموظف)", additionPh: "بيان الإضافة", settleTotal: "الإجمالي بعد الخصم/الإضافة",
+    extraTitle: "بنود مالية إضافية (اختيارية — تُضاف لإجمالي المخالصة)",
+    extraLabelPh: "مسمى البند — مثال: أوفرتايم، بدل، هدية، مكافأة صاحب العمل",
+    extraAmountPh: "القيمة (ر.س)",
+    extraHint: "4 بنود شاغرة: اترك الصف فارغاً لتجاهله — المعبأ فقط يُضاف للإجمالي ويُطبع في المخالصة ويُحفظ معها.",
     contractActiveWarn: "عقد هذا الموظف ساري ولم يُفسخ بعد. يمكنك احتساب المخالصة وطباعتها كمسودة فقط. لن يتاح الحفظ والإرسال للمالية إلا بعد فسخ العقد فعلياً في ملف الموظف.",
     contractTerminatedOk: "تم فسخ عقد هذا الموظف. يمكنك حفظ المخالصة وإرسالها للمالية لاعتماد الصرف.",
     draftOnly: "مسودة فقط",
@@ -58,7 +62,7 @@ export default function EndOfService() {
     empInfo: (e) => `Base: ${formatCurrency(e.base_salary)} • Housing: ${formatCurrency(e.housing_allowance)} • Leave balance: auto-calculated (21 days first 5 years + 30 days after) • Ticket: ${e.ticket_entitlement === "yearly" ? "Yearly" : e.ticket_entitlement === "biennial" ? "Biennial" : "None"}`,
     loading: "Loading...", preview: "Settlement preview", savePrint: "Save & print", saving: "Saving...", printOnly: "Print only",
     savedH: "Saved settlements", print: "Print",
-    note: "Half a month per year for the first 5 years, then a full month per year. Resignation reduces the award by tenure (Art. 85). Dismissal for cause (Art. 80) is not entitled. The settlement computes EOS + remaining leave balance; ticket value is open (optional) and added manually by the admin if the company wishes. Printed with the organization logo set in settings.",
+    note: "Half a month per year for the first 5 years, then a full month per year. Resignation reduces the award by tenure (Art. 85). Dismissal for cause (Art. 80) is not entitled. The settlement computes EOS + remaining leave balance + filled extra items; ticket value is open (optional) and added manually by the admin if the company wishes. Printed with the organization logo set in settings.",
     eosFlow: "Approval flow: HR ← Finance (settlement with proof) ← close the employee permanently",
     stDraft: "Draft", stFin: "Awaiting finance", stDone: "Paid & employee closed", stRejected: "Rejected", stSettled: "Transferred",
     hrApprove: "Approve & send to finance", pay: "Confirm settlement + proof", reject: "Reject",
@@ -69,6 +73,10 @@ export default function EndOfService() {
     hrWarn: "On approval the settlement moves to finance for payment proof and final closure.",
     payWarn: "On confirmation the transfer proof is recorded and the employee is closed permanently (status set to terminated/resigned).",
     deductionLabel: "Debit dues (deducted)", deductionPh: "Deduction note", additionLabel: "Additional dues (added)", additionPh: "Addition note", settleTotal: "Total after deduction/addition",
+    extraTitle: "Additional financial items (optional — added to the settlement total)",
+    extraLabelPh: "Item name — e.g. overtime, allowance, gift, employer bonus",
+    extraAmountPh: "Value (SAR)",
+    extraHint: "4 blank rows: leave a row empty to ignore it — only filled rows are added to the total, printed, and saved.",
     contractActiveWarn: "This employee's contract is still active. You may calculate and print the settlement as a draft only. Saving and sending to finance is locked until the contract is actually terminated in the employee file.",
     contractTerminatedOk: "This employee's contract has been terminated. You can save the settlement and send it to finance for payout approval.",
     draftOnly: "Draft only",
@@ -96,6 +104,12 @@ export default function EndOfService() {
   const [deductionNote, setDeductionNote] = useState("");
   const [additionAmount, setAdditionAmount] = useState("");
   const [additionNote, setAdditionNote] = useState("");
+  // 4 بنود مالية إضافية حرة (مسمى + قيمة): الشاغر يُتجاهل، والمعبأ يُضاف للإجمالي ويُطبع ويُحفظ.
+  const [extras, setExtras] = useState([
+    { label: "", amount: "" }, { label: "", amount: "" },
+    { label: "", amount: "" }, { label: "", amount: "" },
+  ]);
+  const setExtra = (i, key, value) => setExtras((prev) => prev.map((x, j) => (j === i ? { ...x, [key]: value } : x)));
 
   const load = async () => {
     setLoading(true);
@@ -121,6 +135,8 @@ export default function EndOfService() {
 
   useEffect(() => {
     if (!empId) { setEmpLeaves([]); return; }
+    // تصفير البنود الإضافية عند تبديل الموظف حتى لا تتسرب بنود موظف لآخر.
+    setExtras([{ label: "", amount: "" }, { label: "", amount: "" }, { label: "", amount: "" }, { label: "", amount: "" }]);
     base44.entities.LeaveRequest.filter({ employee_id: empId }, "-created_date", 500)
       .then(setEmpLeaves).catch(() => setEmpLeaves([]));
   }, [empId]);
@@ -158,7 +174,13 @@ export default function EndOfService() {
     const ent = entitledLeaveDays(emp, org, asOf);
     const used = usedLeaveTotal(emp, empLeaves);
     const remaining = Math.max(0, Math.round((ent - used) * 100) / 100);
-    const set = computeSettlement({ employee: emp, org, lastWorkingDate: lwd, reason, ticketAmount, leaveBalance: remaining });
+    const set = computeSettlement({ employee: emp, org, lastWorkingDate: lwd, reason, ticketAmount, leaveBalance: remaining, extraItems: extras });
+    // تسطيح البنود الإضافية (4 مسميات + 4 قيم) لتُحفظ مع السجل وتُطبع منه.
+    const extraFlat = {};
+    (set.extraItems || []).forEach((x, i) => {
+      extraFlat[`extra${i + 1}_label`] = x.label;
+      extraFlat[`extra${i + 1}_amount`] = x.amount;
+    });
     // الهوية من الخزنة السعودية عند تفعيلها (عبر emp_ref)، أو من الحقل المحلي (النمط القديم)
     const idSrc = enrichedEmp || emp;
     const record = {
@@ -171,6 +193,7 @@ export default function EndOfService() {
       basis: set.basis, monthly_wage: set.monthlyWage, daily_wage: set.dailyWage, fraction_label: set.fractionLabel,
       eos_amount: set.amount, leave_balance_days: set.leaveBalance, leave_cash: set.leaveCash,
       ticket_entitlement: set.ticketEntitlement, ticket_amount: set.ticketAmount,
+      extra_total: set.extraTotal, ...extraFlat,
       total_settlement: set.total_settlement, generated_date: todayISO(), status: "draft",
     };
     setPreview({ ...record, employee_name_full: record.employee_name });
@@ -186,6 +209,11 @@ export default function EndOfService() {
         monthly_wage: preview.monthly_wage, daily_wage: preview.daily_wage,
         fraction_label: preview.fraction_label, description: preview.description,
         eos_amount: preview.eos_amount, leave_cash: preview.leave_cash, ticket_amount: preview.ticket_amount,
+        extra_total: preview.extra_total,
+        extra1_label: preview.extra1_label, extra1_amount: preview.extra1_amount,
+        extra2_label: preview.extra2_label, extra2_amount: preview.extra2_amount,
+        extra3_label: preview.extra3_label, extra3_amount: preview.extra3_amount,
+        extra4_label: preview.extra4_label, extra4_amount: preview.extra4_amount,
       };
       const eosRef = await writeRecordToVault(VAULT_MODULES.eos, null, vaultData);
       // تعمية الهوية في Base44 — تُحفظ في الخزنة عبر emp_ref فقط
@@ -214,7 +242,7 @@ export default function EndOfService() {
       try {
         const v = await readRecordFromVault(VAULT_MODULES.eos, rec.eos_ref);
         if (v) {
-          for (const k of ["basis", "reason_note", "fraction_label", "description", "monthly_wage", "daily_wage", "eos_amount", "leave_cash", "ticket_amount", "hr_note", "finance_note", "deduction_note", "addition_note"]) {
+          for (const k of ["basis", "reason_note", "fraction_label", "description", "monthly_wage", "daily_wage", "eos_amount", "leave_cash", "ticket_amount", "extra_total", "extra1_label", "extra1_amount", "extra2_label", "extra2_amount", "extra3_label", "extra3_amount", "extra4_label", "extra4_amount", "hr_note", "finance_note", "deduction_note", "addition_note"]) {
             if (v[k] !== undefined && v[k] !== null && v[k] !== "") r[k] = v[k];
           }
         }
@@ -244,7 +272,7 @@ export default function EndOfService() {
       const s = acting.req;
       const ded = Math.max(0, Number(deductionAmount) || 0);
       const add = Math.max(0, Number(additionAmount) || 0);
-      const baseTotal = (Number(s.eos_amount) || 0) + (Number(s.leave_cash) || 0) + (Number(s.ticket_amount) || 0);
+      const baseTotal = (Number(s.eos_amount) || 0) + (Number(s.leave_cash) || 0) + (Number(s.ticket_amount) || 0) + (Number(s.extra_total) || 0);
       const total = Math.max(0, baseTotal + add - ded);
       // تحديث السجل الحساس في الخزنة بملاحظات الموارد البشرية والخصومات
       if (s.eos_ref) {
@@ -368,7 +396,19 @@ export default function EndOfService() {
             <Input type="number" dir="ltr" value={ticketAmount} placeholder="0" onChange={(e) => setTicketAmount(e.target.value)} />
             <span className="text-xs text-muted-foreground">{t.ticketHint}</span>
           </div>
-          <div className="flex items-end">
+          <div className="space-y-1.5 md:col-span-3">
+            <Label className="text-xs font-medium flex items-center gap-1 text-muted-foreground"><FileText size={14} /> {t.extraTitle}</Label>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+              {extras.map((x, i) => (
+                <div key={i} className="flex gap-2">
+                  <Input value={x.label} placeholder={`${t.extraLabelPh}`} onChange={(e) => setExtra(i, "label", e.target.value)} className="text-xs" />
+                  <Input type="number" dir="ltr" value={x.amount} placeholder={t.extraAmountPh} onChange={(e) => setExtra(i, "amount", e.target.value)} className="text-xs w-32 shrink-0" />
+                </div>
+              ))}
+            </div>
+            <span className="text-xs text-muted-foreground">{t.extraHint}</span>
+          </div>
+          <div className="flex items-end md:col-span-3">
             <Button onClick={compute} disabled={!emp} className="w-full gap-2"><Calculator size={18} /> {t.calc}</Button>
           </div>
         </div>

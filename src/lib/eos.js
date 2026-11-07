@@ -206,7 +206,7 @@ export function computeGOSI({ employee, org }) {
   };
 }
 
-export function computeSettlement({ employee, org, lastWorkingDate, reason, leaveBalance, ticketAmount }) {
+export function computeSettlement({ employee, org, lastWorkingDate, reason, leaveBalance, ticketAmount, extraItems }) {
   const basis = org?.eos_basis || "gross";
   const eos = computeEOS({ employee, lastWorkingDate, reason, basis });
   const lb = leaveBalance != null ? Number(leaveBalance) : (Number(employee.leave_balance) || 0);
@@ -223,8 +223,14 @@ export function computeSettlement({ employee, org, lastWorkingDate, reason, leav
       if (currentYear - lastUsed >= cycle) ticketVal = empTicket;
     }
   }
-  const total = Number((eos.amount + leaveCash + ticketVal).toFixed(2));
-  return { ...eos, basis, leaveBalance: lb, leaveCash, ticketEntitlement: employee.ticket_entitlement, ticketValue: ticketVal, ticketAmount: ticketVal, total_settlement: total };
+  // بنود مالية إضافية حرة (بدل/أوفرتايم/هدية/مكافأة صاحب العمل...): المعبأ فقط يُحتسب.
+  const extras = (Array.isArray(extraItems) ? extraItems : [])
+    .map((x) => ({ label: String(x?.label || "").trim(), amount: Math.max(0, Number(x?.amount) || 0) }))
+    .filter((x) => x.label || x.amount > 0)
+    .slice(0, 4);
+  const extraTotal = Number(extras.reduce((s, x) => s + x.amount, 0).toFixed(2));
+  const total = Number((eos.amount + leaveCash + ticketVal + extraTotal).toFixed(2));
+  return { ...eos, basis, leaveBalance: lb, leaveCash, ticketEntitlement: employee.ticket_entitlement, ticketValue: ticketVal, ticketAmount: ticketVal, extraItems: extras, extraTotal, total_settlement: total };
 }
 
 export function isSaudiNationalId(id) {
