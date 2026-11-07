@@ -61,3 +61,7 @@ jobs:
           api-key-id: ${{ secrets.APPSTORE_API_KEY_ID }}
           api-private-key: ${{ secrets.APPSTORE_PRIVATE_KEY }}
           release-notes: ${{ inputs.release_notes }}
+          # إيقاف الفحص الاستباقي لبيانات Test Information: التطبيق تحديث لنسخة
+          # قائمة وبياناتها معبأة مسبقاً في App Store Connect، فالرفع المباشر يكفي
+          # وأبل ترسل إيميلاً عند اكتمال المعالجة.
+          wait-for-processing: 'false'
