@@ -162,6 +162,21 @@ export function attendanceDisplayStatus(recordOrStatus) {
   return { key: "on_duty", label: map[lang] || map.en, cls: "bg-emerald-50 text-emerald-700" };
 }
 
+// تاريخ عملية الحضور/الانصراف الفعلية: من طابع لحظة العملية المخزّن، وإلا تاريخ السجل.
+// kind: "in" للحضور، "out" للانصراف. يُستخدم لعرض تاريخ كل عملية مع وقتها.
+export function attendanceOpDate(record, kind) {
+  try {
+    const at = Number(record?.[kind === "out" ? "check_out_at" : "check_in_at"]) || 0;
+    if (at > 0) {
+      const d = new Date(at);
+      if (!isNaN(d.getTime())) {
+        return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+      }
+    }
+  } catch {}
+  return String(record?.date || "").slice(0, 10);
+}
+
 // أسماء أيام الأسبوع بالعربية مفهرسة حسب getDay() (0=الأحد ... 6=السبت)
 export const WEEK_DAYS_AR = ["الأحد", "الاثنين", "الثلاثاء", "الأربعاء", "الخميس", "الجمعة", "السبت"];
 

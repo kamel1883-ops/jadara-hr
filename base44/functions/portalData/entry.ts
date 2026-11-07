@@ -1170,14 +1170,14 @@ export default async function (req) {
       const today = recs[0] || null;
       if (today) {
         const updated = await base44.asServiceRole.entities.Attendance.update(today.id, {
-          check_in: checkIn, status: "present", source: "portal", employee_user_id: emp.user_id || null,
+          check_in: checkIn, check_in_at: Date.now(), status: "present", source: "portal", employee_user_id: emp.user_id || null,
           branch_id: branchId, branch_name: branchName,
         });
         return Response.json({ ok: true, today: updated });
       }
       const created = await base44.asServiceRole.entities.Attendance.create({
         employee_id: employeeId, employee_user_id: emp.user_id || null, employee_name: empLabel,
-        emp_ref: emp.emp_ref || "", date, check_in: checkIn, status: "present", source: "portal", work_hours: 0,
+        emp_ref: emp.emp_ref || "", date, check_in: checkIn, check_in_at: Date.now(), status: "present", source: "portal", work_hours: 0,
         branch_id: branchId, branch_name: branchName,
       });
       return Response.json({ ok: true, today: created });
@@ -1266,7 +1266,7 @@ export default async function (req) {
         }
       } catch {}
       const updated = await base44.asServiceRole.entities.Attendance.update(today.id, {
-        check_out: checkOut, work_hours: wh, status: outStatus,
+        check_out: checkOut, check_out_at: Date.now(), work_hours: wh, status: outStatus,
         break_minutes: breakMinutes, break_start, break_log, source: "portal",
       });
       return Response.json({ ok: true, today: updated });

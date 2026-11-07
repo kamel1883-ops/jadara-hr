@@ -27,6 +27,13 @@ function timeToMin(t) {
   return Number(m[1]) * 60 + Number(m[2]);
 }
 
+// طابع لحظة العملية من تاريخ السجل + الوقت المستورد — لتظهر كل عملية بتاريخها ووقتها.
+function opStamp(d, hm) {
+  if (!d || !hm) return 0;
+  const t = new Date(`${String(d).slice(0, 10)}T${hm}:00`).getTime();
+  return Number.isFinite(t) ? t : 0;
+}
+
 function normalizeRecord(r) {
   return {
     employee_number: String(r.employee_number ?? r.رقم_الموظف ?? r.الرقم_الوظيفي ?? '').trim(),
@@ -176,6 +183,8 @@ export default async function (req) {
         date: r.date,
         check_in: r.check_in || '',
         check_out: r.check_out || '',
+        check_in_at: opStamp(r.date, r.check_in),
+        check_out_at: opStamp(r.date, r.check_out),
         work_hours: workMin != null ? wh : undefined,
         status: short > 0 ? 'late' : 'present',
       };

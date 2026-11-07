@@ -10,7 +10,7 @@ import {
 } from "@/components/ui/select";
 import { CalendarCheck, Plus, CalendarOff } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { todayISO, attendanceDisplayStatus, isOrgWeeklyOff, dayNameAr } from "@/lib/hr";
+import { todayISO, attendanceDisplayStatus, isOrgWeeklyOff, dayNameAr, attendanceOpDate } from "@/lib/hr";
 import { resolveWorkHours } from "@/lib/branchHours";
 import { requiredNetHours } from "@/lib/payrollCompute";
 // dayNameAr يُستخدم فقط في الفرع العربي للإجازة الأسبوعية؛ الفرع الإنجليزي يستخدم toLocaleDateString داخل العنصر.
@@ -97,12 +97,18 @@ export default function Attendance() {
     setCreating(true);
     const emp = employees.find((x) => x.id === newRec.employee_id);
     const br = branches.find((b) => b.id === emp?.branch_id);
+    const stampOf = (hm) => {
+      if (!hm) return 0;
+      const d = new Date(`${date}T${hm}:00`);
+      return isNaN(d.getTime()) ? 0 : d.getTime();
+    };
     await base44.entities.Attendance.create({
       employee_id: newRec.employee_id,
       employee_name: emp ? emp.full_name : "",
       national_id: emp?.emp_ref ? "" : (emp ? (emp.national_id || "") : ""),
       emp_ref: emp?.emp_ref || "",
       date, check_in: newRec.check_in, check_out: newRec.check_out,
+      check_in_at: stampOf(newRec.check_in), check_out_at: stampOf(newRec.check_out),
       status: newRec.status, work_hours: 8,
       branch_id: emp?.branch_id || null, branch_name: br?.name || emp?.branch_name || "",
     });
@@ -225,8 +231,14 @@ export default function Attendance() {
                         </td>
                         <td className="px-4 py-3 text-xs tabular-nums text-muted-foreground">{r.national_id || (employees.find((e) => e.id === r.employee_id)?.national_id || "—")}</td>
                         {branchFilter !== "all" && <td className="px-4 py-3 text-xs text-muted-foreground">{r.branch_name || "—"}</td>}
-                        <td className="px-4 py-3 tabular-nums">{r.check_in || "-"}</td>
-                        <td className="px-4 py-3 tabular-nums">{r.check_out || "-"}</td>
+                        <td className="px-4 py-3 tabular-nums">
+                          <div>{r.check_in || "-"}</div>
+                          {r.check_in && <div className="text-[11px] text-muted-foreground">{attendanceOpDate(r, "in")}</div>}
+                        </td>
+                        <td className="px-4 py-3 tabular-nums">
+                          <div>{r.check_out || "-"}</div>
+                          {r.check_out && <div className="text-[11px] text-muted-foreground">{attendanceOpDate(r, "out")}</div>}
+                        </td>
                         <td className="px-4 py-3"><StatusBadge record={r} employees={employees} branches={branches} org={org} isAr={isAr} /></td>
                         <td className="px-4 py-3">
                           <Select value={r.status} onValueChange={(v) => updateStatus(r, v)}>

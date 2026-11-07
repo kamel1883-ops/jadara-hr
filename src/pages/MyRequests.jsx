@@ -30,7 +30,7 @@ import {
   CalendarPlus, Wallet, Loader2, BadgeCheck, Clock, Banknote, CalendarCheck, Plane, LogOut, Crown, ArrowRight, Building2, Package, MessageSquareWarning
 } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { leaveTypeLabel, formatCurrency, attendanceDisplayStatus } from "@/lib/hr";
+import { leaveTypeLabel, formatCurrency, attendanceDisplayStatus, attendanceOpDate } from "@/lib/hr";
 import { badge } from "@/lib/approvals";
 import { entitledLeaveDays, usedLeaveTotal } from "@/lib/leaveBalance";
 import { computeSettlement } from "@/lib/eos";
@@ -442,8 +442,14 @@ export default function MyRequests() {
                             return (
                               <tr key={a.id} className="border-t border-border">
                                 <td className="py-2">{a.date}</td>
-                                <td className="py-2">{a.check_in || "—"}</td>
-                                <td className="py-2">{a.check_out || "—"}</td>
+                                <td className="py-2">
+                                  <div>{a.check_in || "—"}</div>
+                                  {a.check_in && <div className="text-[11px] text-muted-foreground tabular-nums">{attendanceOpDate(a, "in")}</div>}
+                                </td>
+                                <td className="py-2">
+                                  <div>{a.check_out || "—"}</div>
+                                  {a.check_out && <div className="text-[11px] text-muted-foreground tabular-nums">{attendanceOpDate(a, "out")}</div>}
+                                </td>
                                 <td className="py-2">{a.work_hours || "—"}</td>
                                 <td className="py-2"><span className={cn("text-xs px-2 py-0.5 rounded-full", st.cls)}>{st.label}</span></td>
                               </tr>

@@ -4,7 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Calendar, Printer, Search } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { usePortalI18n, portalDir } from "@/lib/portalI18n";
-import { attendanceDisplayStatus } from "@/lib/hr";
+import { attendanceDisplayStatus, attendanceOpDate } from "@/lib/hr";
 
 const STATUS_CLS = {
   present: "bg-emerald-50 text-emerald-700",
@@ -76,8 +76,14 @@ export default function ManagerAttendanceSection({ records = [], subs = [] }) {
             <div className="col-span-3 font-medium truncate">{r.employee_name || "—"}</div>
             <div className="col-span-2 text-muted-foreground tabular-nums" dir="ltr">{r.national_id || "—"}</div>
             <div className="col-span-2 text-muted-foreground">{r.date || "—"}</div>
-            <div className="col-span-1 tabular-nums">{r.check_in || "—"}</div>
-            <div className="col-span-1 tabular-nums">{r.check_out || "—"}</div>
+            <div className="col-span-1 tabular-nums">
+            <div>{r.check_in || "—"}</div>
+            {r.check_in && <div className="text-[10px] text-muted-foreground">{attendanceOpDate(r, "in")}</div>}
+          </div>
+            <div className="col-span-1 tabular-nums">
+            <div>{r.check_out || "—"}</div>
+            {r.check_out && <div className="text-[10px] text-muted-foreground">{attendanceOpDate(r, "out")}</div>}
+          </div>
             <div className="col-span-1 tabular-nums">{Number(r.work_hours || 0).toFixed(1)}</div>
             <div className="col-span-2">
               <span className={cn("px-1.5 py-0.5 rounded-full text-[11px]", STATUS_CLS[r.status] || "bg-slate-100 text-slate-600")}>

@@ -5,6 +5,7 @@ import { Fingerprint, Loader2, LogIn, LogOut, MapPin, CheckCircle2, Coffee, Play
 import { cn } from "@/lib/utils";
 import { usePortalI18n, usePortalT, portalDir } from "@/lib/portalI18n";
 import { resolveWorkHours } from "@/lib/branchHours";
+import { attendanceOpDate } from "@/lib/hr";
 import { computeDeductibleShortfall } from "@/lib/payrollCompute";
 
 const localToday = () => {
@@ -168,9 +169,9 @@ export default function EmployeeClock({ employee, org, branch, branches, onChang
           // وحالة الموظف أثناء الدوام «موجود بالعمل» (present). يُحدَّد التأخير عند الانصراف فقط.
           const checkInTime = nowHM();
           if (today) {
-            await base44.entities.Attendance.update(today.id, { check_in: checkInTime, status: "present", source: "portal", employee_user_id: employee.user_id, branch_id: bId, branch_name: bName });
+            await base44.entities.Attendance.update(today.id, { check_in: checkInTime, check_in_at: Date.now(), status: "present", source: "portal", employee_user_id: employee.user_id, branch_id: bId, branch_name: bName });
           } else {
-            await base44.entities.Attendance.create({ employee_id: employee.id, employee_user_id: employee.user_id, employee_name: name, emp_ref: employee.emp_ref || "", date: localToday(), check_in: checkInTime, status: "present", source: "portal", work_hours: 0, branch_id: bId, branch_name: bName });
+            await base44.entities.Attendance.create({ employee_id: employee.id, employee_user_id: employee.user_id, employee_name: name, emp_ref: employee.emp_ref || "", date: localToday(), check_in: checkInTime, check_in_at: Date.now(), status: "present", source: "portal", work_hours: 0, branch_id: bId, branch_name: bName });
           }
         }
         setMsg({ type: "ok", text: t.doneIn });
@@ -206,7 +207,7 @@ export default function EmployeeClock({ employee, org, branch, branches, onChang
           // عند الانصراف يُقارن الصافي (انصراف − حضور − راحات) بالمطلوب (8 ساعات كحد أقصى):
           // أقل منه (بعد السماح) → متأخر، وإلا → حاضر 100%. لا عمل إضافي للزيادة.
           const outStatus = computeDeductibleShortfall(hours.work_hours_per_day, wh, hours.late_grace_minutes) > 0 ? "late" : "present";
-          await base44.entities.Attendance.update(today.id, { check_out: nowHM(), work_hours: wh, status: outStatus, source: "portal" });
+          await base44.entities.Attendance.update(today.id, { check_out: nowHM(), check_out_at: Date.now(), work_hours: wh, status: outStatus, source: "portal" });
         }
         setMsg({ type: "ok", text: t.doneOut });
       }
@@ -276,10 +277,16 @@ export default function EmployeeClock({ employee, org, branch, branches, onChang
         <div className="rounded-xl bg-emerald-50/60 border border-emerald-100 p-3">
           <div className="text-xs text-muted-foreground">{t.in}</div>
           <div className="text-lg font-bold tabular-nums">{today?.check_in || "—"}</div>
+          {today?.check_in && (
+            <div className="text-[11px] text-muted-foreground tabular-nums">{attendanceOpDate(today, "in")}</div>
+          )}
         </div>
         <div className="rounded-xl bg-blue-50/60 border border-blue-100 p-3">
           <div className="text-xs text-muted-foreground">{t.out}</div>
           <div className="text-lg font-bold tabular-nums">{today?.check_out || "—"}</div>
+          {today?.check_out && (
+            <div className="text-[11px] text-muted-foreground tabular-nums">{attendanceOpDate(today, "out")}</div>
+          )}
         </div>
       </div>
 
@@ -313,8 +320,17 @@ export default function EmployeeClock({ employee, org, branch, branches, onChang
             </Button>
           </>
         ) : (
-          <div className="flex items-center gap-2 text-emerald-700 text-sm font-medium">
-            <CheckCircle2 size={18} /> {t.complete(today?.work_hours || 0)}
+          <div>
+            <div className="flex items-center gap-2 text-emerald-700 text-sm font-medium">
+              <CheckCircle2 size={18} /> {t.complete(today?.work_hours || 0)}
+            </div>
+            {today?.check_out && (
+              <div className="mt-1 text-xs text-muted-foreground tabular-nums ms-6">
+                {lang === "ar"
+                  ? `وقت الانصراف: ${attendanceOpDate(today, "out")} ${today.check_out}`
+                  : `Checked out: ${attendanceOpDate(today, "out")} ${today.check_out}`}
+              </div>
+            )}
           </div>
         )}
       </div>
