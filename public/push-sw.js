@@ -29,6 +29,19 @@ self.addEventListener("push", (event) => {
   event.waitUntil(self.registration.showNotification(title, options));
 });
 
+// المتصفح ألغى الاشتراك أو جدّده (تحديث النظام مثلاً): نعيد الاشتراك بنفس مفتاح
+// التطبيق فوراً، وصفحة البوابة تُعيد ربطه بسجل الموظف عند أول فتح تلقائياً.
+self.addEventListener("pushsubscriptionchange", (event) => {
+  event.waitUntil(
+    (async () => {
+      try {
+        const options = (event.oldSubscription && event.oldSubscription.options) || { userVisibleOnly: true };
+        await self.registration.pushManager.subscribe(options);
+      } catch {}
+    })()
+  );
+});
+
 self.addEventListener("notificationclick", (event) => {
   event.notification.close();
   const target = (event.notification.data && event.notification.data.url) || "/portal";

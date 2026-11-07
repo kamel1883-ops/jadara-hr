@@ -3,6 +3,7 @@ import { base44 } from "@/api/base44Client";
 import { Button } from "@/components/ui/button";
 import { BellRing, BellOff, Loader2, ShieldCheck } from "lucide-react";
 import { usePortalI18n } from "@/lib/portalI18n";
+import { isNativeApp } from "@/lib/nativeApp";
 
 const COPY = {
   ar: {
@@ -13,6 +14,7 @@ const COPY = {
     on: "الإشعارات مفعّلة على هذا الجهاز — يصلك التنبيه حتى والتطبيق مقفل.",
     denied: "الإشعارات مرفوضة من إعدادات المتصفح. افتح إعدادات الموقع في المتصفح واسمح بالإشعارات، ثم أعد المحاولة.",
     unsupported: "هذا المتصفح لا يدعم إشعارات الجوال. افتح بوابة الموظف من كروم على أندرويد أو سفاري على آيفون.",
+    inapp: "أنت داخل تطبيق المتجر: إشعارات الجوال عندما يكون التطبيق مغلقاً تحتاج إشعارات التطبيق الأصلي (غير مهيأة على هذا الإصدار). لتصلك التنبيهات فوراً والتطبيق مغلق: افتح بوابة الموظف من متصفح جوالك — أو أضفها إلى الشاشة الرئيسية على آيفون — وفعّل الإشعارات من هناك مرة واحدة. أما داخل التطبيق فالتنبيه يظهر بمجرد فتحه.",
     iosHint: "على آيفون: اضغط «مشاركة» ثم «إضافة إلى الشاشة الرئيسية»، وافتح البوابة من الأيقونة، ثم فعّل الإشعارات من هنا.",
     failed: "تعذّر تفعيل الإشعارات. أعد المحاولة.",
     errSession: "انتهت جلسة الدخول — اخرج وادخل برقم الهوية من جديد، ثم فعّل الإشعارات.",
@@ -37,6 +39,7 @@ const COPY = {
     on: "Notifications are on for this device — the alert arrives even with the app closed.",
     denied: "Notifications are blocked in your browser settings. Allow notifications for this site, then try again.",
     unsupported: "This browser does not support phone notifications. Open the employee portal from Chrome on Android or Safari on iPhone.",
+    inapp: "You are inside the store app: alerts while the app is closed need native app notifications, which this build does not have yet. To get the alert with the app closed, open the employee portal in your phone browser — or add it to the Home Screen on iPhone — and enable notifications there once. Inside the app the alert appears as soon as it opens.",
     iosHint: "On iPhone: tap Share, choose “Add to Home Screen”, open the portal from that icon, then enable notifications here.",
     failed: "Could not enable notifications. Please try again.",
     errSession: "Your session expired — sign out and sign back in with your national ID, then enable notifications.",
@@ -77,6 +80,7 @@ export default function WebPushEnabler({ session }) {
     "PushManager" in window &&
     "Notification" in window;
 
+  const inStoreApp = isNativeApp();
   const isIos = typeof navigator !== "undefined" && /iPad|iPhone|iPod/.test(navigator.userAgent || "");
   const isStandalone =
     typeof window !== "undefined" &&
@@ -103,6 +107,12 @@ export default function WebPushEnabler({ session }) {
   }, [session]);
 
   const registerAndCheck = useCallback(async () => {
+    // داخل تطبيق المتجر (WebView) لا تعمل إشعارات الويب حين يكون مغلقاً —
+    // تُعرض حالة صريحة بدل الإيحاء بأن التنبيه سيصل.
+    if (inStoreApp) {
+      setState("inapp");
+      return;
+    }
     if (!supported || !session?.token || !session?.employee_id) {
       setState(supported ? "off" : "unsupported");
       return;
@@ -142,7 +152,7 @@ export default function WebPushEnabler({ session }) {
     } catch {
       setState("off");
     }
-  }, [session, supported, refreshSubscription]);
+  }, [session, supported, refreshSubscription, inStoreApp]);
 
   useEffect(() => {
     registerAndCheck();
@@ -273,7 +283,7 @@ export default function WebPushEnabler({ session }) {
 
   if (!session?.token || !session?.employee_id) return null;
 
-  const icon = state === "on" ? <ShieldCheck className="w-5 h-5 text-emerald-500" /> : state === "denied" ? <BellOff className="w-5 h-5 text-amber-500" /> : <BellRing className="w-5 h-5 text-primary" />;
+  const icon = state === "on" ? <ShieldCheck className="w-5 h-5 text-emerald-500" /> : state === "denied" || state === "inapp" ? <BellOff className="w-5 h-5 text-amber-500" /> : <BellRing className="w-5 h-5 text-primary" />;
 
   return (
     <div className="rounded-2xl border border-border bg-card p-4 flex flex-col sm:flex-row sm:items-center gap-3">
@@ -281,14 +291,14 @@ export default function WebPushEnabler({ session }) {
       <div className="flex-1 min-w-0 space-y-1">
         <div className="font-semibold text-sm">{t.title}</div>
         <p className="text-xs text-muted-foreground leading-relaxed">
-          {state === "on" ? t.on : state === "denied" ? t.denied : state === "unsupported" ? t.unsupported : t.desc}
+          {state === "on" ? t.on : state === "denied" ? t.denied : state === "unsupported" ? t.unsupported : state === "inapp" ? t.inapp : t.desc}
         </p>
         {isIos && !isStandalone && state !== "on" ? (
           <p className="text-xs text-amber-600 leading-relaxed">{t.iosHint}</p>
         ) : null}
         {note ? <p className="text-xs text-destructive">{note}</p> : null}
       </div>
-      {state !== "on" && state !== "unsupported" ? (
+      {state !== "on" && state !== "unsupported" && state !== "inapp" ? (
         <Button size="sm" onClick={enable} disabled={busy || state === "loading"} className="gap-2 shrink-0">
           {busy ? <Loader2 className="w-4 h-4 animate-spin" /> : <BellRing className="w-4 h-4" />}
           {busy ? t.working : t.enable}

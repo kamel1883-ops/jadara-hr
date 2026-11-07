@@ -22,6 +22,7 @@ import PortalNotificationsBell from "@/components/portal/PortalNotificationsBell
 import PortalNotificationsSection from "@/components/portal/PortalNotificationsSection";
 import PresenceProofPrompt from "@/components/portal/PresenceProofPrompt";
 import WebPushEnabler from "@/components/portal/WebPushEnabler";
+import PushRegistrar from "@/components/portal/PushRegistrar";
 import PortalAuthCard from "@/components/portal/PortalAuthCard";
 import { Image } from "@/components/ui/image";
 import { usePortalI18n, usePortalT, portalDir } from "@/lib/portalI18n";
@@ -370,6 +371,7 @@ export default function MyRequests() {
             <button type="button" onClick={() => navigate("/portal/approvals")} className={cn("px-4 py-2.5 text-sm font-medium rounded-xl transition", view === "approvals" ? "bg-violet-500/15 text-violet-700" : "text-muted-foreground hover:text-foreground hover:bg-white/50")}>{t.approvalsTab}</button>
           )}
         </div>
+        <PushRegistrar session={session} />
         {hasApprovals && view === "approvals" ? (
           <ApprovalsPortal portalSession={session} />
         ) : view === "notifications" ? (

@@ -66,8 +66,9 @@ export default function PresenceProofManager({ org }) {
     diagCode: "رمز التشخيص",
     loading: "جارٍ التحميل...",
     payrollNote: "تنبيه: هذا الإجراء لا يغيّر سجلات الحضور ولا مسير الرواتب.",
-    pushSent: (sent, total) => `تم إرسال تنبيه التطبيق إلى ${sent} من ${total} موظفاً مستهدفاً.`,
-    pushPartial: (sent, failed, skipped, firstError) => `تم إرسال تنبيه التطبيق إلى ${sent} وتعذّر ${failed}${skipped ? ` — ${skipped} بلا حساب تطبيق مرتبط بهويته` : ""}${firstError ? ` — التشخيص: ${firstError}` : ""}. للتطبيق المغلق: نسخة المتجر المحدّثة + الإشعارات والصوت مفعّلة + إيقاف الكتم وعدم الإزعاج.`,
+    pushSent: (sent, total, web) => `وصل تنبيه الجوال إلى ${sent} من ${total} موظفاً مستهدفاً${web ? ` — ${web} منها عبر إشعارات الجوال التي تصل والتطبيق مغلق` : ""}.`,
+    pushPartial: (sent, failed, skipped, firstError, web) => `وصل تنبيه الجوال إلى ${sent}${web ? ` (${web} منها عبر إشعارات الجوال والتطبيق مغلق)` : ""} وتعذّر ${failed}${skipped ? ` — ${skipped} بلا جهاز مفعّل ولا حساب تطبيق مرتبط بهويته` : ""}${firstError ? ` — التشخيص: ${firstError}` : ""}.`,
+    pushNoDevice: "تنبيه: لا يوجد بين المستهدفين جهاز مفعّل لإشعارات الجوال — يظهر التنبيه داخل بوابة الموظف عند فتحها فقط، ولا يصل والجوال مقفل حتى يفعّل كل موظف الإشعارات من بوابة الموظف على جهازه (مرة واحدة).",
     pushFailed: "تعذّر إرسال تنبيه التطبيق للموظفين — تحقق من نسخة المتجر المحدّثة وتفعيل الإشعارات مع الصوت وربط الحسابات بالهويات، وأوقف الكتم وعدم الإزعاج.",
     pushNoUser: "لم يُرسل تنبيه التطبيق لأن حسابات الموظفين المستهدفين غير مرتبطة بهوياتهم بعد — يرى الموظفون التنبيه أعلى بوابة الموظف عند فتحها برقم الهوية.",
     testPush: "دفع تجريبي للحاضرين الآن",
@@ -109,8 +110,9 @@ export default function PresenceProofManager({ org }) {
     diagCode: "Diagnostic code",
     loading: "Loading...",
     payrollNote: "Note: this action does not change attendance records or payroll.",
-    pushSent: (sent, total) => `App alerts were sent to ${sent} of ${total} targeted employees.`,
-    pushPartial: (sent, failed, skipped, firstError) => `App alerts reached ${sent} but failed for ${failed}${skipped ? ` — ${skipped} have no app account linked to their identity` : ""}${firstError ? ` — diagnostic: ${firstError}` : ""}. For closed-app sound: updated store app + notifications with sound on + silent/DND off.`,
+    pushSent: (sent, total, web) => `Phone alerts reached ${sent} of ${total} targeted employees${web ? ` — ${web} of them through phone notifications that arrive with the app closed` : ""}.`,
+    pushPartial: (sent, failed, skipped, firstError, web) => `Phone alerts reached ${sent}${web ? ` (${web} through phone notifications with the app closed)` : ""} and failed for ${failed}${skipped ? ` — ${skipped} have no enabled device and no app account linked to their identity` : ""}${firstError ? ` — diagnostic: ${firstError}` : ""}.`,
+    pushNoDevice: "Note: none of the targeted employees has notifications enabled on a device — the alert only appears inside the employee portal when opened, and never while the phone is locked, until each employee enables notifications from the portal on their own device (once).",
     pushFailed: "App alerts could not be sent — check the updated store build, notifications with sound, identity-linked app accounts, and turn off silent mode / Do Not Disturb.",
     pushNoUser: "App alerts were not sent because the targeted employees have no app account linked to their identities yet — they still see the alert at the top of the employee portal when opened with their national ID.",
     testPush: "Test push to on-shift staff",
@@ -296,15 +298,16 @@ export default function PresenceProofManager({ org }) {
   const pushFailedCount = Number(request?.push_failed_count || 0);
   const pushSkippedCount = Number(request?.push_skipped_count || 0);
   const pushTargetTotal = Number(request?.target_count || 0);
+  const pushWebCount = Number(request?.push_web_count || 0);
   const pushFirstError = String(pushInfo?.first_error || "");
   const pushDetail = !pushStatus
     ? ""
     : pushStatus === "sent"
-      ? t.pushSent(pushSentCount, pushTargetTotal)
+      ? t.pushSent(pushSentCount, pushTargetTotal, pushWebCount)
       : pushStatus === "partial"
-        ? t.pushPartial(pushSentCount, pushFailedCount, pushSkippedCount, pushFirstError)
+        ? `${t.pushPartial(pushSentCount, pushFailedCount, pushSkippedCount, pushFirstError, pushWebCount)}${pushWebCount === 0 ? ` ${t.pushNoDevice}` : ""}`
         : pushStatus === "failed"
-          ? (pushFirstError ? `${t.pushFailed} ${isAr ? "التشخيص" : "Diagnostic"}: ${pushFirstError}` : t.pushFailed)
+          ? `${pushFirstError ? `${t.pushFailed} ${isAr ? "التشخيص" : "Diagnostic"}: ${pushFirstError}` : t.pushFailed}${pushWebCount === 0 ? ` ${t.pushNoDevice}` : ""}`
           : t.pushNoUser;
   const pushWarn = pushStatus === "partial" || pushStatus === "failed" || pushStatus === "skipped_no_user";
 

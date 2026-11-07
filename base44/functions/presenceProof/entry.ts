@@ -140,7 +140,9 @@ async function getVapid(base44: any) {
   const envPrivate = envVar("VAPID_PRIVATE_KEY");
   const envSubject = envVar("VAPID_SUBJECT") || "mailto:support@jadara.app";
   if (envPublic && envPrivate) return { publicKey: envPublic, privateKey: envPrivate, subject: envSubject };
-  const rows = asList(await base44.asServiceRole.entities.PushServerKey.list("-created_date", 5).catch(() => []));
+  // أقدم مفتاح هو المعتمد دائماً: لو أُنشئت مفاتيح أكثر من مرة تبقى الاشتراكات
+  // القديمة صالحة ولا يفشل الإرسال بمفتاح مختلف عن مفتاح الاشتراك.
+  const rows = asList(await base44.asServiceRole.entities.PushServerKey.list("created_date", 5).catch(() => []));
   const row = rows?.[0];
   if (row?.public_key && row?.private_key) {
     return { publicKey: String(row.public_key), privateKey: String(row.private_key), subject: String(row.subject || envSubject) };
@@ -317,6 +319,8 @@ async function hydrate(base44: any, row: any) {
     push_sent_count: Number(row?.push_sent_count || 0),
     push_failed_count: Number(row?.push_failed_count || 0),
     push_skipped_count: Number(row?.push_skipped_count || 0),
+    push_web_count: Number(row?.push_web_count || 0),
+    push_web_failed_count: Number(row?.push_web_failed_count || 0),
     };
 }
 
@@ -471,6 +475,84 @@ export default async function (req) {
       return Response.json({ ok: true, closed });
     }
 
+    // === جهاز الموظف: مفاتيح الإشعارات وربط الاشتراك ===
+    // الربط يتم بجلسة بوابة الموظف، أو بحساب التطبيق المسجّل دخوله على جواله إن انتهت
+    // جلسة البوابة — فيبقى الجهاز مربوطاً بسجل الموظف ولا يتوقف وصول التنبيه والجوال مغلق.
+    if (action === "push_key" || action === "push_subscribe" || action === "push_unsubscribe") {
+      let ctx = await portalContext(base44, body);
+      if (!ctx) {
+        let appUser: any = null;
+        try { appUser = await base44.auth.me(); } catch { appUser = null; }
+        if (appUser) {
+          const uid = String(appUser.id || "");
+          const email = String(appUser.email || "").trim().toLowerCase();
+          let emp: any = null;
+          try {
+            const byUser = uid
+              ? asList(await base44.asServiceRole.entities.Employee.filter({ user_id: uid }, undefined, 5))
+              : [];
+            emp = byUser?.[0] || null;
+            if (!emp && email) {
+              const byEmail = asList(await base44.asServiceRole.entities.Employee.filter({ email }, undefined, 5));
+              emp = (byEmail || []).find((e: any) => String(e?.email || "").trim().toLowerCase() === email) || null;
+            }
+          } catch { emp = null; }
+          if (emp && emp.status !== "terminated" && emp.status !== "resigned") {
+            ctx = { emp, unified: String(emp?.unified_number || "").trim() };
+          }
+        }
+      }
+      if (!ctx) return Response.json({ ok: false, error: "invalid_session" }, { status: 401 });
+
+      if (action === "push_key") {
+        try {
+          const vapid = await getVapid(base44);
+          return Response.json({ ok: true, public_key: vapid.publicKey });
+        } catch {
+          return Response.json({ ok: false, error: "vapid_failed" }, { status: 500 });
+        }
+      }
+
+      if (action === "push_subscribe") {
+        const sub = body?.subscription || {};
+        const endpoint = String(sub?.endpoint || "").trim();
+        const p256dh = String(sub?.keys?.p256dh || "").trim();
+        const auth = String(sub?.keys?.auth || "").trim();
+        if (!endpoint || !p256dh || !auth) {
+          return Response.json({ ok: false, error: "invalid_subscription" }, { status: 400 });
+        }
+        const existing = asList(
+          await base44.asServiceRole.entities.EmployeePushSubscription.filter({ endpoint }, undefined, 5).catch(() => [])
+        );
+        const data = {
+          unified_number: ctx.unified,
+          employee_id: String(ctx.emp.id),
+          endpoint,
+          p256dh,
+          auth,
+          user_agent: String(body?.user_agent || "").slice(0, 300),
+          active: true,
+          subscribed_at: Date.now(),
+        };
+        if (existing?.[0]) {
+          await base44.asServiceRole.entities.EmployeePushSubscription.update(String(existing[0].id), data);
+        } else {
+          await base44.asServiceRole.entities.EmployeePushSubscription.create(data);
+        }
+        return Response.json({ ok: true });
+      }
+
+      const endpoint = String(body?.endpoint || "").trim();
+      if (!endpoint) return Response.json({ ok: true });
+      const rows = asList(
+        await base44.asServiceRole.entities.EmployeePushSubscription.filter({ endpoint }, undefined, 5).catch(() => [])
+      );
+      for (const row of rows || []) {
+        try { await base44.asServiceRole.entities.EmployeePushSubscription.update(String(row.id), { active: false }); } catch {}
+      }
+      return Response.json({ ok: true });
+    }
+
     // الإصدار والمتابعة للإدارة فقط: مسؤول الشركة، أو موظف مفوّض على الحضور/الإعدادات.
     let unified = "";
     let issuerUserId = "";
@@ -497,64 +579,6 @@ export default async function (req) {
       issuerName = String(user.full_name || user.email || "");
     }
     if (!unified) return Response.json({ ok: false, error: "no_company" }, { status: 400 });
-
-    // مفاتيح دفع الويب العامة للجوال — تُقرأ بعد تسجيل دخول الموظف برقم هويته.
-    if (action === "push_key") {
-      const ctx = await portalContext(base44, body);
-      if (!ctx) return Response.json({ ok: false, error: "invalid_session" }, { status: 401 });
-      try {
-        const vapid = await getVapid(base44);
-        return Response.json({ ok: true, public_key: vapid.publicKey });
-      } catch {
-        return Response.json({ ok: false, error: "vapid_failed" }, { status: 500 });
-      }
-    }
-
-    // ربط جوال الموظف بسجل هويته: يُحفظ اشتراك الدفع على الموظف نفسه، لا على بريد.
-    if (action === "push_subscribe") {
-      const ctx = await portalContext(base44, body);
-      if (!ctx) return Response.json({ ok: false, error: "invalid_session" }, { status: 401 });
-      const sub = body?.subscription || {};
-      const endpoint = String(sub?.endpoint || "").trim();
-      const p256dh = String(sub?.keys?.p256dh || "").trim();
-      const auth = String(sub?.keys?.auth || "").trim();
-      if (!endpoint || !p256dh || !auth) {
-        return Response.json({ ok: false, error: "invalid_subscription" }, { status: 400 });
-      }
-      const existing = asList(
-        await base44.asServiceRole.entities.EmployeePushSubscription.filter({ endpoint }, undefined, 5).catch(() => [])
-      );
-      const data = {
-        unified_number: ctx.unified,
-        employee_id: String(ctx.emp.id),
-        endpoint,
-        p256dh,
-        auth,
-        user_agent: String(body?.user_agent || "").slice(0, 300),
-        active: true,
-        subscribed_at: Date.now(),
-      };
-      if (existing?.[0]) {
-        await base44.asServiceRole.entities.EmployeePushSubscription.update(String(existing[0].id), data);
-      } else {
-        await base44.asServiceRole.entities.EmployeePushSubscription.create(data);
-      }
-      return Response.json({ ok: true });
-    }
-
-    if (action === "push_unsubscribe") {
-      const ctx = await portalContext(base44, body);
-      if (!ctx) return Response.json({ ok: false, error: "invalid_session" }, { status: 401 });
-      const endpoint = String(body?.endpoint || "").trim();
-      if (!endpoint) return Response.json({ ok: true });
-      const rows = asList(
-        await base44.asServiceRole.entities.EmployeePushSubscription.filter({ endpoint }, undefined, 5).catch(() => [])
-      );
-      for (const row of rows || []) {
-        try { await base44.asServiceRole.entities.EmployeePushSubscription.update(String(row.id), { active: false }); } catch {}
-      }
-      return Response.json({ ok: true });
-    }
 
     // ربط حساب التطبيق (Play/Apple) بسجل الموظف تلقائياً: الموظف المسجّل دخوله
     // في التطبيق ويفتح بوابة الموظف برقم هويته على نفس الجوال يُربط حسابه،
