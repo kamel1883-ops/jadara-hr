@@ -148,6 +148,26 @@ export default function WebPushEnabler({ session }) {
     registerAndCheck();
   }, [registerAndCheck]);
 
+  // ربط حساب التطبيق (Play/Apple) بسجل الموظف تلقائياً ولمرة واحدة: من سجّل
+  // الدخول في التطبيق ثم فتح البوابة برقم هويته على نفس الجوال يُربط حسابه،
+  // فيصله تنبيه إثبات الحضور الأصلي — يعمل حتى داخل التطبيق نفسه بلا دفع ويب.
+  useEffect(() => {
+    (async () => {
+      try {
+        if (!session?.token || !session?.employee_id) return;
+        const me = await base44.auth.me().catch(() => null);
+        const appUserId = String(me?.id || me?.user_id || "");
+        if (!appUserId) return;
+        await base44.functions.invoke("presenceProof", {
+          token: session.token,
+          employee_id: session.employee_id,
+          action: "link_app_user",
+          app_user_id: appUserId,
+        });
+      } catch {}
+    })();
+  }, [session]);
+
   const enable = async () => {
     setBusy(true);
     setNote("");

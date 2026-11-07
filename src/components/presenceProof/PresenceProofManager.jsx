@@ -76,6 +76,7 @@ export default function PresenceProofManager({ org }) {
     testNone: (never, stale) => `الدفع التجريبي: لم يصل لأي جهاز بعد${never?.length ? ` — لم يفعّل الإشعارات: ${never.join("، ")}` : ""}${stale?.length ? ` — انتهى التفعيل ويحتاج إعادة فتح البوابة: ${stale.join("، ")}` : ""}. كل موظف حاضر يفتح بوابة الموظف برقم هويته على جواله — ومن كان مفعّلاً من قبل تكفيه إعادة الفتح لتجديد الاشتراك تلقائياً، ومن لم يفعّل يضغط «تفعيل الإذن والإشعارات» مرة واحدة — وعلى الآيفون تُفتح البوابة من أيقونة الشاشة الرئيسية — ثم أعد الضغط.`,
     testFail: "الدفع التجريبي: فشل الإرسال",
     testEmpty: "الدفع التجريبي: لا يوجد موظف في الدوام الآن — الزر يستهدف الحاضرين في هذه اللحظة فقط.",
+    storeApp: (names) => `تنبيه تطبيق المتجر (Play/Apple) لن يصل هؤلاء لعدم ربط حساب التطبيق بهوياتهم: ${names.join("، ")} — الحل لكل موظف: يثبّت التطبيق ويسجّل الدخول بحسابه فيه، ثم يفتح بوابة الموظف برقم هويته على نفس الجوال مرة واحدة (يتم الربط تلقائياً)، ويفعّل الإشعارات مع الصوت للتطبيق من إعدادات الجوال ويوقف الكتم وعدم الإزعاج.`,
     phoneCoverage: (withPhone, total) => `وللعلم: ${withPhone} من ${total} من هؤلاء لديهم رقم جوال مسجّل في ملف الموظف.`,
   } : {
     title: "Instant presence proof",
@@ -118,6 +119,7 @@ export default function PresenceProofManager({ org }) {
     testNone: (never, stale) => `Test push: no device received it yet${never?.length ? ` — never enabled: ${never.join(", ")}` : ""}${stale?.length ? ` — expired subscriptions: ${stale.join(", ")}` : ""}. Each employee on shift opens the portal with their national ID on their phone — reopening auto-refreshes a previous subscription, otherwise tap “Allow notifications” once — on iPhone open it from the Home Screen icon — then retry.`,
     testFail: "Test push failed",
     testEmpty: "Test push: no employee is on shift right now — this button targets only those present at this moment.",
+    storeApp: (names) => `Store-app alerts (Play/Apple) will never reach these employees — no app account linked to their identities: ${names.join(", ")}. Fix for each employee: install the app and sign in with their account, then open the employee portal with their national ID once on the same phone (linking is automatic), and enable notifications with sound for the app in the phone settings with silent/DND off.`,
     phoneCoverage: (withPhone, total) => `Note: ${withPhone} of ${total} of them have a phone number on file.`,
   };
 
@@ -264,11 +266,18 @@ export default function PresenceProofManager({ org }) {
         const stale = namesOf(["expired"]);
         const failed = details.find((d) => d.status === "failed");
         const sent = Number(test.sent || 0) + Number(test.web_sent || 0);
-        if (sent > 0) setTestNote(t.testSent(sent, total, never, stale));
-        else if (failed) setTestNote(`${t.testFail}${failed.error || test.first_error ? ` — ${failed.error || test.first_error}` : ""}`);
+        // من بلا حساب تطبيق مرتبط لن يصله تنبيه المتجر (Play/Apple) أبداً —
+        // يُعرضون بالاسم مع خطوات الربط حتى يُسمَع الصوت في التطبيق الأصلي.
+        const noApp = details
+          .filter((d) => d.app === false)
+          .map((d) => String(d.name || ""))
+          .filter(Boolean);
+        const storeLine = noApp.length ? ` ${t.storeApp(noApp)}` : "";
+        if (sent > 0) setTestNote(`${t.testSent(sent, total, never, stale)}${storeLine}`);
+        else if (failed) setTestNote(`${t.testFail}${failed.error || test.first_error ? ` — ${failed.error || test.first_error}` : ""}${storeLine}`);
         else {
           const coverage = Number(test.total || 0) > 0 ? t.phoneCoverage(Number(test.with_phone || 0), Number(test.total || 0)) : "";
-          setTestNote(`${t.testNone(never, stale)}${coverage ? ` ${coverage}` : ""}`);
+          setTestNote(`${t.testNone(never, stale)}${coverage ? ` ${coverage}` : ""}${storeLine}`);
         }
       }
     } catch (err) {

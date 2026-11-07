@@ -556,6 +556,35 @@ export default async function (req) {
       return Response.json({ ok: true });
     }
 
+    // ربط حساب التطبيق (Play/Apple) بسجل الموظف تلقائياً: الموظف المسجّل دخوله
+    // في التطبيق ويفتح بوابة الموظف برقم هويته على نفس الجوال يُربط حسابه،
+    // فيصله تنبيه التطبيق الأصلي — بلا بريد ولا إدخال يدوي. الربط لمرة واحدة فقط.
+    if (action === "link_app_user") {
+      const ctx = await portalContext(base44, body);
+      if (!ctx) return Response.json({ ok: false, error: "invalid_session" }, { status: 401 });
+      const appUserId = String(body?.app_user_id || "").trim();
+      if (!appUserId) return Response.json({ ok: false, error: "missing" }, { status: 400 });
+      if (String((ctx.emp as any)?.user_id || "").trim()) {
+        return Response.json({ ok: true, linked: false, reason: "already" });
+      }
+      let appUser: any = null;
+      try { appUser = await base44.asServiceRole.entities.User.get(appUserId); } catch { appUser = null; }
+      if (!appUser) return Response.json({ ok: false, error: "no_user" }, { status: 404 });
+      const empEmail = String((ctx.emp as any)?.email || "").trim().toLowerCase();
+      const userEmail = String((appUser as any)?.email || "").trim().toLowerCase();
+      // أمان الربط: إن كان للسجل وللحساب بريدان مختلفان نرفض — دفع التنبيه لجهاز
+      // شخص آخر تسريب. من لا بريد له (الدخول بالهوية) يُربط مباشرة.
+      if (empEmail && userEmail && empEmail !== userEmail) {
+        return Response.json({ ok: false, error: "email_mismatch" }, { status: 403 });
+      }
+      try {
+        await base44.asServiceRole.entities.Employee.update(String(ctx.emp.id), { user_id: appUserId });
+        return Response.json({ ok: true, linked: true });
+      } catch {
+        return Response.json({ ok: false, error: "save_failed" }, { status: 500 });
+      }
+    }
+
     // دفع تجريبي للإدارة فقط: يستهدف الموظفين الحاضرين في الدوام الآن داخل المنشأة
     // (نفس منطق إصدار الطلب)، ويُظهر بالاسم من وصلته الدفعة ومن لا يملك حساب تطبيق مرتبط.
     if (action === "test_push") {
@@ -604,7 +633,7 @@ export default async function (req) {
         const emp = byId.get(String(id || ""));
         if (!emp) {
           test.skipped += 1;
-          test.details.push({ employee_id: id, name: "", status: "missing" });
+          test.details.push({ employee_id: id, name: "", status: "missing", app: false });
           continue;
         }
         const name = String((emp as any)?.full_name || (emp as any)?.employee_number || "");
@@ -636,7 +665,7 @@ export default async function (req) {
         const webStatus = web.sent > 0 ? "web" : (Number((web as any)?.devices || 0) > 0 ? "expired" : "no_account");
         if (!userId) {
           test.skipped += 1;
-          test.details.push({ employee_id: id, name, status: webStatus });
+          test.details.push({ employee_id: id, name, status: webStatus, app: false });
           continue;
         }
         test.attempted += 1;
@@ -649,13 +678,13 @@ export default async function (req) {
             action_url: "/portal",
           });
           test.sent += 1;
-          test.details.push({ employee_id: id, name, status: "sent" });
+          test.details.push({ employee_id: id, name, status: "sent", app: true });
         } catch (err) {
           test.failed += 1;
           let message = "send_failed";
           try { message = String(err?.message || err?.code || "send_failed").slice(0, 160); } catch {}
           if (!test.first_error) test.first_error = message;
-          test.details.push({ employee_id: id, name, status: "failed", error: message });
+          test.details.push({ employee_id: id, name, status: "failed", error: message, app: true });
         }
       }
       return Response.json({ ok: true, test });
