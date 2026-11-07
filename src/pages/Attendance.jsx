@@ -59,6 +59,8 @@ export default function Attendance() {
 
   const load = async (silent = false) => {
     if (!silent) setLoading(true);
+    // إغلاق السجلات المفتوحة المنسية من الأيام السابقة قبل العرض.
+    try { await base44.functions.invoke("presenceProof", { action: "auto_close" }); } catch {}
     const [data, emps, brs] = await Promise.all([
       base44.entities.Attendance.filter({ date }, "-created_date", 500),
       base44.entities.Employee.filter({ status: "active" }, "-created_date", 500),
@@ -298,6 +300,9 @@ function StatusBadge({ record, employees, branches, org, isAr }) {
       {record?.check_out && elapsedMs > 0 && (
         <div className="mt-1 text-[11px] text-muted-foreground tabular-nums">
           {isAr ? `المدة: ${formatWorkDuration(elapsedMs, "ar")}` : `Worked: ${formatWorkDuration(elapsedMs, "en")}`}
+          {record?.auto_closed && (
+            <span className="text-amber-700"> {isAr ? "(انصراف تلقائي — نسي التسجيل)" : "(auto check-out)"}</span>
+          )}
         </div>
       )}
       {record?.check_out && closedNet > 0 && required > 0 && (

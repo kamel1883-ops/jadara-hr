@@ -73,6 +73,8 @@ export default function AttendanceReport({ org }) {
   useEffect(() => {
     (async () => {
       setLoading(true);
+      // إغلاق السجلات المفتوحة المنسية من الأيام السابقة قبل بناء الكشف.
+      try { await base44.functions.invoke("presenceProof", { action: "auto_close" }); } catch {}
       try {
         const [all, emps, versions] = await Promise.all([
           base44.entities.Attendance.list("-created_date", 1000),
@@ -272,7 +274,10 @@ export default function AttendanceReport({ org }) {
                 </TableCell>
                 <TableCell className="text-center text-xs tabular-nums" dir="ltr">{dStr || "—"}</TableCell>
                 <TableCell className="text-center tabular-nums">{r.check_in || "—"}</TableCell>
-                <TableCell className="text-center tabular-nums">{r.check_out || "—"}</TableCell>
+                <TableCell className="text-center tabular-nums">
+                  <div>{r.check_out || "—"}</div>
+                  {r.auto_closed && <div className="text-[10px] text-amber-600">{lang === "ar" ? "تلقائي" : "auto"}</div>}
+                </TableCell>
                 <TableCell className="text-center text-xs tabular-nums">{r.check_in ? formatWorkDuration(attendanceElapsedMs(r), lang) : "—"}</TableCell>
                 <TableCell className="text-center">
                   <span className={cn("text-xs px-2.5 py-1 rounded-full font-medium", s.cls)}>{s.label}</span>

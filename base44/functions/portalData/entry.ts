@@ -11,6 +11,7 @@ import { getDocumentLinkInCompany, buildDownloadUrl, storeDocument } from "../..
 import { vaultErrorCode, vaultErrorStatus } from "../../shared/vaultErrors.ts";
 import { saveLeaveDocument, canManageLeaveDocuments, companyOwnsLeaveDocument } from "../../shared/leaveDocuments.ts";
 import { tenantKeysForEmployee } from "../../shared/vaultIdentity.ts";
+import { closeStaleOpenAttendance } from "../../shared/autoCloseAttendance.ts";
 import { employeeOwnsDocument, validVaultRef } from "../../shared/vaultAuthorization.ts";
 import {
   loadCompanyBag, organizationForEmployee, inCompany, canWrite, stampCompany, scopeQuery, filterPayload,
@@ -221,13 +222,30 @@ export default async function (req) {
       const publicEmployee = { ...(emp || {}) };
       delete publicEmployee.portal_password_hash;
       delete publicEmployee.portal_password_salt;
+      // إغلاق أي سجل مفتوح منسي من أيام سابقة، وإعادة الجلب لعرض الحالة المغلقة فوراً.
+      let attendanceOut = attendance || [];
+      if (!isOwnerSession) {
+        try {
+          const closedFetch = await closeStaleOpenAttendance(base44, {
+            org: orgRow || {}, employees: [emp], branches,
+            employeeIds: [String(employeeId)], nowMs: Date.now(),
+          });
+          if (closedFetch > 0) {
+            try {
+              attendanceOut = await base44.asServiceRole.entities.Attendance.filter(
+                { employee_id: employeeId }, "-date", 10
+              );
+            } catch {}
+          }
+        } catch {}
+      }
       return Response.json({
         ok: true,
         employee: publicEmployee,
         org: orgRow || null,
         branch,
         branches,
-        leaves, loans, attendance, trips, warnings,
+        leaves, loans, attendance: attendanceOut, trips, warnings,
         reviews, trainings,
         settlements: paidSettlements,
         decisions, incentives,
@@ -1102,6 +1120,23 @@ export default async function (req) {
 
     // ====== الحضور والبصمة — بوابة الموظف ======
     if (action === "today_attendance") {
+      // إغلاق أي سجل مفتوح منسي من أيام سابقة قبل عرض سجل اليوم.
+      if (!isOwnerSession) {
+        try {
+          const orgA = await sessionOrg();
+          let brsA: any[] = [];
+          try {
+            if (emp?.branch_id) {
+              const b = await base44.asServiceRole.entities.Branch.get(String(emp.branch_id));
+              if (b) brsA = [b];
+            }
+          } catch {}
+          await closeStaleOpenAttendance(base44, {
+            org: orgA || {}, employees: [emp], branches: brsA,
+            employeeIds: [String(employeeId)], nowMs: Date.now(),
+          });
+        } catch {}
+      }
       const recs = await base44.asServiceRole.entities.Attendance.filter(
         { employee_id: employeeId, date: todayISO() }, "-created_date", 5
       );
@@ -1149,6 +1184,15 @@ export default async function (req) {
       const sentLat = Number(body.lat), sentLng = Number(body.lng), sentAcc = Number(body.accuracy || 0);
       const hasCoords = isFinite(sentLat) && isFinite(sentLng) && sentLat !== 0 && sentLng !== 0;
       const orgForWp: any = await sessionOrg();
+      // من نسي انصرافه في يوم سابق يُغلق سجله تلقائياً بنهاية دوام ذلك اليوم قبل بصمة اليوم.
+      if (!isOwnerSession) {
+        try {
+          await closeStaleOpenAttendance(base44, {
+            org: orgForWp || {}, employees: [emp], branches: branchHours ? [branchHours] : [],
+            employeeIds: [String(employeeId)], nowMs: Date.now(),
+          });
+        } catch {}
+      }
       let wpLat: number | null = null, wpLng: number | null = null, wpRadius = 50;
       if (branchLat != null && branchLat !== "" && branchLng != null && branchLng !== "") {
         wpLat = Number(branchLat); wpLng = Number(branchLng); wpRadius = Number(branchRadius) || Number(orgForWp?.workplace_radius) || 50;

@@ -450,6 +450,7 @@ export default function MyRequests() {
                                 <td className="py-2">
                                   <div>{a.check_out || "—"}</div>
                                   {a.check_out && <div className="text-[11px] text-muted-foreground tabular-nums">{attendanceOpDate(a, "out")}</div>}
+                                  {a.auto_closed && <div className="text-[10px] text-amber-600">{isAr ? "تلقائي" : "auto"}</div>}
                                 </td>
                                 <td className="py-2">
                                   <div>{a.work_hours || "—"}</div>

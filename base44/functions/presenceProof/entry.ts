@@ -1,6 +1,7 @@
 import { createClientFromRequest } from "npm:@base44/sdk@0.8.54";
 import { verifyToken } from "../../shared/portalToken.ts";
 import { resolveBranchSchedule } from "../../shared/branchSchedule.ts";
+import { closeStaleOpenAttendance } from "../../shared/autoCloseAttendance.ts";
 // تُحمَّل مكتبة الدفع ديناميكياً داخل getVapid/sendWebPush فقط،
 // حتى تبقى بقية أفعال الدالة (mine/request/status) تعمل لو تعذّر تحميلها.
 
@@ -336,6 +337,10 @@ async function collectOnShift(base44: any, unified: string, org: any) {
     ).catch(() => [])
   );
   const ids = (employees || []).map((e: any) => String(e?.id || "")).filter(Boolean);
+  // إغلاق السجلات المفتوحة المنسية أولاً حتى لا تُحتسب أياماً مفتوحة ولا تُستهدف الأشباح.
+  try {
+    await closeStaleOpenAttendance(base44, { org, employees, branches, nowMs: Date.now() });
+  } catch {}
   const attendanceByEmployee: Record<string, any> = {};
   if (ids.length) {
     try {
@@ -422,6 +427,48 @@ export default async function (req) {
         ok: true,
         active: { ...activeView, confirmed: true, confirmed_at: nowMs, remaining_ms: Math.max(0, Number(active.deadline_at || 0) - Date.now()) },
       });
+    }
+
+    // الإغلاق التلقائي للمنسي: يقبله مسؤول الشركة لنطاق المنشأة، أو الموظف
+    // لجلسة بوابته لنفسه فقط — يُستدعى عند فتح جداول الحضور وبوابة الموظف.
+    if (action === "auto_close") {
+      const pctx = await portalContext(base44, body);
+      let acUnified = "";
+      let acEmpIds: string[] = [];
+      if (pctx) {
+        acUnified = pctx.unified;
+        acEmpIds = [String(pctx.emp.id)];
+      } else {
+        let user: any = null;
+        try { user = await base44.auth.me(); } catch { user = null; }
+        if (!user) return Response.json({ ok: false, error: "unauthorized" }, { status: 401 });
+        if (user.role !== "admin") return Response.json({ ok: false, error: "forbidden" }, { status: 403 });
+        const tenant = await resolveTenantForUser(base44, user);
+        acUnified = String(tenant?.unified_number || "").trim();
+        if (!acUnified) return Response.json({ ok: false, error: "no_company" }, { status: 400 });
+      }
+      const acOrgs = asList(
+        await base44.asServiceRole.entities.Organization.filter({ unified_number: acUnified }, "-created_date", 5).catch(() => [])
+      );
+      const acOrg = acOrgs?.[0] || {};
+      const acEmps = pctx
+        ? [pctx.emp]
+        : asList(
+          await base44.asServiceRole.entities.Employee.filter(
+            { unified_number: acUnified, status: "active" }, "-created_date", 5000
+          ).catch(() => [])
+        );
+      const acBranches = asList(
+        await base44.asServiceRole.entities.Branch.filter({ unified_number: acUnified }, "-created_date", 500).catch(() => [])
+      );
+      const closed = await closeStaleOpenAttendance(base44, {
+        org: acOrg,
+        employees: acEmps,
+        branches: acBranches,
+        employeeIds: acEmpIds.length ? acEmpIds : undefined,
+        nowMs: Date.now(),
+      }).catch(() => 0);
+      return Response.json({ ok: true, closed });
     }
 
     // الإصدار والمتابعة للإدارة فقط: مسؤول الشركة، أو موظف مفوّض على الحضور/الإعدادات.

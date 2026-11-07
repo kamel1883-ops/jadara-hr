@@ -84,6 +84,7 @@ export default function ManagerAttendanceSection({ records = [], subs = [] }) {
             <div className="col-span-1 tabular-nums">
             <div>{r.check_out || "—"}</div>
             {r.check_out && <div className="text-[10px] text-muted-foreground">{attendanceOpDate(r, "out")}</div>}
+            {r.auto_closed && <div className="text-[10px] text-amber-600">{isAr ? "تلقائي" : "auto"}</div>}
           </div>
             <div className="col-span-1 tabular-nums">
               <div>{Number(r.work_hours || 0).toFixed(1)}</div>
