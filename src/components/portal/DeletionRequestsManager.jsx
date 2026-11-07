@@ -163,7 +163,14 @@ export default function DeletionRequestsManager({ session, isAr }) {
             <div key={r.id} className="rounded-xl border border-border p-4 space-y-2.5">
               <div className="flex items-start justify-between gap-3 flex-wrap">
                 <div className="min-w-0">
-                  <div className="font-semibold text-foreground">{r.company_name || "—"}</div>
+                  <div className="font-semibold text-foreground flex items-center gap-2 flex-wrap">
+                    {r.company_name || "—"}
+                    {r.requested_via === "portal" && (
+                      <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-violet-100 text-violet-700">
+                        {isAr ? "من بوابة الموظف" : "From employee portal"}
+                      </span>
+                    )}
+                  </div>
                   <div className="text-xs text-muted-foreground mt-0.5" dir="ltr">{r.unified_number || "—"}</div>
                 </div>
                 {statusBadge(r.status)}

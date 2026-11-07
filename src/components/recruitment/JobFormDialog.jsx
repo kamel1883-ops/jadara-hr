@@ -4,7 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { MobileSelect, MobileSelectItem } from "@/components/ui/mobile-select";
 import { base44 } from "@/api/base44Client";
 import { useToast } from "@/components/ui/use-toast";
 import { useI18n } from "@/lib/i18n";
@@ -94,24 +94,18 @@ export default function JobFormDialog({ open, onOpenChange, onSaved, job }) {
           </div>
           <div className="grid grid-cols-2 gap-3">
             <div><Label>{t.type}</Label>
-              <Select value={form.job_type} onValueChange={(v) => set("job_type", v)}>
-                <SelectTrigger><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="full_time">{t.full}</SelectItem>
-                  <SelectItem value="part_time">{t.part}</SelectItem>
-                  <SelectItem value="contract">{t.cont}</SelectItem>
-                </SelectContent>
-              </Select>
+              <MobileSelect value={form.job_type} onValueChange={(v) => set("job_type", v)}>
+                <MobileSelectItem value="full_time">{t.full}</MobileSelectItem>
+                <MobileSelectItem value="part_time">{t.part}</MobileSelectItem>
+                <MobileSelectItem value="contract">{t.cont}</MobileSelectItem>
+              </MobileSelect>
             </div>
             <div><Label>{t.natReq}</Label>
-              <Select value={form.nationality_req} onValueChange={(v) => set("nationality_req", v)}>
-                <SelectTrigger><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="any">{t.any}</SelectItem>
-                  <SelectItem value="saudi">{t.saudi}</SelectItem>
-                  <SelectItem value="resident">{t.resident}</SelectItem>
-                </SelectContent>
-              </Select>
+              <MobileSelect value={form.nationality_req} onValueChange={(v) => set("nationality_req", v)}>
+                <MobileSelectItem value="any">{t.any}</MobileSelectItem>
+                <MobileSelectItem value="saudi">{t.saudi}</MobileSelectItem>
+                <MobileSelectItem value="resident">{t.resident}</MobileSelectItem>
+              </MobileSelect>
             </div>
           </div>
           <div className="grid grid-cols-3 gap-3">
@@ -128,10 +122,10 @@ export default function JobFormDialog({ open, onOpenChange, onSaved, job }) {
           <Textarea rows={5} value={form.description} onChange={(e) => set("description", e.target.value)} placeholder={t.jdPh} />
           <p className="text-xs text-muted-foreground">{t.jdHint}</p>
           <div><Label>{t.status}</Label>
-            <Select value={form.status} onValueChange={(v) => set("status", v)}>
-              <SelectTrigger className="w-40"><SelectValue /></SelectTrigger>
-              <SelectContent><SelectItem value="open">{t.open}</SelectItem><SelectItem value="closed">{t.closed}</SelectItem></SelectContent>
-            </Select>
+            <MobileSelect value={form.status} onValueChange={(v) => set("status", v)} className="w-40">
+              <MobileSelectItem value="open">{t.open}</MobileSelectItem>
+              <MobileSelectItem value="closed">{t.closed}</MobileSelectItem>
+            </MobileSelect>
           </div>
         </div>
         <DialogFooter>

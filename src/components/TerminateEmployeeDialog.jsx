@@ -5,9 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
-import {
-  Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
-} from "@/components/ui/select";
+import { MobileSelect, MobileSelectItem } from "@/components/ui/mobile-select";
 import { Loader2 } from "lucide-react";
 import { terminationReasons, reasonMeta, todayISO } from "@/lib/eos";
 import { useI18n } from "@/lib/i18n";
@@ -81,19 +79,16 @@ export default function TerminateEmployeeDialog({ open, onClose, employee, onSav
             </div>
             <div className="space-y-1.5">
               <Label className="text-xs font-medium text-muted-foreground">{t.rec}</Label>
-              <Select value={reason} onValueChange={setReason}>
-                <SelectTrigger><SelectValue placeholder={t.pick} /></SelectTrigger>
-                <SelectContent>
-                  {terminationReasons.filter(r => r.value !== "none").map((r) => {
-                    const m = isAr ? r.ar : r.en;
-                    return (
-                      <SelectItem key={r.value} value={r.value}>
-                        {m.label} — {m.article}
-                      </SelectItem>
-                    );
-                  })}
-                </SelectContent>
-              </Select>
+              <MobileSelect value={reason} onValueChange={setReason} placeholder={t.pick}>
+                {terminationReasons.filter(r => r.value !== "none").map((r) => {
+                  const m = isAr ? r.ar : r.en;
+                  return (
+                    <MobileSelectItem key={r.value} value={r.value}>
+                      {m.label} — {m.article}
+                    </MobileSelectItem>
+                  );
+                })}
+              </MobileSelect>
               {reason && (
                 <div className="text-xs text-muted-foreground bg-muted/60 rounded-lg p-2">
                   {reasonMeta(reason).note}

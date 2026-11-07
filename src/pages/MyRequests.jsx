@@ -41,6 +41,7 @@ import { portalSession } from "@/lib/portalSession";
 import JobDescPrintActions from "@/components/docs/JobDescPrintActions";
 import JobDescriptionDoc from "@/components/docs/JobDescriptionDoc";
 import DelegatedWorkspace from "@/components/portal/DelegatedWorkspace";
+import PortalCompanyDeletion from "@/components/portal/PortalCompanyDeletion";
 import AssistantAvatar from "@/components/AssistantAvatar";
 import PullToRefresh from "@/components/PullToRefresh";
 
@@ -669,6 +670,7 @@ export default function MyRequests() {
               {can("incentives") && <EmployeeIncentives items={incentives} session={session} onReload={() => load(session)} />}
             </div>
             <DelegatedWorkspace perms={perms} session={session} employee={employee} isAr={isAr} />
+            <PortalCompanyDeletion session={session} isAr={isAr} />
           </>
         )}
       </div>

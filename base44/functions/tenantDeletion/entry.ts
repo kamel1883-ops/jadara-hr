@@ -83,6 +83,73 @@ export default async function (req: Request) {
         || normEmail(tenant?.contact_email) === ownerEmail;
     };
 
+    // ——— بوابة الموظف: طلب حذف المنشأة بالكامل ———
+    // يُنشئ طلباً بحالة pending فقط؛ لا يُحذف أي شيء قبل اعتماد المالك من بوابته.
+    const portalEmployee = async () => {
+      const token = String(body.token || "");
+      const employeeId = String(body.employee_id || "");
+      if (!token || !employeeId) return null;
+      const verified = await verifyToken(token);
+      if (!verified.ok || verified.employeeId !== employeeId) return null;
+      const emp = await S.Employee.get(employeeId).catch(() => null);
+      if (!emp || emp.status === "terminated" || emp.status === "resigned") return null;
+      return emp;
+    };
+
+    const portalTenant = async (un: string) => {
+      const rows = asList(await S.Tenant.filter({ unified_number: un }, "-created_date", 5));
+      return rows[0] || null;
+    };
+
+    if (action === "portal_status") {
+      const emp = await portalEmployee();
+      if (!emp) return Response.json({ ok: false, error: "invalid_session" }, { status: 401 });
+      const un = String(emp.unified_number || "").trim();
+      if (!un) return Response.json({ ok: true, tenant: null, request: null });
+      const tenant = await portalTenant(un);
+      const rows = asList(await S.TenantDeletionRequest.filter({ unified_number: un }, "-created_date", 50));
+      const request = rows.find((r) => r.status === "pending") || rows[0] || null;
+      return Response.json({
+        ok: true,
+        tenant: { name: tenant?.name || "", unified_number: un },
+        request,
+        blocked: isPlatformAccount(null, tenant),
+      });
+    }
+
+    if (action === "portal_request") {
+      const emp = await portalEmployee();
+      if (!emp) return Response.json({ ok: false, error: "invalid_session" }, { status: 401 });
+      const un = String(emp.unified_number || "").trim();
+      if (!un) return Response.json({ ok: false, error: "no_tenant" }, { status: 400 });
+      const tenant = await portalTenant(un);
+      if (!tenant) return Response.json({ ok: false, error: "no_tenant" }, { status: 400 });
+      if (isPlatformAccount(null, tenant)) return Response.json({ ok: false, error: "not_allowed" }, { status: 403 });
+      const pending = asList(
+        await S.TenantDeletionRequest.filter({ unified_number: un, status: "pending" }, "-created_date", 1)
+      );
+      if (pending.length) return Response.json({ ok: true, already: true, request: pending[0] });
+      const employees = asList(await S.Employee.filter({ unified_number: un }, "-created_date", 2000))
+        .filter((e) => e.status !== "terminated" && e.status !== "resigned");
+      const created = await S.TenantDeletionRequest.create({
+        tenant_id: tenant.id,
+        unified_number: un,
+        company_name: tenant.name || "",
+        contact_email: tenant.contact_email || "",
+        contact_phone: tenant.contact_phone || "",
+        requested_via: "portal",
+        requested_by_employee_id: String(emp.id || ""),
+        requested_by_user_id: String(emp.user_id || ""),
+        requested_by_name: String(emp.full_name || ""),
+        requested_by_email: String(emp.email || "").toLowerCase(),
+        employees_count: employees.length,
+        reason: String(body.reason || "").slice(0, 1000),
+        status: "pending",
+        requested_date: todayISO(),
+      });
+      return Response.json({ ok: true, request: created });
+    }
+
     // ——— حساب الشركة: حالة الطلب ———
     if (action === "status") {
       const { user, tenant } = await resolveTenant();

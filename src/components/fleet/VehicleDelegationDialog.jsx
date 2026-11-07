@@ -3,7 +3,7 @@ import { base44 } from "@/api/base44Client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { MobileSelect, MobileSelectItem } from "@/components/ui/mobile-select";
 import { ScrollText, FileText, RotateCcw, Loader2 } from "lucide-react";
 import { useI18n } from "@/lib/i18n";
 import { enrichEmployeesBatch } from "@/lib/vaultSensitive";
@@ -138,14 +138,11 @@ export default function VehicleDelegationDialog({ vehicle, employees, onClose, o
               <div className="font-medium text-sm">{t.formTitle(!!(list.find((r) => r.is_current && r.status === "active")))}</div>
               <div className="space-y-1.5">
                 <Label>{t.driver}</Label>
-                <Select value={empId} onValueChange={setEmpId}>
-                  <SelectTrigger><SelectValue placeholder={t.pickEmp} /></SelectTrigger>
-                  <SelectContent>
-                    {enrichedEmps.map((e) => (
-                      <SelectItem key={e.id} value={e.id}>{e.full_name} — {e.national_id || "—"} {e.position ? `· ${e.position}` : ""}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                <MobileSelect value={empId} onValueChange={setEmpId} placeholder={t.pickEmp}>
+                  {enrichedEmps.map((e) => (
+                    <MobileSelectItem key={e.id} value={e.id}>{e.full_name} — {e.national_id || "—"} {e.position ? `· ${e.position}` : ""}</MobileSelectItem>
+                  ))}
+                </MobileSelect>
               </div>
               <div className="grid grid-cols-2 gap-3">
                 <div className="space-y-1.5">

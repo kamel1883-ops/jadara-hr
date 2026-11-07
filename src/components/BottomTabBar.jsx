@@ -1,11 +1,12 @@
-import React, { useRef } from "react";
+import React from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { LayoutDashboard, Users, ClipboardCheck, Settings as SettingsIcon } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useI18n } from "@/lib/i18n";
 
-// شريط التبويب السفلي — يدعم حفظ تاريخ التنقّل بين التبويبات (history stack preservation)
-// بحيث يبقى مسار العودة محفوظاً عند التبديل بين التبويبات الجذرية.
+// شريط التبويب السفلي — التنقل بين الشاشات الجذرية دون إعادة تهيئتها.
+// الشاشات تبقى مثبتة في TabScreens (حالة كاملة: نماذج، مرشحات، واجهة فرعية، تمرير)،
+// لذلك لا يُرسل أي مفتاح تحديث ولا يُعاد تركيب المسار عند التبديل.
 const TABS = [
   { to: "/app", ar: "الرئيسية", en: "Home", icon: LayoutDashboard },
   { to: "/employees", ar: "الموظفين", en: "Employees", icon: Users },
@@ -18,16 +19,17 @@ export default function BottomTabBar({ onNavigate }) {
   const isAr = lang === "ar";
   const location = useLocation();
   const navigate = useNavigate();
-  const stackRef = useRef([]);
 
   const isActive = (to) => (to === "/app" ? location.pathname === "/app" : location.pathname.startsWith(to));
 
   const handleClick = (to) => {
-    const stack = stackRef.current;
-    if (stack[stack.length - 1] !== to) stack.push(to);
     onNavigate?.();
-    const active = isActive(to);
-    navigate(to, { state: active ? { refreshKey: Date.now(), tabStack: [...stack] } : { tabStack: [...stack] } });
+    if (isActive(to)) {
+      // إعادة الضغط على التبويب النشط: العودة لأعلى الشاشة فقط — دون فقدان الحالة
+      window.scrollTo({ top: 0, behavior: "smooth" });
+      return;
+    }
+    navigate(to);
   };
 
   return (

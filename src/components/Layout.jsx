@@ -10,6 +10,7 @@ import NotificationsBell from "@/components/NotificationsBell";
 import CompanyAssistant from "@/components/CompanyAssistant";
 import AnimatedOutlet from "@/components/AnimatedOutlet";
 import BottomTabBar from "@/components/BottomTabBar";
+import TabScreens from "@/components/TabScreens";
 import SupportTicketDialog from "@/components/SupportTicketDialog";
 import { useI18n } from "@/lib/i18n";
 
@@ -90,7 +91,8 @@ export default function Layout() {
   };
 
   const isActive = (path) => path === "/" ? location.pathname === "/" : location.pathname.startsWith(path);
-  const rootTab = ROOT_TABS.includes(location.pathname) ? bottomNav.find((i) => i.to === location.pathname) : null;
+  const isRootTab = ROOT_TABS.includes(location.pathname);
+  const rootTab = isRootTab ? bottomNav.find((i) => i.to === location.pathname) : null;
 
   return (
     <div className="min-h-screen bg-background flex">
@@ -199,7 +201,7 @@ export default function Layout() {
             <Crown size={440} className="text-amber-500 dark:text-amber-400" strokeWidth={0.8} />
           </div>
           <div className="relative">
-            <AnimatedOutlet />
+            {isRootTab ? <TabScreens active={location.pathname} /> : <AnimatedOutlet />}
           </div>
         </main>
 
