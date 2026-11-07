@@ -1,0 +1,63 @@
+name: Upload iOS build to TestFlight
+
+# كيف تشتغل الأتمتة:
+# 1. حمّل نسخة iOS (ملف .ipa) من Base44 على جهازك — لازم تكون موقّعة بشهادة
+#    التوزيع الخاصة بحسابك (نفس الـ Bundle ID المسجّل في App Store Connect).
+# 2. انسخ الملف إلى مجلد ios-build في المستودع باسم app.ipa وادفعه (push).
+# 3. هذا الملف يشتغل تلقائياً ويرفع النسخة إلى TestFlight في App Store Connect
+#    باستخدام مفتاح الـ API المحفوظ في أسرار المستودع (لا يظهر لأحد).
+# 4. بعد الرفع: ادخل App Store Connect ← TestFlight ← وزّع على المختبرين،
+#    أو قدّمها للمراجعة للنشر في المتجر.
+
+on:
+  push:
+    paths:
+      - "ios-build/*.ipa"
+  workflow_dispatch:
+    inputs:
+      ipa_path:
+        description: "مسار ملف الـ .ipa داخل المستودع"
+        required: false
+        default: "ios-build/app.ipa"
+      release_notes:
+        description: "ملاحظات النسخة لمختبري TestFlight (اختياري)"
+        required: false
+        default: ""
+
+jobs:
+  upload:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: حدّد مسار ملف الـ IPA
+        id: ipa
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            echo "path=${{ inputs.ipa_path }}" >> "$GITHUB_OUTPUT"
+          else
+            echo "path=ios-build/app.ipa" >> "$GITHUB_OUTPUT"
+          fi
+          ls -lh "$(cat /dev/null)" 2>/dev/null || true
+
+      - name: تحقق من وجود الملف
+        run: |
+          if [ ! -f "${{ steps.ipa.outputs.path }}" ]; then
+            echo "::error::لم يتم العثور على ${{ steps.ipa.outputs.path }} — ضع ملف الـ .ipa في مجلد ios-build باسم app.ipa"
+            exit 1
+          fi
+          ls -lh "${{ steps.ipa.outputs.path }}"
+
+      - name: الرفع إلى TestFlight
+        uses: apple-actions/upload-testflight-build@v5
+        with:
+          app-path: ${{ steps.ipa.outputs.path }}
+          app-type: ios
+          issuer-id: ${{ secrets.APPSTORE_ISSUER_ID }}
+          api-key-id: ${{ secrets.APPSTORE_API_KEY_ID }}
+          api-private-key: ${{ secrets.APPSTORE_PRIVATE_KEY }}
+          release-notes: ${{ inputs.release_notes }}
