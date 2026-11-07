@@ -7,7 +7,7 @@ import { printReport } from "@/lib/reportPrint";
 import DocApprovalMark from "@/components/docs/DocApprovalMark";
 import { useToast } from "@/components/ui/use-toast";
 import { cn } from "@/lib/utils";
-import { attendanceDisplayStatus, isOrgWeeklyOff, todayISO } from "@/lib/hr";
+import { attendanceDisplayStatus, isOrgWeeklyOff, todayISO, attendanceElapsedMs, formatWorkDuration } from "@/lib/hr";
 import { useI18n } from "@/lib/i18n";
 
 const MONTHS = {
@@ -42,7 +42,7 @@ export default function AttendanceReport({ org }) {
     btn: "تحميل تقرير الشهر PDF",
     exporting: "جارٍ التصدير…",
     total: "إجمالي السجلات", present: "حاضر", late: "متأخر", absent: "غائب", leave: "إجازة",
-    thEmp: "الموظف", thId: "الهوية/الإقامة", thDay: "اليوم", thDate: "التاريخ", thIn: "الحضور", thOut: "الانصراف", thStatus: "الحالة",
+    thEmp: "الموظف", thId: "الهوية/الإقامة", thDay: "اليوم", thDate: "التاريخ", thIn: "الحضور", thOut: "الانصراف", thWork: "مدة الدوام", thStatus: "الحالة",
     weeklyOff: "إجازة أسبوعية",
     pdfTitle: (m) => `تقرير الحضور والانصراف — ${m}`,
     pdfSub: (tot, c) => `إجمالي السجلات: ${tot} — حاضر: ${c.present} · متأخر: ${c.late} · غائب: ${c.absent} · إجازة: ${c.leave}`,
@@ -56,7 +56,7 @@ export default function AttendanceReport({ org }) {
     btn: "Download monthly report PDF",
     exporting: "Exporting…",
     total: "Total records", present: "Present", late: "Late", absent: "Absent", leave: "Leave",
-    thEmp: "Employee", thId: "ID / Iqama", thDay: "Day", thDate: "Date", thIn: "Check in", thOut: "Check out", thStatus: "Status",
+    thEmp: "Employee", thId: "ID / Iqama", thDay: "Day", thDate: "Date", thIn: "Check in", thOut: "Check out", thWork: "Worked", thStatus: "Status",
     weeklyOff: "Weekly off",
     pdfTitle: (m) => `Attendance report — ${m}`,
     pdfSub: (tot, c) => `Total records: ${tot} — Present: ${c.present} · Late: ${c.late} · Absent: ${c.absent} · Leave: ${c.leave}`,
@@ -251,6 +251,7 @@ export default function AttendanceReport({ org }) {
             <TableHead className="text-center">{t.thDate}</TableHead>
             <TableHead className="text-center">{t.thIn}</TableHead>
             <TableHead className="text-center">{t.thOut}</TableHead>
+            <TableHead className="text-center">{t.thWork}</TableHead>
             <TableHead className="text-center">{t.thStatus}</TableHead>
           </TableRow>
           </TableHeader>
@@ -272,6 +273,7 @@ export default function AttendanceReport({ org }) {
                 <TableCell className="text-center text-xs tabular-nums" dir="ltr">{dStr || "—"}</TableCell>
                 <TableCell className="text-center tabular-nums">{r.check_in || "—"}</TableCell>
                 <TableCell className="text-center tabular-nums">{r.check_out || "—"}</TableCell>
+                <TableCell className="text-center text-xs tabular-nums">{r.check_in ? formatWorkDuration(attendanceElapsedMs(r), lang) : "—"}</TableCell>
                 <TableCell className="text-center">
                   <span className={cn("text-xs px-2.5 py-1 rounded-full font-medium", s.cls)}>{s.label}</span>
                 </TableCell>

@@ -4,7 +4,8 @@ import { Button } from "@/components/ui/button";
 import { Calendar, Printer, Search } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { usePortalI18n, portalDir } from "@/lib/portalI18n";
-import { attendanceDisplayStatus, attendanceOpDate } from "@/lib/hr";
+import { attendanceDisplayStatus, attendanceOpDate, attendanceElapsedMs, formatWorkDuration } from "@/lib/hr";
+import OnDutyTimer from "@/components/OnDutyTimer";
 
 const STATUS_CLS = {
   present: "bg-emerald-50 text-emerald-700",
@@ -84,7 +85,14 @@ export default function ManagerAttendanceSection({ records = [], subs = [] }) {
             <div>{r.check_out || "—"}</div>
             {r.check_out && <div className="text-[10px] text-muted-foreground">{attendanceOpDate(r, "out")}</div>}
           </div>
-            <div className="col-span-1 tabular-nums">{Number(r.work_hours || 0).toFixed(1)}</div>
+            <div className="col-span-1 tabular-nums">
+              <div>{Number(r.work_hours || 0).toFixed(1)}</div>
+              {r.check_in && (r.check_out ? (
+                <div className="text-[10px] text-muted-foreground">{formatWorkDuration(attendanceElapsedMs(r), isAr ? "ar" : "en")}</div>
+              ) : (
+                <OnDutyTimer record={r} isAr={isAr} className="text-[10px] text-muted-foreground" />
+              ))}
+            </div>
             <div className="col-span-2">
               <span className={cn("px-1.5 py-0.5 rounded-full text-[11px]", STATUS_CLS[r.status] || "bg-slate-100 text-slate-600")}>
                 {statusLabel(r)}

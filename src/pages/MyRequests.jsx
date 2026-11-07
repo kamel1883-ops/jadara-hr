@@ -30,7 +30,8 @@ import {
   CalendarPlus, Wallet, Loader2, BadgeCheck, Clock, Banknote, CalendarCheck, Plane, LogOut, Crown, ArrowRight, Building2, Package, MessageSquareWarning
 } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { leaveTypeLabel, formatCurrency, attendanceDisplayStatus, attendanceOpDate } from "@/lib/hr";
+import { leaveTypeLabel, formatCurrency, attendanceDisplayStatus, attendanceOpDate, attendanceElapsedMs, formatWorkDuration } from "@/lib/hr";
+import OnDutyTimer from "@/components/OnDutyTimer";
 import { badge } from "@/lib/approvals";
 import { entitledLeaveDays, usedLeaveTotal } from "@/lib/leaveBalance";
 import { computeSettlement } from "@/lib/eos";
@@ -450,7 +451,14 @@ export default function MyRequests() {
                                   <div>{a.check_out || "—"}</div>
                                   {a.check_out && <div className="text-[11px] text-muted-foreground tabular-nums">{attendanceOpDate(a, "out")}</div>}
                                 </td>
-                                <td className="py-2">{a.work_hours || "—"}</td>
+                                <td className="py-2">
+                                  <div>{a.work_hours || "—"}</div>
+                                  {a.check_in && (a.check_out ? (
+                                    <div className="text-[11px] text-muted-foreground tabular-nums">{isAr ? `المدة: ${formatWorkDuration(attendanceElapsedMs(a), "ar")}` : `Worked: ${formatWorkDuration(attendanceElapsedMs(a), "en")}`}</div>
+                                  ) : (
+                                    <OnDutyTimer record={a} isAr={isAr} className="text-[11px] text-muted-foreground tabular-nums" />
+                                  ))}
+                                </td>
                                 <td className="py-2"><span className={cn("text-xs px-2 py-0.5 rounded-full", st.cls)}>{st.label}</span></td>
                               </tr>
                             );

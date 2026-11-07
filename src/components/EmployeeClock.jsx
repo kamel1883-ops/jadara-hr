@@ -1,11 +1,12 @@
 import React, { useState, useEffect } from "react";
 import { base44 } from "@/api/base44Client";
 import { Button } from "@/components/ui/button";
-import { Fingerprint, Loader2, LogIn, LogOut, MapPin, CheckCircle2, Coffee, Play } from "lucide-react";
+import { Fingerprint, Loader2, LogIn, LogOut, MapPin, CheckCircle2, Coffee, Play, Timer } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { usePortalI18n, usePortalT, portalDir } from "@/lib/portalI18n";
 import { resolveWorkHours } from "@/lib/branchHours";
-import { attendanceOpDate } from "@/lib/hr";
+import { attendanceOpDate, attendanceElapsedMs, formatWorkDuration } from "@/lib/hr";
+import OnDutyTimer from "@/components/OnDutyTimer";
 import { computeDeductibleShortfall } from "@/lib/payrollCompute";
 
 const localToday = () => {
@@ -290,6 +291,13 @@ export default function EmployeeClock({ employee, org, branch, branches, onChang
         </div>
       </div>
 
+      {checkedIn && !checkedOut && today?.check_in && (
+        <div className="rounded-xl bg-emerald-50/60 border border-emerald-100 px-3 py-2 mb-4 flex items-center gap-2">
+          <Timer size={16} className="text-emerald-600 shrink-0" />
+          <OnDutyTimer record={today} isAr={lang === "ar"} className="text-sm font-medium text-emerald-700 tabular-nums" />
+        </div>
+      )}
+
       {checkedIn && !checkedOut && (onBreak || (today?.break_minutes || 0) > 0) && (
         <div className="rounded-xl bg-amber-50/60 border border-amber-100 p-3 mb-4 flex items-center gap-2">
           <Coffee size={16} className="text-amber-600 shrink-0" />
@@ -329,6 +337,13 @@ export default function EmployeeClock({ employee, org, branch, branches, onChang
                 {lang === "ar"
                   ? `وقت الانصراف: ${attendanceOpDate(today, "out")} ${today.check_out}`
                   : `Checked out: ${attendanceOpDate(today, "out")} ${today.check_out}`}
+              </div>
+            )}
+            {today?.check_out && (
+              <div className="mt-1 text-xs text-muted-foreground tabular-nums ms-6">
+                {lang === "ar"
+                  ? `مدة الدوام: ${formatWorkDuration(attendanceElapsedMs(today), "ar")}`
+                  : `Worked: ${formatWorkDuration(attendanceElapsedMs(today), "en")}`}
               </div>
             )}
           </div>

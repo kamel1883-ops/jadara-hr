@@ -162,6 +162,60 @@ export function attendanceDisplayStatus(recordOrStatus) {
   return { key: "on_duty", label: map[lang] || map.en, cls: "bg-emerald-50 text-emerald-700" };
 }
 
+// لحظة الحضور/الانصراف بالمللي ثانية: الطابع المخزّن أولاً، ثم اشتقاق من تاريخ
+// السجل + الوقت، ثم تاريخ الإنشاء احتياطاً للحضور. تُستخدم لحساب مدة التواجد الفعلية.
+export function attendanceMomentMs(record, kind) {
+  try {
+    const stamped = Number(record?.[kind === "out" ? "check_out_at" : "check_in_at"]) || 0;
+    if (stamped > 0) return stamped;
+    const hm = String(record?.[kind === "out" ? "check_out" : "check_in"] || "");
+    const d = String(record?.date || "").slice(0, 10);
+    if (d && /^\d{1,2}:\d{2}$/.test(hm)) {
+      const t = new Date(`${d}T${hm}:00`).getTime();
+      if (!isNaN(t)) return t;
+    }
+    if (kind === "in" && record?.created_date) {
+      const t = new Date(record.created_date).getTime();
+      if (!isNaN(t)) return t;
+    }
+  } catch {}
+  return 0;
+}
+
+// المدة المنقضية بالمللي ثانية: للمفتوح (حضور بلا انصراف) حتى اللحظة المعطاة،
+// وللمغلق بين لحظتي الحضور والانصراف — أي مدة التواجد الفعلية بالدوام.
+export function attendanceElapsedMs(record, nowMs) {
+  const start = attendanceMomentMs(record, "in");
+  if (!start) return 0;
+  const end = record?.check_out ? attendanceMomentMs(record, "out") : Number(nowMs) || Date.now();
+  if (!end || end < start) return 0;
+  return end - start;
+}
+
+// صياغة المدة بالعربية: «ساعة و10 دقائق»، «ساعتين و5 دقائق»، «4 ساعات»،
+// «7 ساعات و30 دقيقة» — وبغير العربية بصيغة مختصرة مثل 1h 10m.
+export function formatWorkDuration(ms, lang) {
+  const totalMin = Math.max(0, Math.floor((Number(ms) || 0) / 60000));
+  const h = Math.floor(totalMin / 60), m = totalMin % 60;
+  if (lang !== "ar") {
+    if (h && m) return `${h}h ${m}m`;
+    if (h) return `${h}h`;
+    if (m) return `${m}m`;
+    return "<1m";
+  }
+  const unit = (n, one, two, few, many) => {
+    if (n === 1) return one;
+    if (n === 2) return two;
+    if (n >= 3 && n <= 10) return `${n} ${few}`;
+    return `${n} ${many}`;
+  };
+  const parts = [];
+  if (h) parts.push(unit(h, "ساعة", "ساعتين", "ساعات", "ساعة"));
+  if (m) parts.push(unit(m, "دقيقة", "دقيقتين", "دقائق", "دقيقة"));
+  if (!parts.length) return "أقل من دقيقة";
+  return parts.join(" و");
+}
+
 // تاريخ عملية الحضور/الانصراف الفعلية: من طابع لحظة العملية المخزّن، وإلا تاريخ السجل.
 // kind: "in" للحضور، "out" للانصراف. يُستخدم لعرض تاريخ كل عملية مع وقتها.
 export function attendanceOpDate(record, kind) {

@@ -10,9 +10,10 @@ import {
 } from "@/components/ui/select";
 import { CalendarCheck, Plus, CalendarOff } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { todayISO, attendanceDisplayStatus, isOrgWeeklyOff, dayNameAr, attendanceOpDate } from "@/lib/hr";
+import { todayISO, attendanceDisplayStatus, isOrgWeeklyOff, dayNameAr, attendanceOpDate, attendanceElapsedMs, formatWorkDuration } from "@/lib/hr";
 import { resolveWorkHours } from "@/lib/branchHours";
-import { requiredNetHours } from "@/lib/payrollCompute";
+import { requiredNetHours, computeDeductibleShortfall } from "@/lib/payrollCompute";
+import OnDutyTimer from "@/components/OnDutyTimer";
 // dayNameAr يُستخدم فقط في الفرع العربي للإجازة الأسبوعية؛ الفرع الإنجليزي يستخدم toLocaleDateString داخل العنصر.
 import { useI18n } from "@/lib/i18n";
 import AttendanceReport from "@/components/reports/AttendanceReport";
@@ -281,22 +282,37 @@ function StatusBadge({ record, employees, branches, org, isAr }) {
   const grace = Number(hours.late_grace_minutes) || 0;
   const open = record?.status === "present" && record?.check_in && !record?.check_out;
   const closedNet = record?.check_out ? Number(record?.work_hours) || 0 : 0;
+  const elapsedMs = record?.check_out ? attendanceElapsedMs(record) : 0;
+  // النقص بعد السماح (يُحتسب تأخيراً ويُخصم)، والزيادة عن المطلوب (تُعرض ولا تُحتسب إضافياً)
+  const shortfallHrs = record?.status === "late"
+    ? computeDeductibleShortfall(hours.work_hours_per_day, closedNet, grace)
+    : 0;
+  const extraMs = required > 0 && elapsedMs > 0 ? elapsedMs - required * 3600e3 : 0;
   const title = isAr
-    ? "الصافي = الانصراف − الحضور − الاستراحات المسجلة. يُحدَّد التأخير عند الانصراف فقط."
-    : "Net = check-out − check-in − recorded breaks. Lateness is decided at check-out only.";
+    ? `المطلوب الصافي: ${required.toFixed(1)} س${grace ? ` · السماح: ${grace} د` : ""} — الصافي = الانصراف − الحضور − الاستراحات المسجلة. يُحدَّد التأخير عند الانصراف فقط.`
+    : `Required net: ${required.toFixed(1)} h${grace ? ` · Grace: ${grace} min` : ""} — Net = check-out − check-in − recorded breaks. Lateness is decided at check-out only.`;
   return (
     <div>
       <span title={title} className={cn("text-xs px-2.5 py-1 rounded-full font-medium", s.cls)}>{s.label}</span>
-      {open && required > 0 && (
+      {open && <OnDutyTimer record={record} isAr={isAr} />}
+      {record?.check_out && elapsedMs > 0 && (
         <div className="mt-1 text-[11px] text-muted-foreground tabular-nums">
-          {isAr
-            ? `المطلوب الصافي: ${required.toFixed(1)} س${grace ? ` · السماح: ${grace} د` : ""}`
-            : `Required net: ${required.toFixed(1)} h${grace ? ` · Grace: ${grace} min` : ""}`}
+          {isAr ? `المدة: ${formatWorkDuration(elapsedMs, "ar")}` : `Worked: ${formatWorkDuration(elapsedMs, "en")}`}
         </div>
       )}
       {record?.check_out && closedNet > 0 && required > 0 && (
         <div className="mt-1 text-[11px] text-muted-foreground tabular-nums">
           {isAr ? `الصافي: ${closedNet.toFixed(1)} / ${required.toFixed(1)} س` : `Net: ${closedNet.toFixed(1)} / ${required.toFixed(1)} h`}
+        </div>
+      )}
+      {shortfallHrs > 0 && (
+        <div className="mt-1 text-[11px] text-amber-700 tabular-nums">
+          {isAr ? `التأخير: ${formatWorkDuration(shortfallHrs * 3600e3, "ar")}` : `Late: ${formatWorkDuration(shortfallHrs * 3600e3, "en")}`}
+        </div>
+      )}
+      {extraMs >= 15 * 60e3 && (
+        <div className="mt-1 text-[11px] text-muted-foreground tabular-nums">
+          {isAr ? `زيادة عن الدوام: ${formatWorkDuration(extraMs, "ar")} (لا تُحتسب إضافياً)` : `Extra: ${formatWorkDuration(extraMs, "en")} (unpaid)`}
         </div>
       )}
     </div>
