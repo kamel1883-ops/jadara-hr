@@ -1,7 +1,7 @@
-import React, { useCallback, useEffect, useMemo, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { base44 } from "@/api/base44Client";
 import { Button } from "@/components/ui/button";
-import { AlarmCheck, BellRing, Loader2, ShieldCheck, Timer } from "lucide-react";
+import { AlarmCheck, BellRing, ChevronDown, ChevronUp, Loader2, ShieldCheck, Timer } from "lucide-react";
 import { useI18n } from "@/lib/i18n";
 import { portalSession } from "@/lib/portalSession";
 import { cn } from "@/lib/utils";
@@ -37,6 +37,8 @@ export default function PresenceProofManager({ org }) {
   const isAr = lang === "ar";
   const t = isAr ? {
     title: "إثبات الحضور الفوري",
+    expand: "فتح",
+    collapse: "إغلاق",
     desc: "تنبيه عاجل للموجودين في الدوام حالياً فقط — للتأكيد خلال 5 دقائق. يصل لجهاز الموظف نفسه بعد تفعيله إشعارات الجوال من بوابة الموظف برقم هويته (بلا بريد وبلا حساب إضافي)، ويصل أيضاً لحساب التطبيق إن وُجد، ويظهر أعلى بوابة الموظف عند فتحها. على آيفون: تُضاف البوابة إلى الشاشة الرئيسية أولاً ثم تُفعّل الإشعارات. استخدم زر «دفع تجريبي» للتأكد قبل الاعتماد عليه. عدم التأكيد يظهر في تقرير المتابعة فقط ولا يُحتسب غياباً أو خصماً.",
     request: "طلب إثبات الحضور الآن",
     requesting: "جارٍ إرسال التنبيه...",
@@ -77,6 +79,8 @@ export default function PresenceProofManager({ org }) {
     phoneCoverage: (withPhone, total) => `وللعلم: ${withPhone} من ${total} من هؤلاء لديهم رقم جوال مسجّل في ملف الموظف.`,
   } : {
     title: "Instant presence proof",
+    expand: "Open",
+    collapse: "Close",
     desc: "An urgent check for employees currently on shift only — confirm within 5 minutes. It reaches the employee’s own device once they enable phone notifications from the portal with their national ID (no email, no extra account), and also the app account if one exists; the alert also appears at the top of the employee portal. On iPhone the portal must be added to the Home Screen first. Use “Test push” to verify it before relying on it. A missed confirmation appears only in follow-up; it is never automatic absence or deduction.",
     request: "Request presence proof now",
     requesting: "Sending the urgent alert...",
@@ -137,6 +141,19 @@ export default function PresenceProofManager({ org }) {
   const [error, setError] = useState("");
   const [errorCode, setErrorCode] = useState("");
   const [nowMs, setNowMs] = useState(Date.now());
+  // ستارة ذكية: مغلقة افتراضياً لتوفير المساحة، تُحفظ حالة الفتح/الإغلاق،
+  // وتنفتح تلقائياً عند وصول طلب نشط جديد حتى لا يفوت التنبيه العاجل.
+  const [open, setOpen] = useState(() => {
+    try { return localStorage.getItem("presenceProof.open") === "1"; } catch { return false; }
+  });
+  const seenActiveId = useRef(null);
+  const toggleOpen = useCallback(() => {
+    setOpen((v) => {
+      const next = !v;
+      try { localStorage.setItem("presenceProof.open", next ? "1" : "0"); } catch {}
+      return next;
+    });
+  }, []);
 
   const load = useCallback(async (silent = false) => {
     if (!silent) setLoading(true);
@@ -162,6 +179,14 @@ export default function PresenceProofManager({ org }) {
     if (!request || request.status !== "active") return;
     const id = setInterval(() => setNowMs(Date.now()), 1000);
     return () => clearInterval(id);
+  }, [request]);
+
+  useEffect(() => {
+    if (request?.status === "active" && request?.id && seenActiveId.current !== String(request.id)) {
+      seenActiveId.current = String(request.id);
+      setOpen(true);
+      try { localStorage.setItem("presenceProof.open", "1"); } catch {}
+    }
   }, [request]);
 
   const failWith = (payload = {}, status = 0) => {
@@ -201,6 +226,8 @@ export default function PresenceProofManager({ org }) {
       const data = res?.data || res;
       if (data?.ok) {
         setRequest(data.request || null);
+        setOpen(true);
+        try { localStorage.setItem("presenceProof.open", "1"); } catch {}
         if (data.push) setPushInfo(data.push);
         setError("");
         setErrorCode("");
@@ -272,13 +299,40 @@ export default function PresenceProofManager({ org }) {
           : t.pushNoUser;
   const pushWarn = pushStatus === "partial" || pushStatus === "failed" || pushStatus === "skipped_no_user";
 
+  const headerSummary = active
+    ? `${t.active} • ${t.remaining}: ${fmtRemaining(remaining, isAr)}`
+    : request
+      ? `${t.latest} • ${t.confirmed}: ${Number(request.confirmed_count || 0)} • ${t.pending}: ${Number(request.pending_count || 0)}`
+      : t.noRequest;
+
   return (
     <div className="bg-white rounded-2xl border border-border p-4 mb-5">
-      <div className="flex flex-col sm:flex-row sm:items-start gap-3 justify-between">
+      <button
+        type="button"
+        onClick={toggleOpen}
+        aria-expanded={open}
+        className="w-full flex items-center justify-between gap-3 text-start"
+      >
+        <span className="flex items-center gap-2 min-w-0">
+          <span className="relative flex h-2.5 w-2.5 shrink-0">
+            {active && <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-rose-500 opacity-75" />}
+            <span className={cn("relative inline-flex rounded-full h-2.5 w-2.5", active ? "bg-rose-600" : "bg-muted-foreground/30")} />
+          </span>
+          <BellRing size={18} className="text-rose-600 shrink-0" />
+          <span className="min-w-0">
+            <span className="font-semibold block">{t.title}</span>
+            <span className="text-xs text-muted-foreground block truncate">{headerSummary}</span>
+          </span>
+        </span>
+        <span className="flex items-center gap-1 text-xs text-muted-foreground shrink-0">
+          {open ? t.collapse : t.expand}
+          {open ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
+        </span>
+      </button>
+
+      {open && (
+      <div className="mt-3 flex flex-col sm:flex-row sm:items-start gap-3 justify-between">
         <div>
-          <h3 className="font-semibold flex items-center gap-2">
-            <BellRing size={18} className="text-rose-600" /> {t.title}
-          </h3>
           <p className="text-xs text-muted-foreground mt-1 leading-relaxed max-w-2xl">{t.desc}</p>
           <p className="text-[11px] text-muted-foreground mt-1 flex items-center gap-1">
             <ShieldCheck size={12} /> {t.payrollNote}
@@ -300,21 +354,23 @@ export default function PresenceProofManager({ org }) {
           </Button>
         </div>
       </div>
+      )}
 
-      {testNote && (
+      {open && testNote && (
         <p className="mt-2 text-[11px] text-muted-foreground">{testNote}</p>
       )}
 
-      {error && (
+      {open && error && (
         <div className="mt-3 text-sm text-rose-700 bg-rose-50 border border-rose-200 rounded-xl px-3 py-2">
           <div>{error}</div>
           {errorCode && <div className="mt-1 text-xs text-rose-600/90 tabular-nums">{t.diagCode}: {errorCode}</div>}
         </div>
       )}
-      {proofDisabled && !error && (
+      {open && proofDisabled && !error && (
         <div className="mt-3 text-sm text-amber-700 bg-amber-50 border border-amber-200 rounded-xl px-3 py-2">{t.disabled}</div>
       )}
 
+      {open && (
       <div className="mt-4">
         {loading ? (
           <div className="text-sm text-muted-foreground">{t.loading}</div>
@@ -388,6 +444,7 @@ export default function PresenceProofManager({ org }) {
           </div>
         )}
       </div>
+      )}
     </div>
   );
 }
