@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from "@/components/ui/select";
+import { MobileSelect, MobileSelectItem } from "@/components/ui/mobile-select";
 import { Loader2 } from "lucide-react";
 import { useI18n } from "@/lib/i18n";
 import { translateTo7 } from "@/lib/translate7";
@@ -95,22 +95,22 @@ export default function DecisionFormDialog({ open, onClose, onSaved, employees, 
           <div className="grid grid-cols-2 gap-3">
             <div>
               <Label className="text-xs">{t.type}</Label>
-              <Select value={form.decision_type} onValueChange={(v) => set("decision_type", v)}>
-                <SelectTrigger className="mt-1"><SelectValue /></SelectTrigger>
-                <SelectContent>{TYPES.map((x) => <SelectItem key={x.v} value={x.v}>{t.types[x.v]}</SelectItem>)}</SelectContent>
-              </Select>
+              <div className="mt-1">
+                <MobileSelect value={form.decision_type} onValueChange={(v) => set("decision_type", v)}>
+                  {TYPES.map((x) => <MobileSelectItem key={x.v} value={x.v}>{t.types[x.v]}</MobileSelectItem>)}
+                </MobileSelect>
+              </div>
             </div>
             <div>
               <Label className="text-xs">{t.target}</Label>
-              <Select value={form.target} onValueChange={(v) => set("target", v)}>
-                <SelectTrigger className="mt-1"><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">{t.all}</SelectItem>
-                  <SelectItem value="department">{t.dept}</SelectItem>
-                  <SelectItem value="managers">{t.managers}</SelectItem>
-                  <SelectItem value="employee">{t.emp}</SelectItem>
-                </SelectContent>
-              </Select>
+              <div className="mt-1">
+                <MobileSelect value={form.target} onValueChange={(v) => set("target", v)}>
+                  <MobileSelectItem value="all">{t.all}</MobileSelectItem>
+                  <MobileSelectItem value="department">{t.dept}</MobileSelectItem>
+                  <MobileSelectItem value="managers">{t.managers}</MobileSelectItem>
+                  <MobileSelectItem value="employee">{t.emp}</MobileSelectItem>
+                </MobileSelect>
+              </div>
             </div>
           </div>
           <div>
@@ -134,19 +134,21 @@ export default function DecisionFormDialog({ open, onClose, onSaved, employees, 
           {form.target === "department" && (
             <div>
               <Label className="text-xs">{t.chooseDept}</Label>
-              <Select value={form.department} onValueChange={(v) => set("department", v)}>
-                <SelectTrigger className="mt-1"><SelectValue placeholder={t.chooseDept} /></SelectTrigger>
-                <SelectContent>{departments.map((d) => <SelectItem key={d} value={d}>{d}</SelectItem>)}</SelectContent>
-              </Select>
+              <div className="mt-1">
+                <MobileSelect value={form.department} onValueChange={(v) => set("department", v)} placeholder={t.chooseDept}>
+                  {departments.map((d) => <MobileSelectItem key={d} value={d}>{d}</MobileSelectItem>)}
+                </MobileSelect>
+              </div>
             </div>
           )}
           {form.target === "employee" && (
             <div>
               <Label className="text-xs">{t.chooseEmp}</Label>
-              <Select value={form.employee_id} onValueChange={(v) => set("employee_id", v)}>
-                <SelectTrigger className="mt-1"><SelectValue placeholder={t.chooseEmp} /></SelectTrigger>
-                <SelectContent>{employees.map((e) => <SelectItem key={e.id} value={e.id}>{e.full_name} · {e.department || ""}</SelectItem>)}</SelectContent>
-              </Select>
+              <div className="mt-1">
+                <MobileSelect value={form.employee_id} onValueChange={(v) => set("employee_id", v)} placeholder={t.chooseEmp}>
+                  {employees.map((e) => <MobileSelectItem key={e.id} value={e.id}>{e.full_name} · {e.department || ""}</MobileSelectItem>)}
+                </MobileSelect>
+              </div>
             </div>
           )}
           {busy && <div className="flex items-center gap-2 text-xs text-violet-600"><Loader2 className="animate-spin" size={14} /> {t.translating}</div>}

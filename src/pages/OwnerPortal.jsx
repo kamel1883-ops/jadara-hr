@@ -12,6 +12,7 @@ import StrategicPlan from "@/pages/StrategicPlan";
 import Logo from "@/components/Logo";
 import LanguageToggle from "@/components/LanguageToggle";
 import OwnerNotificationsBell from "@/components/portal/OwnerNotificationsBell";
+import PullToRefresh from "@/components/PullToRefresh";
 import { useI18n } from "@/lib/i18n";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -62,6 +63,8 @@ export default function OwnerPortal() {
   const [employee, setEmployee] = useState(session?.employee || null);
   const [refreshing, setRefreshing] = useState(false);
   const [tab, setTab] = useState("clients");
+  // مفتاح إعادة تحميل محتوى التبويب الحالي عند سحب-للتحديث (كل مدير تبويب يجلب بياناته بنفسه)
+  const [refreshKey, setRefreshKey] = useState(0);
 
   // عند وجود جلسة محفوظة، نُتحقق منها خادمياً ونُحدّث بيانات المالك (role_level)
   // من المصدر — الجلسات القديمة قد تفتقد role_level أو تكون منتهية/بسرّ مُستبدل.
@@ -380,14 +383,18 @@ export default function OwnerPortal() {
           <button onClick={() => setTab("deletion")} className={tabCls("deletion")}>{isAr ? "طلبات حذف المنشآت" : "Deletion Requests"}</button>
           <button onClick={() => setTab("strategy")} className={tabCls("strategy")}>{isAr ? "الخطة الاستراتيجية" : "Strategic Plan"}</button>
         </div>
-        {tab === "clients" ? <ClientsManager session={session} />
-          : tab === "surveys" ? <SurveysManager session={session} />
-          : tab === "affiliates" ? <AffiliatesManager session={session} isAr={isAr} />
-          : tab === "finance" ? <FinanceManager session={session} isAr={isAr} />
-          : tab === "strategy" ? <StrategicPlan session={session} />
-          : tab === "support" ? <SupportTicketsManager session={session} isAr={isAr} />
-          : tab === "deletion" ? <DeletionRequestsManager session={session} isAr={isAr} />
-          : <DiscountManager session={session} />}
+        <PullToRefresh onRefresh={async () => setRefreshKey((k) => k + 1)}>
+          <div key={`${tab}-${refreshKey}`}>
+            {tab === "clients" ? <ClientsManager session={session} />
+              : tab === "surveys" ? <SurveysManager session={session} />
+              : tab === "affiliates" ? <AffiliatesManager session={session} isAr={isAr} />
+              : tab === "finance" ? <FinanceManager session={session} isAr={isAr} />
+              : tab === "strategy" ? <StrategicPlan session={session} />
+              : tab === "support" ? <SupportTicketsManager session={session} isAr={isAr} />
+              : tab === "deletion" ? <DeletionRequestsManager session={session} isAr={isAr} />
+              : <DiscountManager session={session} />}
+          </div>
+        </PullToRefresh>
       </div>
     </div>
   );

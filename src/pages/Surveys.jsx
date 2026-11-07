@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { MobileSelect, MobileSelectItem } from "@/components/ui/mobile-select";
 import { ClipboardList, Plus, Pencil, Trash2, BarChart3, Send, Eye, Star } from "lucide-react";
 import { useI18n } from "@/lib/i18n";
 import { cn } from "@/lib/utils";
@@ -137,10 +137,9 @@ export default function Surveys() {
             <div className="grid grid-cols-2 gap-3">
               <In label={t.name}><Input value={form.title} onChange={(e) => set("title", e.target.value)} required /></In>
               <In label={t.type}>
-                <Select value={form.type} onValueChange={(v) => set("type", v)}>
-                  <SelectTrigger><SelectValue /></SelectTrigger>
-                  <SelectContent>{TYPES.map((x) => <SelectItem key={x} value={x}>{tyL(x)}</SelectItem>)}</SelectContent>
-                </Select>
+                <MobileSelect value={form.type} onValueChange={(v) => set("type", v)}>
+                  {TYPES.map((x) => <MobileSelectItem key={x} value={x}>{tyL(x)}</MobileSelectItem>)}
+                </MobileSelect>
               </In>
             </div>
             <In label={t.desc}><Textarea rows={2} value={form.description} onChange={(e) => set("description", e.target.value)} /></In>
@@ -161,10 +160,11 @@ export default function Surveys() {
                   <div key={q.id} className="rounded-xl border border-border p-3 space-y-2">
                     <div className="flex gap-2">
                       <Input placeholder={t.qText} value={q.text} onChange={(e) => updQ(q.id, "text", e.target.value)} />
-                      <Select value={q.type} onValueChange={(v) => updQ(q.id, "type", v)}>
-                        <SelectTrigger className="w-32"><SelectValue /></SelectTrigger>
-                        <SelectContent>{QTYPES.map((x) => <SelectItem key={x} value={x}>{isAr ? ({rating:"تقييم 1-5",text:"نص حر",choice:"اختيار"}[x]) : ({rating:"Rating 1-5",text:"Open text",choice:"Choice"}[x])}</SelectItem>)}</SelectContent>
-                      </Select>
+                      <div className="w-32 shrink-0">
+                        <MobileSelect value={q.type} onValueChange={(v) => updQ(q.id, "type", v)}>
+                          {QTYPES.map((x) => <MobileSelectItem key={x} value={x}>{isAr ? ({rating:"تقييم 1-5",text:"نص حر",choice:"اختيار"}[x]) : ({rating:"Rating 1-5",text:"Open text",choice:"Choice"}[x])}</MobileSelectItem>)}
+                        </MobileSelect>
+                      </div>
                       <button type="button" onClick={() => delQ(q.id)} className="p-2 text-red-500"><Trash2 size={16} /></button>
                     </div>
                     {q.type === "choice" && <Input placeholder={t.qOpts} value={q.options} onChange={(e) => updQ(q.id, "options", e.target.value)} />}
@@ -186,10 +186,9 @@ export default function Surveys() {
           <form onSubmit={submitResponse} className="space-y-4">
             {!respondFor.is_anonymous && (
               <In label={t.dep === "Target department" ? "Employee" : "الموظف"}>
-                <Select value={rForm.employee_id} onValueChange={(v) => setRForm((f) => ({ ...f, employee_id: v }))}>
-                  <SelectTrigger><SelectValue placeholder="—" /></SelectTrigger>
-                  <SelectContent>{employees.map((e) => <SelectItem key={e.id} value={e.id}>{e.full_name} — {e.national_id || "—"}</SelectItem>)}</SelectContent>
-                </Select>
+                <MobileSelect value={rForm.employee_id} onValueChange={(v) => setRForm((f) => ({ ...f, employee_id: v }))} placeholder="—">
+                  {employees.map((e) => <MobileSelectItem key={e.id} value={e.id}>{e.full_name} — {e.national_id || "—"}</MobileSelectItem>)}
+                </MobileSelect>
               </In>
             )}
             <div className="space-y-4">

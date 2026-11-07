@@ -76,8 +76,8 @@ export default function BusinessTrips() {
   const [org, setOrg] = useState(null);
   const [busy, setBusy] = useState(null);
 
-  const load = async () => {
-    setLoading(true);
+  const load = async (silent = false) => {
+    if (!silent) setLoading(true);
     const [tr, e, o] = await Promise.all([
       base44.entities.BusinessTrip.list("-created_date", 500),
       base44.entities.Employee.list("-created_date", 500),
@@ -94,6 +94,16 @@ export default function BusinessTrips() {
 
   // بعد اعتماد الانتداب لا تبقى صلاحية للتعديل أو الحذف — تُعرض النتيجة للاطلاع فقط.
   const LOCKED_TRIP = ["approved", "in_progress", "completed", "cancelled"];
+
+  // تحديث تفاؤلي: الانتداب المحفوظ يظهر في القائمة فوراً ثم تُعاد المزامنة بهدوء.
+  const handleTripSaved = (saved) => {
+    if (saved && (saved.id || saved.destination)) {
+      setTrips((cur) => (saved.id && cur.some((t) => t.id === saved.id)
+        ? cur.map((t) => (t.id === saved.id ? { ...t, ...saved } : t))
+        : [{ ...saved }, ...cur]));
+    }
+    load(true);
+  };
 
   const genDoc = async (trip) => {
     const emp = employees.find((x) => x.id === trip.employee_id);
@@ -228,7 +238,7 @@ export default function BusinessTrips() {
 
       </PullToRefresh>
 
-      <BusinessTripForm open={showForm} employees={employees} editing={editing} onClose={() => setShowForm(false)} onSaved={load} />
+      <BusinessTripForm open={showForm} employees={employees} editing={editing} onClose={() => setShowForm(false)} onSaved={handleTripSaved} />
     </div>
   );
 }

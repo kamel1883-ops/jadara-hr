@@ -111,9 +111,11 @@ export default function MyRequests() {
   const [signInMsg, setSignInMsg] = useState({ type: "", text: "" });
 
 
-  const load = useCallback(async (sess = session) => {
+  // silent: إعادة مزامنة في الخلفية بعد إضافة طلب — لا تُخفي القائمة المعروضة
+  // (الطلب يظهر فوراً بالتحديث التفاؤلي) ولا تُطلق شاشة تحميل كاملة.
+  const load = useCallback(async (sess = session, opts = {}) => {
     if (!sess) return;
-    setLoading(true);
+    if (!opts.silent) setLoading(true);
     try {
       const res = await base44.functions.invoke("portalData", {
         token: sess.token, employee_id: sess.employee_id, action: "fetch",
@@ -599,9 +601,9 @@ export default function MyRequests() {
               </Section>
             </div>
 
-            <LeaveRequestForm open={leaveOpen} onClose={() => setLeaveOpen(false)} onSaved={() => load(session)} employees={[employee]} currentUserEmployee={employee} portalCreate={portalCreateLeave} />
-            <LoanRequestForm open={loanOpen} onClose={() => setLoanOpen(false)} onSaved={() => load(session)} employee={employee} portalCreate={portalCreateLoan} />
-            <BusinessTripForm open={tripOpen} onClose={() => setTripOpen(false)} onSaved={() => load(session)} employees={[employee]} currentUserEmployee={employee} portalCreate={portalCreateTrip} />
+            <LeaveRequestForm open={leaveOpen} onClose={() => setLeaveOpen(false)} onSaved={() => load(session, { silent: true })} employees={[employee]} currentUserEmployee={employee} portalCreate={portalCreateLeave} />
+            <LoanRequestForm open={loanOpen} onClose={() => setLoanOpen(false)} onSaved={() => load(session, { silent: true })} employee={employee} portalCreate={portalCreateLoan} />
+            <BusinessTripForm open={tripOpen} onClose={() => setTripOpen(false)} onSaved={() => load(session, { silent: true })} employees={[employee]} currentUserEmployee={employee} portalCreate={portalCreateTrip} />
             <EquipmentRequestForm open={eqOpen} onClose={() => setEqOpen(false)} onSaved={() => load(session)} employee={employee} portalCreate={portalCreateEquipment} />
             <ComplaintForm open={compOpen} onClose={() => setCompOpen(false)} onSaved={() => load(session)} employee={employee} portalCreate={portalCreateComplaint} />
 

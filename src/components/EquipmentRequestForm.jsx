@@ -4,7 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from "@/components/ui/select";
+import { MobileSelect, MobileSelectItem } from "@/components/ui/mobile-select";
 import { Loader2 } from "lucide-react";
 import { base44 } from "@/api/base44Client";
 import { usePortalI18n, portalDir } from "@/lib/portalI18n";
@@ -74,14 +74,11 @@ export default function EquipmentRequestForm({ open, onClose, onSaved, employee,
           </div>
           <div className="space-y-1.5">
             <Label className="text-xs font-medium text-muted-foreground">{t.typeL}</Label>
-            <Select value={form.item_type} onValueChange={(v) => set("item_type", v)}>
-              <SelectTrigger className="w-full"><SelectValue /></SelectTrigger>
-              <SelectContent>
-                {ITEM_TYPES.map((it) => (
-                  <SelectItem key={it.value} value={it.value}>{isAr ? it.ar : it.en}</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+            <MobileSelect value={form.item_type} onValueChange={(v) => set("item_type", v)}>
+              {ITEM_TYPES.map((it) => (
+                <MobileSelectItem key={it.value} value={it.value}>{isAr ? it.ar : it.en}</MobileSelectItem>
+              ))}
+            </MobileSelect>
           </div>
           {form.item_type === "other" && (
             <div className="space-y-1.5">

@@ -3,7 +3,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { MobileSelect, MobileSelectItem } from "@/components/ui/mobile-select";
 import { Loader2 } from "lucide-react";
 import { EXPENSE_CATEGORIES, RECURRENCES } from "@/lib/finance";
 import { formatCurrency } from "@/lib/hr";
@@ -78,21 +78,15 @@ export default function ExpenseFormDialog({ open, onClose, onSave, expense, reve
           <div className="grid grid-cols-2 gap-3">
             <div className="space-y-1.5">
               <Label className="text-xs">{isAr ? "نوع المصروف" : "Category"}</Label>
-              <Select value={form.category} onValueChange={(v) => set("category", v)}>
-                <SelectTrigger><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  {EXPENSE_CATEGORIES.map((c) => <SelectItem key={c.key} value={c.key}>{isAr ? c.ar : c.en}</SelectItem>)}
-                </SelectContent>
-              </Select>
+              <MobileSelect value={form.category} onValueChange={(v) => set("category", v)}>
+                {EXPENSE_CATEGORIES.map((c) => <MobileSelectItem key={c.key} value={c.key}>{isAr ? c.ar : c.en}</MobileSelectItem>)}
+              </MobileSelect>
             </div>
             <div className="space-y-1.5">
               <Label className="text-xs">{isAr ? "التكرار" : "Recurrence"}</Label>
-              <Select value={isCommission ? "one_time" : form.recurrence} onValueChange={(v) => set("recurrence", v)} disabled={isCommission}>
-                <SelectTrigger><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  {RECURRENCES.map((r) => <SelectItem key={r.key} value={r.key}>{isAr ? r.ar : r.en}</SelectItem>)}
-                </SelectContent>
-              </Select>
+              <MobileSelect value={isCommission ? "one_time" : form.recurrence} onValueChange={(v) => set("recurrence", v)} disabled={isCommission}>
+                {RECURRENCES.map((r) => <MobileSelectItem key={r.key} value={r.key}>{isAr ? r.ar : r.en}</MobileSelectItem>)}
+              </MobileSelect>
             </div>
           </div>
 
@@ -109,20 +103,17 @@ export default function ExpenseFormDialog({ open, onClose, onSave, expense, reve
               </div>
               <div className="space-y-1.5">
                 <Label className="text-xs">{isAr ? "الإيراد / العميل المرتبط" : "Related revenue / client"}</Label>
-                <Select value={form.revenue_ref || "manual"} onValueChange={(v) => {
+                <MobileSelect value={form.revenue_ref || "manual"} placeholder={isAr ? "اختر إيراداً" : "Pick a revenue"} onValueChange={(v) => {
                   if (v === "manual") { set("revenue_ref", ""); return; }
                   const r = revenues.find((x) => x.id === v);
                   set("revenue_ref", r?.tenant_name || "");
                   set("base_amount", Number(r?.amount) || 0);
                 }}>
-                  <SelectTrigger><SelectValue placeholder={isAr ? "اختر إيراداً" : "Pick a revenue"} /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="manual">{isAr ? "إدخال يدوي" : "Manual entry"}</SelectItem>
-                    {revenues.map((r) => (
-                      <SelectItem key={r.id} value={r.id}>{r.tenant_name} — {formatCurrency(r.amount)}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                  <MobileSelectItem value="manual">{isAr ? "إدخال يدوي" : "Manual entry"}</MobileSelectItem>
+                  {revenues.map((r) => (
+                    <MobileSelectItem key={r.id} value={r.id}>{r.tenant_name} — {formatCurrency(r.amount)}</MobileSelectItem>
+                  ))}
+                </MobileSelect>
               </div>
               <div className="grid grid-cols-2 gap-3">
                 <div className="space-y-1.5">
@@ -192,13 +183,10 @@ export default function ExpenseFormDialog({ open, onClose, onSave, expense, reve
           <div className="grid grid-cols-2 gap-3">
             <div className="space-y-1.5">
               <Label className="text-xs">{isAr ? "الحالة" : "Status"}</Label>
-              <Select value={form.status} onValueChange={(v) => set("status", v)}>
-                <SelectTrigger><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="active">{isAr ? "سارٍ" : "Active"}</SelectItem>
-                  <SelectItem value="stopped">{isAr ? "متوقف" : "Stopped"}</SelectItem>
-                </SelectContent>
-              </Select>
+              <MobileSelect value={form.status} onValueChange={(v) => set("status", v)}>
+                <MobileSelectItem value="active">{isAr ? "سارٍ" : "Active"}</MobileSelectItem>
+                <MobileSelectItem value="stopped">{isAr ? "متوقف" : "Stopped"}</MobileSelectItem>
+              </MobileSelect>
             </div>
             <div className="space-y-1.5">
               <Label className="text-xs">{isAr ? "ملاحظات" : "Notes"}</Label>

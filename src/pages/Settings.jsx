@@ -2,6 +2,7 @@ import React, { useState, useEffect } from "react";
 import { base44 } from "@/api/base44Client";
 import { getCurrentOrgContext, invalidateCurrentOrg, ORG_DEFAULTS } from "@/lib/currentOrg";
 import PageHeader from "@/components/PageHeader";
+import PullToRefresh from "@/components/PullToRefresh";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -112,8 +113,9 @@ export default function SettingsPage() {
     base44.auth.me().then((u) => setAvatarUrl(u?.avatar_url || "")).catch(() => {});
   }, []);
 
-  useEffect(() => {
-    (async () => {
+  // يُستخدم للتحميل الأول ولسحب-للتحديث على الجوال
+  const loadSettings = async () => {
+    {
       // سجل إعدادات منشأة العميل نفسه فقط (بمطابقة الرقم الموحّد لمنشأته) — لا بيانات أي منشأة أخرى.
       const { tenant, unified, org } = await getCurrentOrgContext();
       const merged = { ...empty };
@@ -137,8 +139,10 @@ export default function SettingsPage() {
       } : null);
       setOrg(merged);
       setLoading(false);
-    })();
-  }, []);
+    }
+  };
+
+  useEffect(() => { loadSettings(); }, []);
 
   const set = (k, v) => setOrg((o) => ({ ...o, [k]: v }));
 
@@ -201,6 +205,7 @@ export default function SettingsPage() {
 
   return (
     <div dir={isAr ? "rtl" : "ltr"}>
+      <PullToRefresh onRefresh={loadSettings}>
       <PageHeader title={t.title} subtitle={t.subtitle} />
       <div className="max-w-3xl space-y-6">
         {subInfo && (subInfo.employee_count > 0 || subInfo.quoted_amount > 0) && (
@@ -406,6 +411,7 @@ export default function SettingsPage() {
           </Button>
         </div>
       </div>
+      </PullToRefresh>
     </div>
   );
 }
