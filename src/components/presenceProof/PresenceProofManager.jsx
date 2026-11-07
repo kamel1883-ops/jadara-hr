@@ -70,8 +70,8 @@ export default function PresenceProofManager({ org }) {
     pushNoUser: "لم يُرسل تنبيه التطبيق لأن حسابات الموظفين المستهدفين غير مرتبطة بهوياتهم بعد — يرى الموظفون التنبيه أعلى بوابة الموظف عند فتحها برقم الهوية.",
     testPush: "دفع تجريبي للحاضرين الآن",
     testing: "جارٍ إرسال الدفع التجريبي...",
-    testSent: (sent, total, missing) => `الدفع التجريبي: أُرسل إلى ${sent} من ${total} موظفاً حاضراً الآن${missing?.length ? ` — لم يصل إلى: ${missing.join("، ")}` : ""}. أقفل التطبيق تماماً وراقب شاشة إشعارات الجوال خلال ثوانٍ.`,
-    testNone: (missing) => `الدفع التجريبي: لم يصل لأي جهاز بعد${missing?.length ? ` — بلا جوال مفعّل للتنبيه: ${missing.join("، ")}` : ""}. كل موظف حاضر يفتح بوابة الموظف برقم هويته ويضغط «تفعيل الإذن والإشعارات» على جواله مرة واحدة، ثم أعد الضغط.`,
+    testSent: (sent, total, never, stale) => `الدفع التجريبي: أُرسل إلى ${sent} من ${total} موظفاً حاضراً الآن${never?.length ? ` — لم يفعّل الإشعارات على جواله: ${never.join("، ")}` : ""}${stale?.length ? ` — انتهى تفعيله ويحتاج إعادة فتح البوابة على جواله: ${stale.join("، ")}` : ""}. أقفل التطبيق تماماً وراقب شاشة إشعارات الجوال خلال ثوانٍ.`,
+    testNone: (never, stale) => `الدفع التجريبي: لم يصل لأي جهاز بعد${never?.length ? ` — لم يفعّل الإشعارات: ${never.join("، ")}` : ""}${stale?.length ? ` — انتهى التفعيل ويحتاج إعادة فتح البوابة: ${stale.join("، ")}` : ""}. كل موظف حاضر يفتح بوابة الموظف برقم هويته على جواله — ومن كان مفعّلاً من قبل تكفيه إعادة الفتح لتجديد الاشتراك تلقائياً، ومن لم يفعّل يضغط «تفعيل الإذن والإشعارات» مرة واحدة — وعلى الآيفون تُفتح البوابة من أيقونة الشاشة الرئيسية — ثم أعد الضغط.`,
     testFail: "الدفع التجريبي: فشل الإرسال",
     testEmpty: "الدفع التجريبي: لا يوجد موظف في الدوام الآن — الزر يستهدف الحاضرين في هذه اللحظة فقط.",
     phoneCoverage: (withPhone, total) => `وللعلم: ${withPhone} من ${total} من هؤلاء لديهم رقم جوال مسجّل في ملف الموظف.`,
@@ -110,8 +110,8 @@ export default function PresenceProofManager({ org }) {
     pushNoUser: "App alerts were not sent because the targeted employees have no app account linked to their identities yet — they still see the alert at the top of the employee portal when opened with their national ID.",
     testPush: "Test push to on-shift staff",
     testing: "Sending the test push...",
-    testSent: (sent, total, missing) => `Test push: delivered to ${sent} of ${total} employees currently on shift${missing?.length ? ` — not delivered to: ${missing.join(", ")}` : ""}. Force-close the app and watch the phone notification shade within seconds.`,
-    testNone: (missing) => `Test push: no device received it yet${missing?.length ? ` — no notifications enabled: ${missing.join(", ")}` : ""}. Each employee on shift opens the portal with their national ID and taps “Allow notifications” once on their phone, then retry.`,
+    testSent: (sent, total, never, stale) => `Test push: delivered to ${sent} of ${total} employees currently on shift${never?.length ? ` — never enabled notifications: ${never.join(", ")}` : ""}${stale?.length ? ` — subscription expired, needs to reopen the portal on their phone: ${stale.join(", ")}` : ""}. Force-close the app and watch the phone notification shade within seconds.`,
+    testNone: (never, stale) => `Test push: no device received it yet${never?.length ? ` — never enabled: ${never.join(", ")}` : ""}${stale?.length ? ` — expired subscriptions: ${stale.join(", ")}` : ""}. Each employee on shift opens the portal with their national ID on their phone — reopening auto-refreshes a previous subscription, otherwise tap “Allow notifications” once — on iPhone open it from the Home Screen icon — then retry.`,
     testFail: "Test push failed",
     testEmpty: "Test push: no employee is on shift right now — this button targets only those present at this moment.",
     phoneCoverage: (withPhone, total) => `Note: ${withPhone} of ${total} of them have a phone number on file.`,
@@ -229,17 +229,19 @@ export default function PresenceProofManager({ org }) {
       } else {
         const details = Array.isArray(test.details) ? test.details : [];
         const total = details.length || (Number(test.sent || 0) + Number(test.failed || 0) + Number(test.skipped || 0));
-        const missing = details
-          .filter((d) => d.status === "no_account" || d.status === "missing")
+        const namesOf = (statuses) => details
+          .filter((d) => statuses.includes(d.status))
           .map((d) => String(d.name || ""))
           .filter(Boolean);
+        const never = namesOf(["no_account", "missing"]);
+        const stale = namesOf(["expired"]);
         const failed = details.find((d) => d.status === "failed");
         const sent = Number(test.sent || 0) + Number(test.web_sent || 0);
-        if (sent > 0) setTestNote(t.testSent(sent, total, missing));
+        if (sent > 0) setTestNote(t.testSent(sent, total, never, stale));
         else if (failed) setTestNote(`${t.testFail}${failed.error || test.first_error ? ` — ${failed.error || test.first_error}` : ""}`);
         else {
           const coverage = Number(test.total || 0) > 0 ? t.phoneCoverage(Number(test.with_phone || 0), Number(test.total || 0)) : "";
-          setTestNote(`${t.testNone(missing)}${coverage ? ` ${coverage}` : ""}`);
+          setTestNote(`${t.testNone(never, stale)}${coverage ? ` ${coverage}` : ""}`);
         }
       }
     } catch (err) {

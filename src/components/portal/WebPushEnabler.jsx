@@ -82,6 +82,26 @@ export default function WebPushEnabler({ session }) {
     typeof window !== "undefined" &&
     (window.navigator.standalone === true || window.matchMedia?.("(display-mode: standalone)").matches);
 
+  // حفظ صامت للاشتراك الحالي في الخادم: يعيد تنشيط السجل ويحدّث مفاتيحه،
+  // فيُصلح الاشتراكات القديمة ويضمن وصول التنبيه والجوال مغلق دون ضغطة جديدة.
+  const refreshSubscription = useCallback(async (subscription) => {
+    try {
+      if (!session?.token || !session?.employee_id || !subscription) return false;
+      const payload = subscription.toJSON ? subscription.toJSON() : subscription;
+      const saved = await base44.functions.invoke("presenceProof", {
+        token: session.token,
+        employee_id: session.employee_id,
+        action: "push_subscribe",
+        subscription: { endpoint: payload.endpoint, keys: payload.keys },
+        user_agent: navigator.userAgent,
+      });
+      const data = saved?.data || saved;
+      return !!data?.ok;
+    } catch {
+      return false;
+    }
+  }, [session]);
+
   const registerAndCheck = useCallback(async () => {
     if (!supported || !session?.token || !session?.employee_id) {
       setState(supported ? "off" : "unsupported");
@@ -91,11 +111,38 @@ export default function WebPushEnabler({ session }) {
       const registration = await navigator.serviceWorker.register("/push-sw.js");
       await navigator.serviceWorker.ready;
       const existing = await registration.pushManager.getSubscription();
-      setState(existing && Notification.permission === "granted" ? "on" : Notification.permission === "denied" ? "denied" : "off");
+      if (existing && Notification.permission === "granted") {
+        setState("on");
+        refreshSubscription(existing);
+        return;
+      }
+      if (!existing && Notification.permission === "granted") {
+        // الإذن ممنوح لكن الاشتراك ضائع (مسح بيانات المتصفح مثلاً) — أعد الاشتراك بصمت.
+        try {
+          const keyRes = await base44.functions.invoke("presenceProof", {
+            token: session.token,
+            employee_id: session.employee_id,
+            action: "push_key",
+          });
+          const keyData = keyRes?.data || keyRes;
+          const publicKey = String(keyData?.public_key || "");
+          if (keyData?.ok && publicKey) {
+            const sub = await registration.pushManager.subscribe({
+              userVisibleOnly: true,
+              applicationServerKey: urlBase64ToUint8Array(publicKey),
+            });
+            if (await refreshSubscription(sub)) {
+              setState("on");
+              return;
+            }
+          }
+        } catch {}
+      }
+      setState(Notification.permission === "denied" ? "denied" : "off");
     } catch {
       setState("off");
     }
-  }, [session, supported]);
+  }, [session, supported, refreshSubscription]);
 
   useEffect(() => {
     registerAndCheck();

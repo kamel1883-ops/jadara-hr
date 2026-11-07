@@ -549,6 +549,7 @@ export default async function (req) {
         total: ids.length,
         web_sent: 0,
         web_failed: 0,
+        web_devices: 0,
         with_phone: ids.filter((id: string) => String((byId.get(String(id)) as any)?.phone || "").trim()).length,
         details: [] as any[],
       };
@@ -582,9 +583,13 @@ export default async function (req) {
         });
         test.web_sent += web.sent;
         test.web_failed += web.failed;
+        test.web_devices = Number(test.web_devices || 0) + Number((web as any)?.devices || 0);
+        // تمييز من لم يفعّل أبداً (بلا اشتراك) ممن انتهى اشتراكه (كان مفعّلاً وتعطّل) —
+        // الثاني تكفيه إعادة فتح البوابة على جواله لتجديد الاشتراك تلقائياً.
+        const webStatus = web.sent > 0 ? "web" : (Number((web as any)?.devices || 0) > 0 ? "expired" : "no_account");
         if (!userId) {
           test.skipped += 1;
-          test.details.push({ employee_id: id, name, status: web.sent > 0 ? "web" : "no_account" });
+          test.details.push({ employee_id: id, name, status: webStatus });
           continue;
         }
         test.attempted += 1;
