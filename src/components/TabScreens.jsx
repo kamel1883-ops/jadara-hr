@@ -1,5 +1,6 @@
 import React, { Suspense, lazy, useEffect, useRef, useState } from "react";
 import { Loader2 } from "lucide-react";
+import { TabScreenActiveContext } from "@/components/TabScreenActive";
 
 // شاشات التبويبات الجذرية للشريط السفلي.
 // تُبقي كل تبويب زاره المستخدم **مثبتاً في الذاكرة** (mount) وتُخفي غير النشط فقط،
@@ -44,9 +45,11 @@ export default function TabScreens({ active }) {
         if (!Screen) return null;
         return (
           <div key={path} hidden={path !== active} aria-hidden={path !== active}>
-            <Suspense fallback={<Fallback />}>
-              <Screen />
-            </Suspense>
+            <TabScreenActiveContext.Provider value={path === active}>
+              <Suspense fallback={<Fallback />}>
+                <Screen />
+              </Suspense>
+            </TabScreenActiveContext.Provider>
           </div>
         );
       })}

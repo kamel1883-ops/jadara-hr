@@ -42,6 +42,7 @@ import JobDescPrintActions from "@/components/docs/JobDescPrintActions";
 import JobDescriptionDoc from "@/components/docs/JobDescriptionDoc";
 import DelegatedWorkspace from "@/components/portal/DelegatedWorkspace";
 import PortalCompanyDeletion from "@/components/portal/PortalCompanyDeletion";
+import PortalAccountDeletion from "@/components/portal/PortalAccountDeletion";
 import AssistantAvatar from "@/components/AssistantAvatar";
 import PullToRefresh from "@/components/PullToRefresh";
 
@@ -671,6 +672,7 @@ export default function MyRequests() {
             </div>
             <DelegatedWorkspace perms={perms} session={session} employee={employee} isAr={isAr} />
             <PortalCompanyDeletion session={session} isAr={isAr} />
+            <PortalAccountDeletion session={session} isAr={isAr} onDeleted={handlePortalLogout} />
           </>
         )}
       </div>

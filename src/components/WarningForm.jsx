@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from "@/components/ui/select";
+import { MobileSelect, MobileSelectItem } from "@/components/ui/mobile-select";
 import { Loader2, AlertTriangle } from "lucide-react";
 import { VIOLATION_CATEGORIES, VIOLATION_CHAPTERS, WARNING_LEVELS, suggestLevel, categoryById } from "@/lib/laborPolicy";
 import { useI18n } from "@/lib/i18n";
@@ -180,14 +180,11 @@ export default function WarningForm({ open, onClose, onSaved, employees }) {
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
             <div className="space-y-1.5">
               <Label>{t.level} {existingCount > 0 ? `(${t.existingCount}: ${existingCount})` : ` (${t.suggested})`}</Label>
-              <Select value={form.warning_level} onValueChange={(v) => set("warning_level", v)}>
-                <SelectTrigger><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  {WARNING_LEVELS.map((l) => (
-                    <SelectItem key={l.id} value={l.id}>{isAr ? l.ar : l.en}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+              <MobileSelect value={form.warning_level} onValueChange={(v) => set("warning_level", v)}>
+                {WARNING_LEVELS.map((l) => (
+                  <MobileSelectItem key={l.id} value={l.id}>{isAr ? l.ar : l.en}</MobileSelectItem>
+                ))}
+              </MobileSelect>
             </div>
             <div className="space-y-1.5">
               <Label>{t.incident}</Label>

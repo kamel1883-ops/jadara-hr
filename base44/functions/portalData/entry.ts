@@ -2329,6 +2329,62 @@ export default async function (req) {
       return Response.json({ ok: true, result: result ?? null });
     }
 
+    // ====== حذف حساب الموظف من داخل التطبيق — متطلب App Store 5.1.1(v) ======
+    // «حذف الحساب» = إنهاء وصول الموظف إلى بوابة الموظف فوراً (كلمة المرور والرموز
+    // وفكّ ربط حساب التطبيق) + تسجيل طلب لمحاسبة الموارد البشرية لإتلاف بياناته الشخصية
+    // غير المشمولة بحفظ نظامي (سجل العمل والرواتب يبقى التزاماً نظامياً على المنشأة).
+    if (action === "account_delete_status") {
+      if (isOwnerSession) return Response.json({ ok: false, error: "forbidden" }, { status: 403 });
+      const rows = await base44.asServiceRole.entities.AccountDeletionRequest.filter(
+        { employee_id: employeeId }, "-created_date", 5
+      );
+      return Response.json({
+        ok: true,
+        request: rows?.[0] || null,
+        portal_enabled: !!emp?.portal_password_enabled,
+      });
+    }
+
+    if (action === "account_delete_request") {
+      if (isOwnerSession) return Response.json({ ok: false, error: "forbidden" }, { status: 403 });
+      if (body.confirm !== true) return Response.json({ ok: false, error: "confirm_required" }, { status: 400 });
+      const pending = await base44.asServiceRole.entities.AccountDeletionRequest.filter(
+        { employee_id: employeeId, status: "pending" }, "-created_date", 5
+      );
+      const request = pending?.[0] || await base44.asServiceRole.entities.AccountDeletionRequest.create({
+        employee_id: employeeId,
+        employee_name: emp?.full_name || empLabel,
+        employee_number: String(emp?.employee_number || ""),
+        unified_number: String(emp?.unified_number || "").trim(),
+        requested_at: todayISO(),
+        requested_via: "portal",
+        status: "pending",
+        note: String(body.note || "").slice(0, 1000),
+      });
+      // إلغاء الوصول فوراً: لا كلمة مرور ولا رمز استعادة ولا ربط بحساب التطبيق.
+      await base44.asServiceRole.entities.Employee.update(employeeId, {
+        portal_password_hash: "",
+        portal_password_salt: "",
+        portal_password_enabled: false,
+        login_otp: "",
+        login_otp_expires_at: 0,
+        login_otp_attempts: 0,
+        user_id: "",
+      });
+      // تنبيه مسؤول المنشأة لإتمام إتلاف البيانات الشخصية من سجلاته.
+      try {
+        await base44.asServiceRole.entities.Notification.create({
+          title: `طلب حذف حساب موظف — ${emp?.full_name || empLabel}`,
+          body: `${emp?.full_name || empLabel} (${emp?.employee_number || ""}) طلب حذف حسابه من بوابة الموظف. أُوقف وصوله فوراً — راجع الطلب وأتلف بياناته الشخصية غير المشمولة بالحفظ النظامي.`,
+          type: "account_deletion",
+          unified_number: String(emp?.unified_number || "").trim(),
+          link: "/employees",
+          is_read: false,
+        });
+      } catch { /* الإشعار لا يمنع إتمام الحذف */ }
+      return Response.json({ ok: true, request });
+    }
+
     return Response.json({ ok: false, error: "unknown_action" }, { status: 400 });
   } catch (error) {
     return Response.json({ ok: false, error: error.message }, { status: 500 });

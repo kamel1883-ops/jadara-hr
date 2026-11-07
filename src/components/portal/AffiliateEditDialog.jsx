@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from "@/components/ui/select";
+import { MobileSelect, MobileSelectItem } from "@/components/ui/mobile-select";
 import { Loader2 } from "lucide-react";
 
 export default function AffiliateEditDialog({ affiliate, isAr = true, session, onClose, onSaved }) {
@@ -43,14 +43,11 @@ export default function AffiliateEditDialog({ affiliate, isAr = true, session, o
         <div className="space-y-4">
           <div className="space-y-1.5">
             <Label>{isAr ? "الحالة" : "Status"}</Label>
-            <Select value={f.status} onValueChange={(v) => setF({ ...f, status: v })}>
-              <SelectTrigger><SelectValue /></SelectTrigger>
-              <SelectContent>
-                <SelectItem value="pending">{isAr ? "طلب جديد" : "Pending"}</SelectItem>
-                <SelectItem value="active">{isAr ? "نشط — رابط الإحالة يعمل" : "Active"}</SelectItem>
-                <SelectItem value="suspended">{isAr ? "موقوف" : "Suspended"}</SelectItem>
-              </SelectContent>
-            </Select>
+            <MobileSelect value={f.status} onValueChange={(v) => setF({ ...f, status: v })}>
+              <MobileSelectItem value="pending">{isAr ? "طلب جديد" : "Pending"}</MobileSelectItem>
+              <MobileSelectItem value="active">{isAr ? "نشط — رابط الإحالة يعمل" : "Active"}</MobileSelectItem>
+              <MobileSelectItem value="suspended">{isAr ? "موقوف" : "Suspended"}</MobileSelectItem>
+            </MobileSelect>
           </div>
           <div className="space-y-1.5">
             <Label>{isAr ? "نسبة العمولة %" : "Commission %"}</Label>

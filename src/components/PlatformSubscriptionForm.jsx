@@ -11,9 +11,7 @@ import { base44 } from "@/api/base44Client";
 import { PLATFORM_TYPES, platformMeta } from "@/lib/platforms";
 import { differenceInMonths, parseISO } from "date-fns";
 import { useI18n } from "@/lib/i18n";
-import {
-  Select, SelectContent, SelectItem, SelectTrigger, SelectValue
-} from "@/components/ui/select";
+import { MobileSelect, MobileSelectItem } from "@/components/ui/mobile-select";
 
 const empty = {
   platform_key: "", custom_label: "", account_id: "",
@@ -116,14 +114,11 @@ export default function PlatformSubscriptionForm({ open, onClose, onSaved, editi
         <form onSubmit={submit} className="space-y-4">
           <div className="space-y-1.5">
             <Label className="text-xs font-medium text-muted-foreground">{t.type}</Label>
-            <Select value={form.platform_key} onValueChange={(v) => set("platform_key", v)} disabled={!!fixedKey}>
-              <SelectTrigger className="w-full"><SelectValue placeholder={t.choose} /></SelectTrigger>
-              <SelectContent>
-                {PLATFORM_TYPES.map((tt) => (
-                  <SelectItem key={tt.key} value={tt.key}>{platformMeta(tt.key).label}</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+            <MobileSelect value={form.platform_key} onValueChange={(v) => set("platform_key", v)} disabled={!!fixedKey} placeholder={t.choose}>
+              {PLATFORM_TYPES.map((tt) => (
+                <MobileSelectItem key={tt.key} value={tt.key}>{platformMeta(tt.key).label}</MobileSelectItem>
+              ))}
+            </MobileSelect>
           </div>
 
           {form.platform_key === "other" && (

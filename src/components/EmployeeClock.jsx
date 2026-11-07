@@ -7,6 +7,7 @@ import { usePortalI18n, usePortalT, portalDir } from "@/lib/portalI18n";
 import { resolveWorkHours } from "@/lib/branchHours";
 import { attendanceOpDate, attendanceElapsedMs, formatWorkDuration } from "@/lib/hr";
 import OnDutyTimer from "@/components/OnDutyTimer";
+import { MobileSelect, MobileSelectItem } from "@/components/ui/mobile-select";
 import { computeDeductibleShortfall } from "@/lib/payrollCompute";
 
 const localToday = () => {
@@ -243,15 +244,17 @@ export default function EmployeeClock({ employee, org, branch, branches, onChang
         <div className="flex items-center gap-2 mb-4 rounded-xl bg-violet-50/60 border border-violet-200 px-3 py-2">
           <MapPin size={14} className="text-violet-600 shrink-0" />
           <label className="text-xs text-muted-foreground whitespace-nowrap">{lang === "ar" ? "فرع البصمة:" : "Check-in branch:"}</label>
-          <select
-            value={String(selBranchId)}
-            onChange={(e) => setSelBranchId(e.target.value)}
-            className="text-xs font-medium bg-white border border-border rounded-lg px-2 py-1.5 flex-1 min-w-0"
-          >
-            {candidates.map((b) => (
-              <option key={b.id} value={String(b.id)}>{b.name || b.id}</option>
-            ))}
-          </select>
+          <div className="flex-1 min-w-0">
+            <MobileSelect
+              value={String(selBranchId)}
+              onValueChange={(v) => setSelBranchId(v)}
+              className="text-xs font-medium bg-white rounded-lg h-8"
+            >
+              {candidates.map((b) => (
+                <MobileSelectItem key={b.id} value={String(b.id)}>{b.name || b.id}</MobileSelectItem>
+              ))}
+            </MobileSelect>
+          </div>
         </div>
       )}
 

@@ -139,6 +139,20 @@ export default function Employees() {
   const years = Array.from(new Set(inactiveRaw.map((e) => e.termination_date?.slice(0, 4)).filter(Boolean))).sort((a, b) => b - a);
   const inactiveList = yearFilter === "all" ? inactiveRaw : inactiveRaw.filter((e) => e.termination_date?.slice(0, 4) === yearFilter);
 
+  // تحديث تفاؤلي: السجل المحفوظ يظهر في الجدول فوراً، ثم تُعاد المزامنة في الخلفية
+  // (الهوية/الجوال تأتي من الخزنة بعد التحميل الكامل).
+  const handleEmployeeSaved = (saved) => {
+    if (saved && (saved.id || saved.employee_number)) {
+      setEmployees((cur) => {
+        if (!saved.id) return [{ ...saved }, ...cur];
+        return cur.some((e) => e.id === saved.id)
+          ? cur.map((e) => (e.id === saved.id ? { ...e, ...saved } : e))
+          : [{ ...saved }, ...cur];
+      });
+    }
+    load();
+  };
+
   const remove = async (emp) => {
     if (!confirm(t.del(emp.employee_number))) return;
     // Optimistic UI: remove from local state instantly, rollback on error
@@ -363,7 +377,7 @@ export default function Employees() {
         </div>
       )}
 
-      <EmployeeForm open={formOpen} onClose={() => setFormOpen(false)} onSaved={load} employee={editTarget} unifiedNumber={myUnified} />
+      <EmployeeForm open={formOpen} onClose={() => setFormOpen(false)} onSaved={handleEmployeeSaved} employee={editTarget} unifiedNumber={myUnified} />
       <EmployeeImport open={importOpen} onClose={() => setImportOpen(false)} onSaved={load} />
       <BranchManager open={branchOpen} onClose={() => setBranchOpen(false)} onSaved={load} org={org} />
       <EmployeeTripsDialog open={tripsOpen} onClose={() => setTripsOpen(false)} employee={tripsEmp} />

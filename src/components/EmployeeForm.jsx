@@ -203,9 +203,12 @@ export default function EmployeeForm({ open, onClose, onSaved, employee, unified
       // وتُعاد برمز معتم (emp_ref). في Base44 يُحفظ الرمز فقط وتُفرّغ الحقول.
       const empRef = await writeEmployeeToVault(employee?.emp_ref, payload);
       const finalPayload = applyEmpRef(payload, empRef);
-      if (employee) await base44.entities.Employee.update(employee.id, finalPayload);
-      else await base44.entities.Employee.create(finalPayload);
-      onSaved?.(); onClose?.();
+      const saved = employee
+        ? await base44.entities.Employee.update(employee.id, finalPayload)
+        : await base44.entities.Employee.create(finalPayload);
+      // يُمرَّر السجل المحفوظ ليعرضه جدول الموظفين فوراً (تحديث تفاؤلي) قبل إعادة التحميل الكاملة
+      onSaved?.(saved ? { ...finalPayload, ...saved } : finalPayload);
+      onClose?.();
     } finally { setSaving(false); }
   };
 

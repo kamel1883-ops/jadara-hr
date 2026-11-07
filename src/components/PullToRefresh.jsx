@@ -1,6 +1,7 @@
 import React from "react";
 import { Loader2, ArrowDown } from "lucide-react";
 import { usePullToRefresh } from "@/hooks/usePullToRefresh";
+import { useTabScreenActive } from "@/components/TabScreenActive";
 import { cn } from "@/lib/utils";
 
 /**
@@ -8,7 +9,9 @@ import { cn } from "@/lib/utils";
  * Pass an async `onRefresh` (usually the page's data loader).
  */
 export default function PullToRefresh({ onRefresh, children, className }) {
-  const { pullDistance, refreshing } = usePullToRefresh({ onRefresh });
+  // التبويبات المخفية تبقى في الذاكرة — لا تُحدَّث مع سحبة التبويب الظاهر.
+  const tabActive = useTabScreenActive();
+  const { pullDistance, refreshing } = usePullToRefresh({ onRefresh, enabled: tabActive });
   const visible = pullDistance > 0 || refreshing;
   const height = refreshing ? 40 : Math.min(pullDistance, 60);
   const ready = pullDistance >= 50;
