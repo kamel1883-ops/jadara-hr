@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import { base44 } from "@/api/base44Client";
-import { LogOut, Menu, X, UserCircle, UserRound, LayoutDashboard, Users, Settings as SettingsIcon, ArrowRight, Fingerprint, CheckCircle2, CalendarDays, Plane, PlaneTakeoff, Wallet, Shield, Car, FileText, Target, GitBranch, Network, CalendarRange, MessageSquare, ClipboardList, ShieldAlert, FileSearch, BarChart3, FileBadge, Crown, Briefcase, GraduationCap, Globe, ScrollText, Gift, Bell, Package, MessageSquareWarning, ShieldCheck, HeartPulse, Headphones, Gauge, Calculator } from "lucide-react";
+import { LogOut, Menu, X, UserCircle, LayoutDashboard, Users, ClipboardCheck, Settings as SettingsIcon, ArrowRight, Fingerprint, CheckCircle2, CalendarDays, Plane, PlaneTakeoff, Wallet, Shield, Car, FileText, Target, GitBranch, Network, CalendarRange, MessageSquare, ClipboardList, ShieldAlert, FileSearch, BarChart3, FileBadge, Crown, Briefcase, GraduationCap, Globe, ScrollText, Gift, Bell, Package, MessageSquareWarning, ShieldCheck, HeartPulse, Headphones, Gauge, Calculator } from "lucide-react";
 import { motion } from "framer-motion";
 import { cn } from "@/lib/utils";
 import Logo from "@/components/Logo";
@@ -14,10 +14,10 @@ import BottomTabBar from "@/components/BottomTabBar";
 import TabScreens from "@/components/TabScreens";
 import SupportTicketDialog from "@/components/SupportTicketDialog";
 import { useI18n } from "@/lib/i18n";
+import { rememberPath } from "@/lib/tabStacks";
 
-// تبويبات الشريط السفلي الجذرية: الرئيسية، الإشعارات، بوابتي، الإعدادات.
-// /portal صفحة عامة مستقلة (بوابة الموظف) وتبقى رابطاً في الشريط دون أن يفرضها هذا المكوّن.
-const ROOT_TABS = ["/app", "/notifications", "/settings"];
+// تبويبات الشريط السفلي الجذرية: الرئيسية، الموافقات، الإشعارات، الإعدادات.
+const ROOT_TABS = ["/app", "/approvals", "/notifications", "/settings"];
 
 // كل قسم يحمل بلاطة متدرّجة فخمة ملونة — الأيقونة بيضاء داخل البلاطة لتعطي مظهراً حقيقياً وملوناً وفخماً
 const appNav = [
@@ -59,9 +59,9 @@ const appNav = [
 ];
 
 const bottomNav = [
-  { to: "/app", ar: "الرئيسية", en: "Home", icon: LayoutDashboard },
+  { to: "/app", ar: "الرئيسية", en: "Dashboard", icon: LayoutDashboard },
+  { to: "/approvals", ar: "الموافقات", en: "Approvals", icon: ClipboardCheck },
   { to: "/notifications", ar: "الإشعارات", en: "Notifications", icon: Bell },
-  { to: "/portal", ar: "بوابتي", en: "My Portal", icon: UserRound },
   { to: "/settings", ar: "الإعدادات", en: "Settings", icon: SettingsIcon },
 ];
 
@@ -75,6 +75,9 @@ export default function Layout() {
   const [open, setOpen] = useState(false);
   const [supportOpen, setSupportOpen] = useState(false);
   const [user, setUser] = useState(null);
+
+  // تذكّر آخر شاشة داخل كل تبويب ليبقى لكل تبويب مساره المستقل
+  useEffect(() => { rememberPath(location.pathname); }, [location.pathname]);
 
   useEffect(() => {
     base44.auth.me().then(setUser).catch(() => {});
@@ -184,10 +187,10 @@ export default function Layout() {
               <>
                 <button
                   onClick={goBack}
-                  className="w-9 h-9 -ms-1 rounded-full bg-white/70 border border-[#E8DEF7] flex items-center justify-center text-[#4A3F66] active:scale-95 transition shrink-0"
+                  className="w-11 h-11 -ms-1.5 rounded-full bg-white/70 dark:bg-card border border-[#E8DEF7] dark:border-border flex items-center justify-center text-[#4A3F66] dark:text-foreground active:scale-95 transition shrink-0"
                   aria-label={isAr ? "رجوع" : "Back"}
                 >
-                  <ArrowRight size={20} style={{ transform: isAr ? "none" : "scaleX(-1)" }} />
+                  <ArrowRight size={22} style={{ transform: isAr ? "none" : "scaleX(-1)" }} />
                 </button>
                 <span className="text-[15px] font-bold text-[#2A2340] truncate">
                   {appNav.find((i) => i.to === location.pathname)?.[isAr ? "ar" : "en"] || (isAr ? "رجوع" : "Back")}

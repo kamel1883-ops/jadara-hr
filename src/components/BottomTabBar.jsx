@@ -1,16 +1,17 @@
 import React from "react";
 import { useLocation, useNavigate } from "react-router-dom";
-import { LayoutDashboard, Bell, UserRound, Settings as SettingsIcon } from "lucide-react";
+import { LayoutDashboard, ClipboardCheck, Bell, Settings as SettingsIcon } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useI18n } from "@/lib/i18n";
+import { pathForTab } from "@/lib/tabStacks";
 
 // شريط التبويب السفلي — التنقل بين الشاشات الجذرية دون إعادة تهيئتها.
 // الشاشات تبقى مثبتة في TabScreens (حالة كاملة: نماذج، مرشحات، واجهة فرعية، تمرير)،
 // لذلك لا يُرسل أي مفتاح تحديث ولا يُعاد تركيب المسار عند التبديل.
 const TABS = [
-  { to: "/app", ar: "الرئيسية", en: "Home", icon: LayoutDashboard },
+  { to: "/app", ar: "الرئيسية", en: "Dashboard", icon: LayoutDashboard },
+  { to: "/approvals", ar: "الموافقات", en: "Approvals", icon: ClipboardCheck },
   { to: "/notifications", ar: "الإشعارات", en: "Notifications", icon: Bell },
-  { to: "/portal", ar: "بوابتي", en: "My Portal", icon: UserRound },
   { to: "/settings", ar: "الإعدادات", en: "Settings", icon: SettingsIcon },
 ];
 
@@ -20,7 +21,7 @@ export default function BottomTabBar({ onNavigate }) {
   const location = useLocation();
   const navigate = useNavigate();
 
-  const isActive = (to) => (to === "/app" ? location.pathname === "/app" : location.pathname.startsWith(to));
+  const isActive = (to) => location.pathname === to || location.pathname.startsWith(to + "/");
 
   const handleClick = (to) => {
     onNavigate?.();
@@ -29,12 +30,13 @@ export default function BottomTabBar({ onNavigate }) {
       window.scrollTo({ top: 0, behavior: "smooth" });
       return;
     }
-    navigate(to);
+    // العودة للتبويب تستعيد آخر شاشة فرعية داخله (حزمة تنقل مستقلة لكل تبويب)
+    navigate(pathForTab(to));
   };
 
   return (
     <nav
-      className="md:hidden fixed bottom-0 inset-x-0 z-50 bg-[#F6F3FC]/95 backdrop-blur border-t border-[#E2D6F4] flex items-stretch justify-around"
+      className="lg:hidden fixed bottom-0 inset-x-0 z-50 bg-[#F6F3FC]/95 dark:bg-card/95 backdrop-blur border-t border-[#E2D6F4] dark:border-border flex items-stretch justify-around"
       style={{ paddingBottom: "env(safe-area-inset-bottom, 16px)" }}
     >
       {TABS.map((item) => {

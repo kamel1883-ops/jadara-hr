@@ -161,6 +161,51 @@ main .hover\:bg-slate-100:hover { background-color: hsl(var(--muted)); }
 /* Dark mode: adapt static bg-white surfaces (cards / sections) to the card token so they respond to system dark preference. */
 .dark .bg-white { background-color: hsl(var(--card)); }
 
+/* === الوضع الليلي للصفحات العامة (الهبوط، تواصل، المدونة، العروض ...) ===
+   كل الأسطح الفاتحة المكتوبة بقيم ثابتة تُعاد ربطها بمتغيّرات الثيم عند تفعيل
+   الوضع الداكن فقط، فلا يتغيّر أي شيء في الوضع الفاتح أو على سطح المكتب. */
+.dark [class~="bg-[#F6F3FC]"],
+.dark [class~="bg-[#F8F6FC]"],
+.dark [class~="bg-[#fcfaf8]"],
+.dark [class~="bg-[#f7f6f2]"] { background-color: hsl(var(--background)); }
+
+.dark .bg-violet-50,
+.dark .bg-violet-100,
+.dark .bg-indigo-50,
+.dark .bg-indigo-100,
+.dark .bg-slate-50,
+.dark .bg-slate-100,
+.dark .bg-gray-50,
+.dark .bg-zinc-50,
+.dark .bg-amber-50,
+.dark .bg-amber-100 { background-color: hsl(var(--muted)); }
+
+.dark [class~="text-[#2A2340]"],
+.dark [class~="text-[#0F172A]"],
+.dark [class~="text-[#1E293B]"],
+.dark .text-slate-900,
+.dark .text-slate-800,
+.dark .text-slate-700 { color: hsl(var(--foreground)); }
+
+.dark [class~="text-[#4A3F66]"],
+.dark [class~="text-[#6B5E8C]"],
+.dark [class~="text-[#8B7AB8]"],
+.dark .text-slate-600,
+.dark .text-slate-500,
+.dark .text-violet-700,
+.dark .text-violet-800 { color: hsl(var(--muted-foreground)); }
+
+.dark [class~="border-[#E2D6F4]"],
+.dark [class~="border-[#E8DEF7]"],
+.dark [class~="border-[#C9B8EE]"] { border-color: hsl(var(--border)); }
+
+/* === مناطق الأمان السفلية (iOS/Android home indicator) ===
+   تُطبَّق على الجوال فقط: أقدام النوافذ المنبثقة والأزرار السفلية. */
+@media (max-width: 1023px) {
+  [role="dialog"] { padding-bottom: max(1rem, env(safe-area-inset-bottom)); }
+  .pb-safe { padding-bottom: max(1rem, env(safe-area-inset-bottom)); }
+}
+
 /* Brochure keeps pure white surfaces always — client logos, mock cards and report cards must stay clearly visible in any theme. */
 .dark .print-brochure .bg-white,
 .dark .print-brochure .bg-slate-50 { background-color: #ffffff !important; }
