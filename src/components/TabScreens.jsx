@@ -8,8 +8,8 @@ import { TabScreenActiveContext } from "@/components/TabScreenActive";
 // تبقى كما تركها المستخدم — بلا أي تغيير على سلوك الويب أو المسارات.
 const SCREENS = {
   "/app": lazy(() => import("@/pages/Dashboard")),
+  "/attendance": lazy(() => import("@/pages/Attendance")),
   "/approvals": lazy(() => import("@/pages/Approvals")),
-  "/notifications": lazy(() => import("@/pages/Notifications")),
   "/settings": lazy(() => import("@/pages/Settings")),
 };
 

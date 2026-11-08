@@ -1,6 +1,6 @@
 import React from "react";
 import { useLocation, useNavigate } from "react-router-dom";
-import { LayoutDashboard, ClipboardCheck, Bell, Settings as SettingsIcon } from "lucide-react";
+import { LayoutDashboard, CalendarDays, ClipboardCheck, Settings as SettingsIcon } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useI18n } from "@/lib/i18n";
 import { pathForTab } from "@/lib/tabStacks";
@@ -10,8 +10,8 @@ import { pathForTab } from "@/lib/tabStacks";
 // لذلك لا يُرسل أي مفتاح تحديث ولا يُعاد تركيب المسار عند التبديل.
 const TABS = [
   { to: "/app", ar: "الرئيسية", en: "Dashboard", icon: LayoutDashboard },
+  { to: "/attendance", ar: "الحضور", en: "Attendance", icon: CalendarDays },
   { to: "/approvals", ar: "الموافقات", en: "Approvals", icon: ClipboardCheck },
-  { to: "/notifications", ar: "الإشعارات", en: "Notifications", icon: Bell },
   { to: "/settings", ar: "الإعدادات", en: "Settings", icon: SettingsIcon },
 ];
 
@@ -36,7 +36,7 @@ export default function BottomTabBar({ onNavigate }) {
 
   return (
     <nav
-      className="lg:hidden fixed bottom-0 inset-x-0 z-50 bg-[#F6F3FC]/95 dark:bg-card/95 backdrop-blur border-t border-[#E2D6F4] dark:border-border flex items-stretch justify-around"
+      className="md:hidden fixed bottom-0 inset-x-0 z-50 bg-[#F6F3FC]/95 dark:bg-card/95 backdrop-blur border-t border-[#E2D6F4] dark:border-border flex items-stretch justify-around"
       style={{ paddingBottom: "env(safe-area-inset-bottom, 16px)" }}
     >
       {TABS.map((item) => {

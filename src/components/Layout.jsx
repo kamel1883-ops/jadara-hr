@@ -1,7 +1,7 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import { base44 } from "@/api/base44Client";
-import { LogOut, Menu, X, UserCircle, LayoutDashboard, Users, ClipboardCheck, Settings as SettingsIcon, ArrowRight, Fingerprint, CheckCircle2, CalendarDays, Plane, PlaneTakeoff, Wallet, Shield, Car, FileText, Target, GitBranch, Network, CalendarRange, MessageSquare, ClipboardList, ShieldAlert, FileSearch, BarChart3, FileBadge, Crown, Briefcase, GraduationCap, Globe, ScrollText, Gift, Bell, Package, MessageSquareWarning, ShieldCheck, HeartPulse, Headphones, Gauge, Calculator } from "lucide-react";
+import { LogOut, X, UserCircle, LayoutDashboard, Users, ClipboardCheck, Settings as SettingsIcon, ArrowRight, Fingerprint, CheckCircle2, CalendarDays, Plane, PlaneTakeoff, Wallet, Shield, Car, FileText, Target, GitBranch, Network, CalendarRange, MessageSquare, ClipboardList, ShieldAlert, FileSearch, BarChart3, FileBadge, Crown, Briefcase, GraduationCap, Globe, ScrollText, Gift, Bell, Package, MessageSquareWarning, ShieldCheck, HeartPulse, Headphones, Gauge, Calculator } from "lucide-react";
 import { motion } from "framer-motion";
 import { cn } from "@/lib/utils";
 import Logo from "@/components/Logo";
@@ -11,13 +11,14 @@ import NotificationsBell from "@/components/NotificationsBell";
 import CompanyAssistant from "@/components/CompanyAssistant";
 import AnimatedOutlet from "@/components/AnimatedOutlet";
 import BottomTabBar from "@/components/BottomTabBar";
+import MobileHeader from "@/components/MobileHeader";
 import TabScreens from "@/components/TabScreens";
 import SupportTicketDialog from "@/components/SupportTicketDialog";
 import { useI18n } from "@/lib/i18n";
 import { rememberPath } from "@/lib/tabStacks";
 
-// تبويبات الشريط السفلي الجذرية: الرئيسية، الموافقات، الإشعارات، الإعدادات.
-const ROOT_TABS = ["/app", "/approvals", "/notifications", "/settings"];
+// تبويبات الشريط السفلي الجذرية: الرئيسية، الحضور، الموافقات، الإعدادات.
+const ROOT_TABS = ["/app", "/attendance", "/approvals", "/settings"];
 
 // كل قسم يحمل بلاطة متدرّجة فخمة ملونة — الأيقونة بيضاء داخل البلاطة لتعطي مظهراً حقيقياً وملوناً وفخماً
 const appNav = [
@@ -60,8 +61,8 @@ const appNav = [
 
 const bottomNav = [
   { to: "/app", ar: "الرئيسية", en: "Dashboard", icon: LayoutDashboard },
+  { to: "/attendance", ar: "الحضور", en: "Attendance", icon: CalendarDays },
   { to: "/approvals", ar: "الموافقات", en: "Approvals", icon: ClipboardCheck },
-  { to: "/notifications", ar: "الإشعارات", en: "Notifications", icon: Bell },
   { to: "/settings", ar: "الإعدادات", en: "Settings", icon: SettingsIcon },
 ];
 
@@ -78,6 +79,17 @@ export default function Layout() {
 
   // تذكّر آخر شاشة داخل كل تبويب ليبقى لكل تبويب مساره المستقل
   useEffect(() => { rememberPath(location.pathname); }, [location.pathname]);
+
+  // اتجاه انتقال التبويبات الجذرية بحسب ترتيبها في الشريط (RTL: يمين ← يسار)
+  const tabIndex = (p) => bottomNav.findIndex((i) => i.to === p);
+  const prevTab = useRef(tabIndex(location.pathname));
+  const [tabDir, setTabDir] = useState(1);
+  useEffect(() => {
+    const next = tabIndex(location.pathname);
+    if (next === -1) return;
+    if (next !== prevTab.current && prevTab.current !== -1) setTabDir(next > prevTab.current ? 1 : -1);
+    prevTab.current = next;
+  }, [location.pathname]);
 
   useEffect(() => {
     base44.auth.me().then(setUser).catch(() => {});
@@ -107,6 +119,10 @@ export default function Layout() {
     const parent = location.pathname.replace(/\/[^/]+\/?$/, "") || "/app";
     navigate(parent.startsWith("/app") || parent === "" ? parent : "/app");
   };
+
+  const headerTitle = isRootTab
+    ? (rootTab ? (isAr ? rootTab.ar : rootTab.en) : "")
+    : (appNav.find((i) => i.to === location.pathname)?.[isAr ? "ar" : "en"] || (isAr ? "رجوع" : "Back"));
 
   return (
     <div className="min-h-screen bg-background flex">
@@ -174,39 +190,13 @@ export default function Layout() {
       {open && <div className="fixed inset-0 bg-black/40 z-30 lg:hidden" onClick={() => setOpen(false)} />}
 
       <div className="flex-1 min-w-0 flex flex-col">
-        <header className="lg:hidden h-16 bg-gradient-to-b from-[#F6F3FC] to-[#EFE9F8] text-[#2A2340] border-b border-[#E2D6F4] flex items-center justify-between px-4 sticky top-0 z-20" style={{ paddingTop: "max(env(safe-area-inset-top), 0px)" }}>
-          <div className="flex items-center gap-2.5 min-w-0">
-            {isRootTab ? (
-              // شاشة جذرية: الشعار + عنوان القسم
-              <>
-                <Link to="/app" className="shrink-0"><Logo tone="dark" size={34} /></Link>
-                <span className="font-extrabold text-[15px] text-[#2A2340] truncate">{rootTab?.ar && isAr ? rootTab.ar : (rootTab?.en || (isAr ? "الرئيسية" : "Home"))}</span>
-              </>
-            ) : (
-              // شاشة فرعية: زر رجوع واضح + عنوان الصفحة
-              <>
-                <button
-                  onClick={goBack}
-                  className="w-11 h-11 -ms-1.5 rounded-full bg-white/70 dark:bg-card border border-[#E8DEF7] dark:border-border flex items-center justify-center text-[#4A3F66] dark:text-foreground active:scale-95 transition shrink-0"
-                  aria-label={isAr ? "رجوع" : "Back"}
-                >
-                  <ArrowRight size={22} style={{ transform: isAr ? "none" : "scaleX(-1)" }} />
-                </button>
-                <span className="text-[15px] font-bold text-[#2A2340] truncate">
-                  {appNav.find((i) => i.to === location.pathname)?.[isAr ? "ar" : "en"] || (isAr ? "رجوع" : "Back")}
-                </span>
-              </>
-            )}
-          </div>
-          <div className="flex items-center gap-2">
-            <button onClick={() => setSupportOpen(true)} className="relative w-9 h-9 rounded-full bg-gradient-to-br from-violet-600 to-indigo-600 text-white flex items-center justify-center shadow-md shadow-violet-300/50 active:scale-95 transition" aria-label={isAr ? "الدعم الفني" : "Support"}>
-              <Headphones size={18} />
-            </button>
-            <NotificationsBell tone="dark" />
-            <LanguageToggle />
-            <button onClick={() => setOpen(true)} className="text-[#6B5E8C]"><Menu size={22} /></button>
-          </div>
-        </header>
+        <MobileHeader
+          isAr={isAr}
+          isRoot={isRootTab}
+          title={headerTitle}
+          onOpenMenu={() => setOpen(true)}
+          onOpenSupport={() => setSupportOpen(true)}
+        />
 
         <div className="hidden lg:flex items-center justify-between h-14 px-6 border-b bg-[#F8F6FC]/80 backdrop-blur sticky top-0 z-20">
           <div className="flex items-center gap-3">
@@ -226,7 +216,7 @@ export default function Layout() {
           </div>
         </div>
 
-        <main className="relative flex-1 p-4 sm:p-6 lg:p-9 pb-24 lg:pb-9 animate-fade-in overflow-hidden">
+        <main className="relative flex-1 p-4 sm:p-6 lg:p-9 pb-24 md:pb-9 animate-fade-in overflow-hidden">
           <div className="pointer-events-none absolute inset-0 bg-gradient-to-br from-violet-500/[0.10] via-indigo-500/[0.05] to-amber-200/[0.10] dark:from-violet-500/[0.14] dark:via-indigo-500/[0.10] dark:to-amber-500/[0.08]" aria-hidden="true" />
           <div className="pointer-events-none absolute -top-24 -left-16 w-[460px] h-[460px] rounded-full bg-violet-500/[0.10] dark:bg-violet-500/[0.16] blur-3xl" aria-hidden="true" />
           <div className="pointer-events-none absolute -bottom-28 -right-20 w-[380px] h-[380px] rounded-full bg-amber-400/[0.10] dark:bg-amber-500/[0.10] blur-3xl" aria-hidden="true" />
@@ -238,9 +228,9 @@ export default function Layout() {
             {isRootTab ? (
               <motion.div
                 key={location.pathname}
-                initial={{ opacity: 0, y: 8 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ duration: 0.22, ease: "easeOut" }}
+                initial={{ opacity: 0, x: tabDir === 1 ? 24 : -24 }}
+                animate={{ opacity: 1, x: 0 }}
+                transition={{ duration: 0.24, ease: "easeOut" }}
               >
                 <TabScreens active={location.pathname} />
               </motion.div>
