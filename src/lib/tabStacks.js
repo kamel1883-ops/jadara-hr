@@ -1,7 +1,7 @@
 // ذاكرة مسار مستقلة لكل تبويب في الشريط السفلي.
 // كل تبويب يتذكّر آخر شاشة فرعية فتحها المستخدم داخله، فالعودة إلى التبويب
 // تُرجعك إلى حيث توقفت بدل إعادة تصفير القسم — تماماً كحزم التنقل في التطبيقات الأصلية.
-export const TAB_ROOTS = ["/app", "/attendance", "/approvals", "/settings"];
+export const TAB_ROOTS = ["/app", "/notifications", "/settings"];
 
 const stacks = {};
 
