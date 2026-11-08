@@ -1,7 +1,8 @@
 import React, { useState, useEffect } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import { base44 } from "@/api/base44Client";
-import { LogOut, Menu, X, UserCircle, LayoutDashboard, Users, ClipboardCheck, Settings as SettingsIcon, ArrowRight, Fingerprint, CheckCircle2, CalendarDays, Plane, PlaneTakeoff, Wallet, Shield, Car, FileText, Target, GitBranch, Network, CalendarRange, MessageSquare, ClipboardList, ShieldAlert, FileSearch, BarChart3, FileBadge, Crown, Briefcase, GraduationCap, Globe, ScrollText, Gift, Bell, Package, MessageSquareWarning, ShieldCheck, HeartPulse, Headphones, Gauge, Calculator } from "lucide-react";
+import { LogOut, Menu, X, UserCircle, UserRound, LayoutDashboard, Users, Settings as SettingsIcon, ArrowRight, Fingerprint, CheckCircle2, CalendarDays, Plane, PlaneTakeoff, Wallet, Shield, Car, FileText, Target, GitBranch, Network, CalendarRange, MessageSquare, ClipboardList, ShieldAlert, FileSearch, BarChart3, FileBadge, Crown, Briefcase, GraduationCap, Globe, ScrollText, Gift, Bell, Package, MessageSquareWarning, ShieldCheck, HeartPulse, Headphones, Gauge, Calculator } from "lucide-react";
+import { motion } from "framer-motion";
 import { cn } from "@/lib/utils";
 import Logo from "@/components/Logo";
 import { Image } from "@/components/ui/image";
@@ -14,7 +15,9 @@ import TabScreens from "@/components/TabScreens";
 import SupportTicketDialog from "@/components/SupportTicketDialog";
 import { useI18n } from "@/lib/i18n";
 
-const ROOT_TABS = ["/app", "/attendance", "/approvals", "/settings"];
+// تبويبات الشريط السفلي الجذرية: الرئيسية، الإشعارات، بوابتي، الإعدادات.
+// /portal صفحة عامة مستقلة (بوابة الموظف) وتبقى رابطاً في الشريط دون أن يفرضها هذا المكوّن.
+const ROOT_TABS = ["/app", "/notifications", "/settings"];
 
 // كل قسم يحمل بلاطة متدرّجة فخمة ملونة — الأيقونة بيضاء داخل البلاطة لتعطي مظهراً حقيقياً وملوناً وفخماً
 const appNav = [
@@ -56,9 +59,9 @@ const appNav = [
 ];
 
 const bottomNav = [
-  { to: "/app", ar: "الرئيسية", en: "Dashboard", icon: LayoutDashboard },
-  { to: "/attendance", ar: "الحضور", en: "Attendance", icon: Fingerprint },
-  { to: "/approvals", ar: "الطلبات", en: "Requests", icon: ClipboardCheck },
+  { to: "/app", ar: "الرئيسية", en: "Home", icon: LayoutDashboard },
+  { to: "/notifications", ar: "الإشعارات", en: "Notifications", icon: Bell },
+  { to: "/portal", ar: "بوابتي", en: "My Portal", icon: UserRound },
   { to: "/settings", ar: "الإعدادات", en: "Settings", icon: SettingsIcon },
 ];
 
@@ -169,15 +172,26 @@ export default function Layout() {
 
       <div className="flex-1 min-w-0 flex flex-col">
         <header className="lg:hidden h-16 bg-gradient-to-b from-[#F6F3FC] to-[#EFE9F8] text-[#2A2340] border-b border-[#E2D6F4] flex items-center justify-between px-4 sticky top-0 z-20" style={{ paddingTop: "max(env(safe-area-inset-top), 0px)" }}>
-          <div className="flex items-center gap-2.5">
-            {rootTab ? (
-              <span className="font-extrabold text-[15px] text-[#2A2340]">{isAr ? rootTab.ar : rootTab.en}</span>
-            ) : (
+          <div className="flex items-center gap-2.5 min-w-0">
+            {isRootTab ? (
+              // شاشة جذرية: الشعار + عنوان القسم
               <>
-                <button onClick={goBack} className="text-[#6B5E8C] active:scale-95 transition" aria-label={isAr ? "رجوع" : "Back"}>
-                  <ArrowRight size={22} style={{ transform: isAr ? "none" : "scaleX(-1)" }} />
+                <Link to="/app" className="shrink-0"><Logo tone="dark" size={34} /></Link>
+                <span className="font-extrabold text-[15px] text-[#2A2340] truncate">{rootTab?.ar && isAr ? rootTab.ar : (rootTab?.en || (isAr ? "الرئيسية" : "Home"))}</span>
+              </>
+            ) : (
+              // شاشة فرعية: زر رجوع واضح + عنوان الصفحة
+              <>
+                <button
+                  onClick={goBack}
+                  className="w-9 h-9 -ms-1 rounded-full bg-white/70 border border-[#E8DEF7] flex items-center justify-center text-[#4A3F66] active:scale-95 transition shrink-0"
+                  aria-label={isAr ? "رجوع" : "Back"}
+                >
+                  <ArrowRight size={20} style={{ transform: isAr ? "none" : "scaleX(-1)" }} />
                 </button>
-                <Logo tone="dark" size={36} />
+                <span className="text-[15px] font-bold text-[#2A2340] truncate">
+                  {appNav.find((i) => i.to === location.pathname)?.[isAr ? "ar" : "en"] || (isAr ? "رجوع" : "Back")}
+                </span>
               </>
             )}
           </div>
@@ -217,7 +231,17 @@ export default function Layout() {
             <Crown size={440} className="text-amber-500 dark:text-amber-400" strokeWidth={0.8} />
           </div>
           <div className="relative">
-            {isRootTab ? <TabScreens active={location.pathname} /> : <AnimatedOutlet />}
+            {/* انتقال انسيابي بين تبويبات الجذر (Framer Motion) — الشاشات تبقى مثبتة في TabScreens فلا تُفقد حالتها */}
+            {isRootTab ? (
+              <motion.div
+                key={location.pathname}
+                initial={{ opacity: 0, y: 8 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ duration: 0.22, ease: "easeOut" }}
+              >
+                <TabScreens active={location.pathname} />
+              </motion.div>
+            ) : <AnimatedOutlet />}
           </div>
         </main>
 
