@@ -34,7 +34,7 @@ export default function BottomTabBar({ onNavigate }) {
 
   return (
     <nav
-      className="lg:hidden fixed bottom-0 inset-x-0 z-30 bg-[#F6F3FC]/95 backdrop-blur border-t border-[#E2D6F4] flex items-stretch justify-around"
+      className="lg:hidden fixed bottom-0 inset-x-0 z-40 bg-[#F6F3FC]/95 backdrop-blur border-t border-[#E2D6F4] flex items-stretch justify-around"
       style={{ paddingBottom: "env(safe-area-inset-bottom)" }}
     >
       {TABS.map((item) => {

@@ -94,6 +94,14 @@ export default function Layout() {
   const isRootTab = ROOT_TABS.includes(location.pathname);
   const rootTab = isRootTab ? bottomNav.find((i) => i.to === location.pathname) : null;
 
+  // زر رجوع موحّد للشاشات الفرعية: يعيد خطوة في سجل التتبع، وإن كانت الصفحة مفتوحة
+  // مباشرة (رابط عميق بلا سجل) ينتقل للأصل مباشرة دون ترك المستخدم في شاشة ميتة.
+  const goBack = () => {
+    if (location.key && location.key !== "default") { navigate(-1); return; }
+    const parent = location.pathname.replace(/\/[^/]+\/?$/, "") || "/app";
+    navigate(parent.startsWith("/app") || parent === "" ? parent : "/app");
+  };
+
   return (
     <div className="min-h-screen bg-background flex">
       <aside
@@ -166,7 +174,7 @@ export default function Layout() {
               <span className="font-extrabold text-[15px] text-[#2A2340]">{isAr ? rootTab.ar : rootTab.en}</span>
             ) : (
               <>
-                <button onClick={() => navigate(-1)} className="text-[#6B5E8C] active:scale-95 transition" aria-label="back">
+                <button onClick={goBack} className="text-[#6B5E8C] active:scale-95 transition" aria-label={isAr ? "رجوع" : "Back"}>
                   <ArrowRight size={22} style={{ transform: isAr ? "none" : "scaleX(-1)" }} />
                 </button>
                 <Logo tone="dark" size={36} />
@@ -184,7 +192,15 @@ export default function Layout() {
         </header>
 
         <div className="hidden lg:flex items-center justify-between h-14 px-6 border-b bg-[#F8F6FC]/80 backdrop-blur sticky top-0 z-20">
-          <div className="text-sm font-medium text-[#6B5E8C]">{isAr ? "منصة جداره — الموارد البشرية" : "Jadara HR Platform"}</div>
+          <div className="flex items-center gap-3">
+            {!rootTab && (
+              <button onClick={goBack} className="flex items-center gap-1.5 text-sm font-semibold text-[#6B5E8C] hover:text-[#2A2340] transition" aria-label={isAr ? "رجوع" : "Back"}>
+                <ArrowRight size={18} className={isAr ? "" : "rotate-180"} />
+                {isAr ? "رجوع" : "Back"}
+              </button>
+            )}
+            <div className="text-sm font-medium text-[#6B5E8C]">{isAr ? "منصة جداره — الموارد البشرية" : "Jadara HR Platform"}</div>
+          </div>
           <div className="flex items-center gap-3">
             <button onClick={() => setSupportOpen(true)} className="flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-gradient-to-l from-violet-600 to-indigo-600 text-white text-sm font-bold shadow-md shadow-violet-300/50 hover:shadow-lg hover:scale-[1.03] transition">
               <Headphones size={16} /> {isAr ? "الدعم الفني" : "Support"}

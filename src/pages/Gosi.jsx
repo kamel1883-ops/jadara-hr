@@ -5,9 +5,7 @@ import { listCurrentOrg } from "@/lib/currentOrg";
 import PageHeader from "@/components/PageHeader";
 import StatCard from "@/components/StatCard";
 import { Button } from "@/components/ui/button";
-import {
-  Select, SelectContent, SelectItem, SelectTrigger, SelectValue
-} from "@/components/ui/select";
+import { MobileSelect, MobileSelectItem } from "@/components/ui/mobile-select";
 import { Input } from "@/components/ui/input";
 import { Shield, FileDown, Save, CheckCircle2, Wallet, Building2, ArrowRight } from "lucide-react";
 import DocApprovalMark from "@/components/docs/DocApprovalMark";
@@ -170,12 +168,9 @@ export default function Gosi() {
         <div className="flex gap-3 flex-wrap items-end">
           <div className="space-y-1.5">
             <label className="text-xs font-medium text-muted-foreground">{t.month}</label>
-            <Select value={String(month)} onValueChange={(v) => setMonth(Number(v))}>
-              <SelectTrigger className="w-40"><SelectValue /></SelectTrigger>
-              <SelectContent>
-                {t.months.map((m, i) => <SelectItem key={i} value={String(i + 1)}>{m}</SelectItem>)}
-              </SelectContent>
-            </Select>
+            <MobileSelect value={String(month)} onValueChange={(v) => setMonth(Number(v))} className="w-40">
+              {t.months.map((m, i) => <MobileSelectItem key={i} value={String(i + 1)}>{m}</MobileSelectItem>)}
+            </MobileSelect>
           </div>
           <div className="space-y-1.5">
             <label className="text-xs font-medium text-muted-foreground">{t.year}</label>

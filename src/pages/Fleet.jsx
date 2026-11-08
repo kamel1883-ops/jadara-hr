@@ -2,9 +2,7 @@ import React, { useState, useEffect } from "react";
 import { base44 } from "@/api/base44Client";
 import PageHeader from "@/components/PageHeader";
 import { Button } from "@/components/ui/button";
-import {
-  Select, SelectContent, SelectItem, SelectTrigger, SelectValue
-} from "@/components/ui/select";
+import { MobileSelect, MobileSelectItem } from "@/components/ui/mobile-select";
 import { Input } from "@/components/ui/input";
 import { Car, Plus, Pencil, Trash2, Shield, FileText, Wrench, ScrollText } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -119,10 +117,9 @@ export default function Fleet() {
               <In label={`${t.plate} · ${tAr}`}><Input value={form.plate_number} onChange={(e) => set("plate_number", e.target.value)} required dir="rtl" /></In>
               <In label={`${t.plate} · ${tEn}`}><Input value={form.plate_number_en} onChange={(e) => set("plate_number_en", e.target.value)} dir="ltr" /></In>
               <In label={t.type}>
-                <Select value={form.vehicle_type} onValueChange={(v) => set("vehicle_type", v)}>
-                  <SelectTrigger><SelectValue /></SelectTrigger>
-                  <SelectContent>{["sedan","suv","van","truck","bus","other"].map((tt) => <SelectItem key={tt} value={tt}>{typeLabel(tt)}</SelectItem>)}</SelectContent>
-                </Select>
+                <MobileSelect value={form.vehicle_type} onValueChange={(v) => set("vehicle_type", v)}>
+                  {["sedan","suv","van","truck","bus","other"].map((tt) => <MobileSelectItem key={tt} value={tt}>{typeLabel(tt)}</MobileSelectItem>)}
+                </MobileSelect>
               </In>
               <In label={`${t.brand} · ${tAr}`}><Input value={form.brand} onChange={(e) => set("brand", e.target.value)} dir="rtl" /></In>
               <In label={`${t.brand} · ${tEn}`}><Input value={form.brand_en} onChange={(e) => set("brand_en", e.target.value)} dir="ltr" /></In>
@@ -131,20 +128,16 @@ export default function Fleet() {
               <In label={t.year}><Input type="number" value={form.year} onChange={(e) => set("year", Number(e.target.value))} /></In>
               <In label={t.color}><Input value={form.color} onChange={(e) => set("color", e.target.value)} /></In>
               <In label={t.owner}>
-                <Select value={form.assigned_to} onValueChange={(v) => set("assigned_to", v)}>
-                  <SelectTrigger><SelectValue placeholder={t.noneItem} /></SelectTrigger>
-                  <SelectContent>{employees.map((e) => <SelectItem key={e.id} value={e.id}>{e.full_name} — {e.national_id || "—"}</SelectItem>)}</SelectContent>
-                </Select>
+                <MobileSelect value={form.assigned_to} onValueChange={(v) => set("assigned_to", v)} placeholder={t.noneItem}>
+                  {employees.map((e) => <MobileSelectItem key={e.id} value={e.id}>{e.full_name} — {e.national_id || "—"}</MobileSelectItem>)}
+                </MobileSelect>
               </In>
               <In label={t.status}>
-                <Select value={form.status} onValueChange={(v) => set("status", v)}>
-                  <SelectTrigger><SelectValue /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="active">{t.active}</SelectItem>
-                    <SelectItem value="under_maintenance">{t.maintenance}</SelectItem>
-                    <SelectItem value="out_of_service">{t.outOfService}</SelectItem>
-                  </SelectContent>
-                </Select>
+                <MobileSelect value={form.status} onValueChange={(v) => set("status", v)}>
+                  <MobileSelectItem value="active">{t.active}</MobileSelectItem>
+                  <MobileSelectItem value="under_maintenance">{t.maintenance}</MobileSelectItem>
+                  <MobileSelectItem value="out_of_service">{t.outOfService}</MobileSelectItem>
+                </MobileSelect>
               </In>
               <In label={t.insExp}><Input type="date" lang={isAr ? "ar" : "en"} value={form.insurance_expiry} onChange={(e) => set("insurance_expiry", e.target.value)} /></In>
               <In label={t.insNo}><Input value={form.insurance_number} onChange={(e) => set("insurance_number", e.target.value)} /></In>
