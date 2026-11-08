@@ -1,6 +1,6 @@
 import React from "react";
 import { useLocation, useNavigate } from "react-router-dom";
-import { LayoutDashboard, Users, ClipboardCheck, Settings as SettingsIcon } from "lucide-react";
+import { LayoutDashboard, Fingerprint, ClipboardCheck, Settings as SettingsIcon } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useI18n } from "@/lib/i18n";
 
@@ -8,9 +8,9 @@ import { useI18n } from "@/lib/i18n";
 // الشاشات تبقى مثبتة في TabScreens (حالة كاملة: نماذج، مرشحات، واجهة فرعية، تمرير)،
 // لذلك لا يُرسل أي مفتاح تحديث ولا يُعاد تركيب المسار عند التبديل.
 const TABS = [
-  { to: "/app", ar: "الرئيسية", en: "Home", icon: LayoutDashboard },
-  { to: "/employees", ar: "الموظفين", en: "Employees", icon: Users },
-  { to: "/approvals", ar: "الموافقات", en: "Approvals", icon: ClipboardCheck },
+  { to: "/app", ar: "الرئيسية", en: "Dashboard", icon: LayoutDashboard },
+  { to: "/attendance", ar: "الحضور", en: "Attendance", icon: Fingerprint },
+  { to: "/approvals", ar: "الطلبات", en: "Requests", icon: ClipboardCheck },
   { to: "/settings", ar: "الإعدادات", en: "Settings", icon: SettingsIcon },
 ];
 
@@ -35,7 +35,7 @@ export default function BottomTabBar({ onNavigate }) {
   return (
     <nav
       className="lg:hidden fixed bottom-0 inset-x-0 z-40 bg-[#F6F3FC]/95 backdrop-blur border-t border-[#E2D6F4] flex items-stretch justify-around"
-      style={{ paddingBottom: "env(safe-area-inset-bottom)" }}
+      style={{ paddingBottom: "env(safe-area-inset-bottom, 16px)" }}
     >
       {TABS.map((item) => {
         const Icon = item.icon;

@@ -14,7 +14,7 @@ import TabScreens from "@/components/TabScreens";
 import SupportTicketDialog from "@/components/SupportTicketDialog";
 import { useI18n } from "@/lib/i18n";
 
-const ROOT_TABS = ["/app", "/employees", "/approvals", "/settings"];
+const ROOT_TABS = ["/app", "/attendance", "/approvals", "/settings"];
 
 // كل قسم يحمل بلاطة متدرّجة فخمة ملونة — الأيقونة بيضاء داخل البلاطة لتعطي مظهراً حقيقياً وملوناً وفخماً
 const appNav = [
@@ -56,9 +56,9 @@ const appNav = [
 ];
 
 const bottomNav = [
-  { to: "/app", ar: "الرئيسية", en: "Home", icon: LayoutDashboard },
-  { to: "/employees", ar: "الموظفين", en: "Employees", icon: Users },
-  { to: "/approvals", ar: "الموافقات", en: "Approvals", icon: ClipboardCheck },
+  { to: "/app", ar: "الرئيسية", en: "Dashboard", icon: LayoutDashboard },
+  { to: "/attendance", ar: "الحضور", en: "Attendance", icon: Fingerprint },
+  { to: "/approvals", ar: "الطلبات", en: "Requests", icon: ClipboardCheck },
   { to: "/settings", ar: "الإعدادات", en: "Settings", icon: SettingsIcon },
 ];
 
