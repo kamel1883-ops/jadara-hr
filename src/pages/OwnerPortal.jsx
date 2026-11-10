@@ -355,9 +355,9 @@ export default function OwnerPortal() {
             <h3 className="font-semibold text-lg">{t.notOwnerTitle}</h3>
             <p className="text-sm text-muted-foreground mt-2 leading-relaxed">{t.notOwnerDesc}</p>
             <div className="flex flex-wrap gap-2 justify-center mt-6">
-              <Link to="/portal">
-                <Button variant="outline" className="gap-2"><ArrowRight size={16} /> {t.goEmployee}</Button>
-              </Link>
+              <Button asChild variant="outline" className="gap-2">
+                <Link to="/portal"><ArrowRight size={16} /> {t.goEmployee}</Link>
+              </Button>
               <Button variant="ghost" onClick={handleLogout} className="gap-2"><LogOut size={16} /> {t.logout}</Button>
             </div>
           </div>

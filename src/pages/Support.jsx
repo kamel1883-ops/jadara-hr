@@ -12,7 +12,6 @@ import { MobileSelect, MobileSelectItem } from "@/components/ui/mobile-select";
 import TurnstileWidget from "@/components/TurnstileWidget";
 import Logo from "@/components/Logo";
 import { ArrowRight, Headphones, Paperclip, X, Loader2, CheckCircle2, Upload } from "lucide-react";
-import { cn } from "@/lib/utils";
 
 export default function Support() {
   const { lang } = useI18n();
@@ -120,7 +119,7 @@ export default function Support() {
           <p className="text-sm text-muted-foreground leading-relaxed mb-6">{t.okNote}</p>
           <div className="flex flex-wrap gap-2 justify-center">
             <Button variant="outline" onClick={() => { setDone(null); setCatKey(""); setSubKey(""); setSubject(""); setDesc(""); setName(""); setEmail(""); setPhone(""); setAttachments([]); }}>{t.newTicket}</Button>
-            <Link to="/"><Button className="gap-2"><ArrowRight size={16} /> {t.backHome}</Button></Link>
+            <Button asChild className="gap-2"><Link to="/"><ArrowRight size={16} /> {t.backHome}</Link></Button>
           </div>
         </div>
       </div>

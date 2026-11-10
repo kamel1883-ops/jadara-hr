@@ -94,7 +94,7 @@ export default function CustomerSurveyTake() {
           <AlertTriangle className="mx-auto text-rose-500 mb-3" size={36} />
           <h1 className="text-lg font-bold mb-1">الاستبيان غير موجود</h1>
           <p className="text-sm text-muted-foreground mb-4">قد يكون الرابط غير صحيح أو محذوف.</p>
-          <Link to="/"><Button variant="outline">العودة للرئيسية</Button></Link>
+          <Button asChild variant="outline"><Link to="/">العودة للرئيسية</Link></Button>
         </div>
       </div>
     );
@@ -107,7 +107,7 @@ export default function CustomerSurveyTake() {
           <Lock className="mx-auto text-slate-400 mb-3" size={36} />
           <h1 className="text-lg font-bold mb-1">الاستبيان مغلق</h1>
           <p className="text-sm text-muted-foreground mb-4">لم يعد يقبل ردودًا. شكراً لاهتمامك.</p>
-          <Link to="/"><Button variant="outline">العودة للرئيسية</Button></Link>
+          <Button asChild variant="outline"><Link to="/">العودة للرئيسية</Link></Button>
         </div>
       </div>
     );
@@ -120,7 +120,7 @@ export default function CustomerSurveyTake() {
           <CheckCircle2 className="mx-auto text-emerald-500 mb-3" size={40} />
           <h1 className="text-lg font-bold mb-1">شكراً لمشاركتك!</h1>
           <p className="text-sm text-muted-foreground mb-4">تم استلام تقييمك ووصوله لإدارة جداره.</p>
-          <Link to="/"><Button variant="outline">العودة للرئيسية</Button></Link>
+          <Button asChild variant="outline"><Link to="/">العودة للرئيسية</Link></Button>
         </div>
       </div>
     );

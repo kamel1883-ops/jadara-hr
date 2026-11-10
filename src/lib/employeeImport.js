@@ -198,14 +198,64 @@ function cellToString(v) {
   return String(v).trim();
 }
 
-// يحلّل ملف CSV أو Xilinx في المتصفح ويعيد مصفوفة كائنات بمفاتيح الحقول
+const pad2 = (n) => String(n).padStart(2, "0");
+
+// حقول التواريخ — تُقرأ من الخلية نفسها لا من نصها، فلا ينقلب اليوم والشهر.
+const isDateKey = (key) => key === "birth_date" || /_date$|_expiry$/.test(key);
+
+// رقم تسلسلي في إكسل (بلا تنسيق تاريخ) → تاريخ ISO
+function serialToISO(n) {
+  const ms = Math.round((Number(n) - 25569) * 86400000);
+  const d = new Date(ms);
+  if (isNaN(d.getTime())) return "";
+  return `${d.getUTCFullYear()}-${pad2(d.getUTCMonth() + 1)}-${pad2(d.getUTCDate())}`;
+}
+
+// ترتيب اليوم/الشهر من تنسيق الخلية نفسه (dd/mm/yyyy أو mm/dd/yyyy) — لا تخمين.
+function monthFirstFormat(numFmt) {
+  const tokens = String(numFmt || "")
+    .replace(/"[^"]*"/g, "")
+    .replace(/\[[^\]]*\]/g, "")
+    .toLowerCase()
+    .match(/[dmy]+/g) || [];
+  return tokens[0]?.startsWith("m") && String(tokens[1] || "").startsWith("d");
+}
+
+// تاريخ خلية إكسل → YYYY-MM-DD (يستخدم UTC لتفادي إزاحة اليوم بين المناطق الزمنية)
+export function dateCellToISO(cell) {
+  let v = cell?.value;
+  if (v && typeof v === "object" && !(v instanceof Date) && v.result != null) v = v.result;
+  if (v == null || v === "") return "";
+  if (v instanceof Date) {
+    if (isNaN(v.getTime())) return "";
+    return `${v.getUTCFullYear()}-${pad2(v.getUTCMonth() + 1)}-${pad2(v.getUTCDate())}`;
+  }
+  const s = String(v).trim();
+  const iso = s.match(/^(\d{4})-(\d{1,2})-(\d{1,2})/);
+  if (iso) return `${iso[1]}-${pad2(iso[2])}-${pad2(iso[3])}`;
+  // تاريخ مكتوب نصاً: الترتيب يُؤخذ من تنسيق الخلية (mm/dd) وإلا فالعُرف المحلي dd/mm
+  const m = s.match(/^(\d{1,2})[\/\-.](\d{1,2})[\/\-.](\d{2,4})$/);
+  if (m) {
+    const y = m[3].length <= 2 ? (Number(m[3]) > 40 ? 1900 + Number(m[3]) : 2000 + Number(m[3])) : Number(m[3]);
+    const a = Number(m[1]);
+    const b = Number(m[2]);
+    const day = monthFirstFormat(cell?.numFmt) ? b : a;
+    const month = monthFirstFormat(cell?.numFmt) ? a : b;
+    if (month >= 1 && month <= 12 && day >= 1 && day <= 31) return `${y}-${pad2(month)}-${pad2(day)}`;
+    return "";
+  }
+  if (/^\d{5}(\.\d+)?$/.test(s)) return serialToISO(Number(s));
+  return "";
+}
+
+// يحلّل ملف CSV أو Excel في المتصفح ويعيد مصفوفة كائنات بمفاتيح الحقول
 export async function parseEmployeeFile(file) {
   const ext = (file.name.split(".").pop() || "").toLowerCase();
   let rawRows = [];
 
   if (ext === "csv") {
     const text = await file.text();
-    rawRows = parseCSV(text);
+    rawRows = parseCSV(text).map((row) => row.map((v) => ({ v, cell: null })));
   } else {
     const buf = await file.arrayBuffer();
     const wb = new ExcelJS.Workbook();
@@ -213,15 +263,18 @@ export async function parseEmployeeFile(file) {
     const ws = wb.worksheets[0];
     if (!ws) return [];
     ws.eachRow({ includeEmpty: false }, (row) => {
-      const vals = row.values; // مفهرس من 1
       const arr = [];
-      for (let i = 1; i < vals.length; i++) arr.push(vals[i]);
+      const cols = Math.max(row.cellCount || 0, ws.columnCount || 0);
+      for (let i = 1; i <= cols; i++) {
+        const cell = row.getCell(i);
+        arr.push({ v: cell.value, cell });
+      }
       rawRows.push(arr);
     });
   }
 
   if (!rawRows.length) return [];
-  const headers = rawRows[0].map((h) => String(h ?? "").trim());
+  const headers = rawRows[0].map((h) => cellToString(h.v).trim());
   // مطابقة مرنة: تتعرّف على الأعمدة بعناوينها الكاملة أو المختصرة، عربي/إنجليزي.
   const colKeys = headers.map((h) => resolveHeader(h));
   const records = [];
@@ -230,7 +283,8 @@ export async function parseEmployeeFile(file) {
     const obj = {};
     colKeys.forEach((key, j) => {
       if (!key) return;
-      obj[key] = cellToString(vals[j]);
+      const el = vals[j];
+      obj[key] = isDateKey(key) && el?.cell ? dateCellToISO(el.cell) : cellToString(el?.v);
     });
     records.push(obj);
   }

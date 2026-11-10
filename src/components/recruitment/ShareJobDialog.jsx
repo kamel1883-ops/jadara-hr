@@ -59,10 +59,10 @@ export default function ShareJobDialog({ open, onOpenChange, job }) {
             </div>
           </div>
           <div className="grid grid-cols-2 gap-2">
-            <a href={wa} target="_blank" rel="noreferrer"><Button className="w-full gap-2 bg-emerald-600 hover:bg-emerald-700"><MessageCircle size={16} /> {t.wa}</Button></a>
-            <a href={tg} target="_blank" rel="noreferrer"><Button className="w-full gap-2 bg-sky-500 hover:bg-sky-600"><Send size={16} /> {t.tg}</Button></a>
-            <a href={li} target="_blank" rel="noreferrer"><Button className="w-full gap-2 bg-blue-700 hover:bg-blue-800"><Linkedin size={16} /> {t.li}</Button></a>
-            <a href={mail}><Button className="w-full gap-2 bg-slate-700 hover:bg-slate-800"><Mail size={16} /> {t.mail}</Button></a>
+            <Button asChild className="w-full gap-2 bg-emerald-600 hover:bg-emerald-700"><a href={wa} target="_blank" rel="noreferrer"><MessageCircle size={16} /> {t.wa}</a></Button>
+            <Button asChild className="w-full gap-2 bg-sky-500 hover:bg-sky-600"><a href={tg} target="_blank" rel="noreferrer"><Send size={16} /> {t.tg}</a></Button>
+            <Button asChild className="w-full gap-2 bg-blue-700 hover:bg-blue-800"><a href={li} target="_blank" rel="noreferrer"><Linkedin size={16} /> {t.li}</a></Button>
+            <Button asChild className="w-full gap-2 bg-slate-700 hover:bg-slate-800"><a href={mail}><Mail size={16} /> {t.mail}</a></Button>
           </div>
 
           <div className="pt-2 border-t border-border">
@@ -73,9 +73,9 @@ export default function ShareJobDialog({ open, onOpenChange, job }) {
             <p className="text-[11px] text-muted-foreground mb-2">{t.saHint}</p>
             <div className="grid grid-cols-2 gap-2">
               {saSites.map((s) => (
-                <a key={s.name} href={s.url} target="_blank" rel="noreferrer">
-                  <Button className={`w-full gap-2 text-white ${s.color}`}><Globe size={14} /> {s.name}</Button>
-                </a>
+                <Button key={s.name} asChild className={`w-full gap-2 text-white ${s.color}`}>
+                  <a href={s.url} target="_blank" rel="noreferrer"><Globe size={14} /> {s.name}</a>
+                </Button>
               ))}
             </div>
           </div>
