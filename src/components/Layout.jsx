@@ -7,6 +7,7 @@ import { cn } from "@/lib/utils";
 import Logo from "@/components/Logo";
 import { Image } from "@/components/ui/image";
 import LanguageToggle from "@/components/LanguageToggle";
+import ThemeToggle from "@/components/ThemeToggle";
 import NotificationsBell from "@/components/NotificationsBell";
 import CompanyAssistant from "@/components/CompanyAssistant";
 import AnimatedOutlet from "@/components/AnimatedOutlet";
@@ -165,7 +166,7 @@ export default function Layout() {
         </nav>
 
         <div className="p-3 border-t border-[#E2D6F4]">
-          <div className="px-3 pb-2"><LanguageToggle /></div>
+          <div className="px-3 pb-2 flex items-center gap-2"><LanguageToggle /><ThemeToggle isAr={isAr} /></div>
           <div className="flex items-center gap-3 px-3 py-2 mb-2 rounded-lg bg-white/60 border border-[#E8DEF7]">
             {user?.avatar_url ? (
               <Image src={user.avatar_url} fittingType="fill" className="w-9 h-9 rounded-full shrink-0 border border-[#E8DEF7]" />
@@ -210,6 +211,7 @@ export default function Layout() {
             <div className="text-sm font-medium text-[#6B5E8C]">{isAr ? "منصة جداره — الموارد البشرية" : "Jadara HR Platform"}</div>
           </div>
           <div className="flex items-center gap-3">
+            <ThemeToggle isAr={isAr} />
             <button onClick={() => setSupportOpen(true)} className="flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-gradient-to-l from-violet-600 to-indigo-600 text-white text-sm font-bold shadow-md shadow-violet-300/50 hover:shadow-lg hover:scale-[1.03] transition">
               <Headphones size={16} /> {isAr ? "الدعم الفني" : "Support"}
             </button>

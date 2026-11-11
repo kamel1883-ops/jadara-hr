@@ -18,6 +18,7 @@ import EmployeeDocuments from "@/components/portal/EmployeeDocuments";
 import ApprovalsPortal from "@/pages/ApprovalsPortal";
 import Logo from "@/components/Logo";
 import PortalLanguageSelector from "@/components/portal/PortalLanguageSelector";
+import ThemeToggle from "@/components/ThemeToggle";
 import PortalNotificationsBell from "@/components/portal/PortalNotificationsBell";
 import PortalNotificationsSection from "@/components/portal/PortalNotificationsSection";
 import PresenceProofPrompt from "@/components/portal/PresenceProofPrompt";
@@ -704,6 +705,7 @@ export default function MyRequests() {
             </Link>
             <PortalNotificationsBell session={session} onViewAll={() => navigate("/portal/notifications")} tone="dark" align={portalDir(lang) === "rtl" ? "left" : "right"} />
             <PortalLanguageSelector />
+            <ThemeToggle isAr={portalDir(lang) === "rtl"} />
             {session && (
               <button onClick={exitToLanding} className="flex items-center gap-2 text-sm text-[#6B5E8C] hover:text-[#2A2340] px-3 py-2 rounded-lg hover:bg-white/60 transition">
                 <LogOut size={18} /> {t.logout}

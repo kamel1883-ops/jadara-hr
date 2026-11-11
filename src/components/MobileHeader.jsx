@@ -4,6 +4,7 @@ import { ArrowRight, Headphones, Menu } from "lucide-react";
 import Logo from "@/components/Logo";
 import NotificationsBell from "@/components/NotificationsBell";
 import LanguageToggle from "@/components/LanguageToggle";
+import ThemeToggle from "@/components/ThemeToggle";
 
 // هيدر الجوال الموحّد للتطبيق الداخلي:
 // - شاشة جذرية (تبويب من الشريط السفلي): شعار جداره + عنوان القسم.
@@ -57,6 +58,7 @@ export default function MobileHeader({ isAr, isRoot, title, onOpenMenu, onOpenSu
           <Headphones size={18} />
         </button>
         <NotificationsBell tone="dark" />
+        <ThemeToggle isAr={isAr} />
         <LanguageToggle />
         <button
           type="button"
