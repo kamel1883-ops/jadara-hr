@@ -1,6 +1,6 @@
 import React from "react";
 import BrandHeader from "@/components/docs/BrandHeader";
-import { formatCurrency } from "@/lib/hr";
+import { formatDocMoney, formatDocNumber } from "@/lib/hr";
 import { reasonMeta } from "@/lib/eos";
 import { useI18n } from "@/lib/i18n";
 import { genDateBoth } from "@/lib/printDate";
@@ -13,10 +13,10 @@ export default function SettlementSheet({ record, org }) {
   const t = L ? {
     orgNameFallback: "اسم المنشأة", cr: "س.ت", title: "مخالصة نهاية الخدمة", no: "رقم",
     emp: "اسم الموظف", empNo: "الرقم الوظيفي", natId: "الهوية/الإقامة", nationality: "الجنسية", dept: "الإدارة", position: "المسمى الوظيفي",
-    hireDate: "تاريخ المباشرة", lwd: "آخر يوم عمل", years: (n) => `${n} سنة`, reason: "سبب الإنهاء",
+    hireDate: "تاريخ المباشرة", lwd: "آخر يوم عمل", years: (n) => `${formatDocNumber(n)} سنة`, reason: "سبب الإنهاء",
     item: "البند", detail: "التفصيل", amount: "المبلغ (ر.س)",
     monthly: "الأجر الشهري", monthlyD: (b) => `أساس: ${b === "gross" ? "إجمالي" : "أساسي فقط"}`, daily: "الأجر اليومي", dailyD: "الأجر الشهري ÷ 30",
-    eos: "مكافأة نهاية الخدمة", leaveCash: "تصفية رصيد الإجازات", leaveD: (n) => `${n} يوم × الأجر اليومي`,
+    eos: "مكافأة نهاية الخدمة", leaveCash: "تصفية رصيد الإجازات", leaveD: (n) => `${formatDocNumber(n)} يوم × الأجر اليومي`,
     ticket: "تعويض التذكرة", ticketD: "لا يستحق", total: "إجمالي المخالصة",
     extraFallback: (i) => `بند إضافي ${i}`,
     deductionLabel: "مستحقات دائنة (تُخصم)", additionLabel: "مستحقات إضافية (تُضاف للموظف)",
@@ -25,10 +25,10 @@ export default function SettlementSheet({ record, org }) {
   } : {
     orgNameFallback: "Organization name", cr: "CR", title: "End-of-service settlement", no: "No.",
     emp: "Employee name", empNo: "Employee no", natId: "ID/Iqama", nationality: "Nationality", dept: "Department", position: "Job title",
-    hireDate: "Commencement date", lwd: "Last working date", years: (n) => `${n} years`, reason: "Termination reason",
+    hireDate: "Commencement date", lwd: "Last working date", years: (n) => `${formatDocNumber(n)} years`, reason: "Termination reason",
     item: "Item", detail: "Detail", amount: "Amount (SAR)",
     monthly: "Monthly wage", monthlyD: (b) => `Basis: ${b === "gross" ? "Gross" : "Base only"}`, daily: "Daily wage", dailyD: "Monthly wage ÷ 30",
-    eos: "EOS award", leaveCash: "Leave balance settlement", leaveD: (n) => `${n} days × daily wage`,
+    eos: "EOS award", leaveCash: "Leave balance settlement", leaveD: (n) => `${formatDocNumber(n)} days × daily wage`,
     ticket: "Ticket compensation", ticketD: "Not entitled", total: "Total settlement",
     extraFallback: (i) => `Additional item ${i}`,
     deductionLabel: "Debit dues (deducted)", additionLabel: "Additional dues (added to employee)",
@@ -85,7 +85,7 @@ export default function SettlementSheet({ record, org }) {
           <tr className="bg-slate-100 font-bold">
             <td className="p-2 border-t-2 border-slate-900">{t.total}</td>
             <td className="p-2 border-t-2 border-slate-900"></td>
-            <td className="p-2 border-t-2 border-slate-900 text-left">{formatCurrency(r.total_settlement)}</td>
+            <td className="p-2 border-t-2 border-slate-900 text-left">{formatDocMoney(r.total_settlement)}</td>
           </tr>
         </tbody>
       </table>
@@ -117,7 +117,7 @@ function Row({ label, detail, value, bold }) {
     <tr className={bold ? "font-semibold" : ""}>
       <td className="p-2 border-b border-slate-200">{label}</td>
       <td className="p-2 border-b border-slate-200 text-slate-600 text-xs">{detail}</td>
-      <td className="p-2 border-b border-slate-200 text-left">{formatCurrency(value)}</td>
+      <td className="p-2 border-b border-slate-200 text-left">{formatDocMoney(value)}</td>
     </tr>
   );
 }

@@ -1,5 +1,5 @@
 import React from "react";
-import { formatCurrency } from "@/lib/hr";
+import { formatDocMoney, formatDocNumber } from "@/lib/hr";
 import { genDateBoth } from "@/lib/printDate";
 
 /**
@@ -17,7 +17,7 @@ export default function PayslipDoc({ record, employee, org, isAr = true, batchTi
     month: "شهر الراتب", batch: "الدفعة",
     item: "البند", detail: "التفصيل", amount: "المبلغ (ر.س)",
     base: "الراتب الأساسي", house: "بدل السكن", trans: "بدل المواصلات", other: "بدلات أخرى", gross: "إجمالي الراتب",
-    bonus: "حوافز", overtime: "عمل إضافي", absent: "خصم الغياب", absentD: (d, h) => `${d || 0} يوم${h ? ` + ${h} ساعة` : ""}`,
+    bonus: "حوافز", overtime: "عمل إضافي", absent: "خصم الغياب", absentD: (d, h) => `${formatDocNumber(d)} يوم${Number(h) ? ` + ${formatDocNumber(h)} ساعة` : ""}`,
     ded: "خصومات أخرى", loan: "قسط السلفة", gosi: "تأمينات الموظف (حصة الموظف)",
     net: "صافي الراتب المستحق والمصروف",
     mudad: "مدد — حماية الأجور (تحويل بنكي)", cash: "كاش — صرف نقدي",
@@ -30,7 +30,7 @@ export default function PayslipDoc({ record, employee, org, isAr = true, batchTi
     month: "Payroll month", batch: "Batch",
     item: "Item", detail: "Detail", amount: "Amount (SAR)",
     base: "Base salary", house: "Housing allowance", trans: "Transport allowance", other: "Other allowances", gross: "Gross salary",
-    bonus: "Bonus", overtime: "Overtime", absent: "Absence deduction", absentD: (d, h) => `${d || 0} day(s)${h ? ` + ${h} hr(s)` : ""}`,
+    bonus: "Bonus", overtime: "Overtime", absent: "Absence deduction", absentD: (d, h) => `${formatDocNumber(d)} day(s)${Number(h) ? ` + ${formatDocNumber(h)} hr(s)` : ""}`,
     ded: "Other deductions", loan: "Loan installment", gosi: "Employee GOSI share",
     net: "Net salary paid",
     mudad: "Mudad — WPS (bank transfer)", cash: "Cash payment",
@@ -85,7 +85,7 @@ export default function PayslipDoc({ record, employee, org, isAr = true, batchTi
           <tr className="bg-slate-100 font-bold">
             <td className="p-2 border-t-2 border-slate-900">{t.net}</td>
             <td className="p-2 border-t-2 border-slate-900"></td>
-            <td className="p-2 border-t-2 border-slate-900 text-left">{formatCurrency(r.net_salary)}</td>
+            <td className="p-2 border-t-2 border-slate-900 text-left">{formatDocMoney(r.net_salary)}</td>
           </tr>
         </tbody>
       </table>
@@ -116,7 +116,7 @@ function Row({ label, detail, value, bold }) {
     <tr className={bold ? "font-semibold" : ""}>
       <td className="p-2 border-b border-slate-200">{label}</td>
       <td className="p-2 border-b border-slate-200 text-slate-600 text-xs">{detail}</td>
-      <td className="p-2 border-b border-slate-200 text-left">{formatCurrency(value)}</td>
+      <td className="p-2 border-b border-slate-200 text-left">{formatDocMoney(value)}</td>
     </tr>
   );
 }

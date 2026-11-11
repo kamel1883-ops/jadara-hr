@@ -10,6 +10,18 @@ export function formatCurrency(n) {
   return `${(Number(n) || 0).toLocaleString("en-US")} ${sarSymbol()}`;
 }
 
+// تنسيق مستندات الطباعة: يُظهر الكسور دائماً بخانتين عشريتين (1,234.56) بدون تشويه القيم الصحيحة.
+export function formatDocMoney(n) {
+  const v = Math.round((Number(n) || 0) * 100) / 100;
+  return `${v.toLocaleString("en-US", { minimumFractionDigits: Number.isInteger(v) ? 0 : 2, maximumFractionDigits: 2 })} ${sarSymbol()}`;
+}
+
+// تنسيق الأيام/الساعات الكسرية في المستندات (21.6 — 0.5) بدون أصفار زائدة.
+export function formatDocNumber(n) {
+  const v = Math.round((Number(n) || 0) * 100) / 100;
+  return v.toLocaleString("en-US", { maximumFractionDigits: 2 });
+}
+
 export function todayISO() {
   return new Date().toISOString().slice(0, 10);
 }
