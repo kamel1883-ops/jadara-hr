@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from "react";
 import { base44 } from "@/api/base44Client";
-import { entitledLeaveDays, usedLeaveTotal, sumUsedDays, getOrgOnce, getEmployeeAnnualDays, openingUsedDays } from "@/lib/leaveBalance";
+import { entitledLeaveDays, usedLeaveTotal, sumUsedDays, getOrgOnce, getEmployeeAnnualDays, openingUsedDays, eosSettledDays } from "@/lib/leaveBalance";
 import { generateLeaveSettlement, openLoanStatement } from "@/lib/docGenerators";
 import { formatCurrency, leaveTypeLabel } from "@/lib/hr";
 import { badge } from "@/lib/approvals";
@@ -73,7 +73,7 @@ export default function EmployeeLeaveLoanSummary({ employee }) {
   // تفصيل «المستخدم» ليكون واضحاً أنه ليس أياماً أُخذت داخل النظام فقط —
   // الرصيد الافتتاحي يُحتسب فقط لمن رُفع ملفه عبر ملف إكسل، وإلا فقيمته صفر.
   const priorUsed = openingUsedDays(emp);
-  const systemUsed = Math.round(sumUsedDays(leaves) * 10) / 10;
+  const systemUsed = Math.round(sumUsedDays(leaves) * 100) / 100;
 
   const doneLeaves = leaves.filter((l) => l.status === "completed" || l.status === "paid");
 
@@ -109,6 +109,13 @@ export default function EmployeeLeaveLoanSummary({ employee }) {
         </div>
         {priorUsed > 0 && (
           <div className="text-[11px] text-amber-600 mt-1">{t.usedBreak(priorUsed, systemUsed)}</div>
+        )}
+        {eosSettledDays(emp) > 0 && (
+          <div className="text-[11px] text-rose-600 mt-1">
+            {isAr
+              ? `+ ${eosSettledDays(emp)} يوم سُوّيت وصُرفت ضمن مخالصة نهاية الخدمة`
+              : `+ ${eosSettledDays(emp)} days settled in the end-of-service payout`}
+          </div>
         )}
       </div>
 

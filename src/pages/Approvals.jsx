@@ -270,7 +270,7 @@ export default function Approvals() {
         // الكاش يُحدَّث من مصدر الحقيقة المحسوب (المستحق − المستخدم السنوي)، لا من رصيد مخزّن قديم.
         const entitled = entitledLeaveDays(emp, org);
         const otherUsed = usedLeaveTotal(emp, (leaves || []).filter((l) => l.id !== r.id && l.employee_id === r.employee_id));
-        const newBalance = consume ? Math.round((entitled - otherUsed - deduct) * 10) / 10 : (Number(emp.leave_balance) || 0);
+        const newBalance = consume ? Math.round((entitled - otherUsed - deduct) * 100) / 100 : (Number(emp.leave_balance) || 0);
         await base44.entities.Employee.update(emp.id, { leave_balance: newBalance, status: "on_leave" });
       }
       if (!fin) { try { await generateLeaveSettlement(r, empOf(r.employee_id), org, leaves); } catch (e) {} }
@@ -301,7 +301,7 @@ export default function Approvals() {
       // المستخدم الكلي (غير مشمول هذا الطلب) = الرصيد الافتتاحي + المعتمد داخل النظام.
       const otherUsed = usedLeaveTotal(emp, (leaves || []).filter((l) => l.id !== r.id && l.employee_id === r.employee_id));
       // المتبقي يظهر بقيمته الصريحة (سالبة إن تجاوز الموظف مستحقه) — لا يُصفَّر عند التجاوز.
-      const before = Math.round((entitled - otherUsed) * 10) / 10;
+      const before = Math.round((entitled - otherUsed) * 100) / 100;
       // الموارد البشرية قد تعتمد جزءاً من الأيام المطلوبة فقط — ما يُخصم من الرصيد هو ما اعتمدته.
       const requested = Math.max(0, Number(r.days_count) || 0);
       const gr = Number(grantedDays);
@@ -309,7 +309,7 @@ export default function Approvals() {
       // ما يُخصم فعلاً من الرصيد هو الإجازة السنوية (أو التصفية الكاملة) فقط —
       // المرضية وبدون الراتب والاضطرارية تُعتمد أيامها ولا تُخصم من الرصيد.
       const deductDays = (r.leave_type === "annual" || r.is_full_clearance) ? granted : 0;
-      const after = Math.round((before - deductDays) * 10) / 10;
+      const after = Math.round((before - deductDays) * 100) / 100;
       const mw = (Number(emp?.base_salary) || 0) + (Number(emp?.housing_allowance) || 0) + (Number(emp?.transport_allowance) || 0) + (Number(emp?.other_allowances) || 0);
       const dailyWage = mw / 30;
       const ticket = r.is_full_clearance ? leaveTicketAmount(emp, org) : 0;
@@ -352,7 +352,7 @@ export default function Approvals() {
       if (emp) {
         await base44.entities.Employee.update(emp.id, {
           // القيمة الصريحة (سالبة عند تجاوز الاستحقاق) — لا تُصفَّر حتى لا تختفي المديونية
-          leave_balance: Math.round((entitled - totalUsed) * 10) / 10,
+          leave_balance: Math.round((entitled - totalUsed) * 100) / 100,
           status: "on_leave",
         });
       }
@@ -692,7 +692,7 @@ export default function Approvals() {
                     <div className="space-y-1.5">
                       <Label className="text-xs font-medium text-muted-foreground">{isAr ? "عدد الأيام الموافق عليها" : "Approved days"}</Label>
                       <div className="flex items-center gap-2">
-                        <Input type="number" min={1} max={Math.max(1, acting.req.days_count || 1)} dir="ltr"
+                        <Input type="number" min={0.5} step="0.01" inputMode="decimal" max={Math.max(0.5, acting.req.days_count || 1)} dir="ltr"
                           value={grantedDays} onChange={(e) => setGrantedDays(e.target.value)}
                           className="w-24 font-bold text-violet-700" />
                         <div className="flex flex-col text-[11px] leading-tight text-muted-foreground">
@@ -940,7 +940,7 @@ function LeaveBalanceLine({ emp, req, allLeaves, org, t }) {
   const entitled = entitledLeaveDays(emp, org, asOf);
   const mine = (allLeaves || []).filter((l) => l.employee_id === req.employee_id);
   const used = usedLeaveTotal(emp, mine);
-  const remaining = Math.round((entitled - used) * 10) / 10;
+  const remaining = Math.round((entitled - used) * 100) / 100;
   const wanted = Math.max(0, Number(req.days_count) || 0);
   const deducts = req.leave_type === "annual" || req.is_full_clearance;
   const short = deducts && wanted > remaining;

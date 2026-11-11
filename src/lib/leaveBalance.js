@@ -116,22 +116,28 @@ export function openingUsedDays(employee) {
   return prior > 0 ? prior : 0;
 }
 
+// أيام الإجازات التي سُوّيت وصُرفت ضمن مخالصة نهاية الخدمة (تُقفل من الرصيد بالكسر الدقيق).
+export function eosSettledDays(employee) {
+  const v = Number(employee?.eos_settled_leave_days) || 0;
+  return v > 0 ? Math.round(v * 100) / 100 : 0;
+}
+
 // «الرصيد المستخدم الكلي» = الرصيد الافتتاحي (من ملف الإكسل فقط)
 // + مجموع الإجازات السنوية المعتمدة داخل النظام (sumUsedDays). عنصران منفصلان لا يتكرران.
 // إن حُدِّد المستخدم يدوياً في الملف (leave_used_manual) يُعتمد هو حصراً.
 // المعادلة المعتمدة: المتبقي = المستحق التراكمي − المستخدم الكلي.
 export function usedLeaveTotal(employee, leaves) {
   const manual = Number(employee?.leave_used_manual);
-  if (employee?.leave_used_manual != null && Number.isFinite(manual)) return Math.round(manual * 10) / 10;
+  if (employee?.leave_used_manual != null && Number.isFinite(manual)) return Math.round(manual * 100) / 100;
   const prior = openingUsedDays(employee);
-  return Math.round((prior + sumUsedDays(leaves)) * 10) / 10;
+  return Math.round((prior + sumUsedDays(leaves) + eosSettledDays(employee)) * 100) / 100;
 }
 
 // الرصيد المتبقي = المستحق التراكمي − المستخدم الكلي (قد يكون سالباً عند تقديم إجازة).
 export function remainingLeave(employee, leaves, org, asOf) {
   const entitled = entitledLeaveDays(employee, org, asOf);
   const used = usedLeaveTotal(employee, leaves);
-  return Math.round((entitled - used) * 10) / 10;
+  return Math.round((entitled - used) * 100) / 100;
 }
 
 // يُعيد الموظفين الذين انتهت إجازتهم السنوية الفعلية (سفر) إلى «على رأس العمل» تلقائياً

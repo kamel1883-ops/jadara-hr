@@ -289,6 +289,16 @@ export default function EndOfService() {
         total_settlement: total,
         status: "awaiting_finance", finance_status: "pending",
       });
+      // شحب رصيد الإجازات بالكسر الدقيق: الأيام (بما فيها الكسور مثل 21.6) تُقفل من رصيد الموظف
+      // وتُقيَّد ضمن «المستخدم» فلا تُصرف مرتين، وقيمتها محسوبة أصلاً في leave_cash.
+      const settledDays = Math.round((Number(s.leave_balance_days) || 0) * 100) / 100;
+      const empRec = employees.find((e) => e.id === s.employee_id);
+      if (empRec && settledDays > 0) {
+        await base44.entities.Employee.update(empRec.id, {
+          eos_settled_leave_days: Math.round(((Number(empRec.eos_settled_leave_days) || 0) + settledDays) * 100) / 100,
+          leave_balance: 0,
+        });
+      }
       // تنبيه المعتمد المالي ببريد + إشعار داخلي بوجود مخالصة نهاية خدمة بانتظار الصرف
       try {
         await base44.functions.invoke("notifyApprover", {
@@ -346,6 +356,16 @@ export default function EndOfService() {
       await base44.entities.Settlement.update(s.id, {
         status: "rejected", [`${stage}_status`]: "rejected", [`${stage}_note`]: note,
       });
+      // رفض المخالصة بعد اعتمادها يُعيد أيام الإجازات المشحوبة إلى «المستخدم» كما كانت
+      if (stage === "finance" && Number(s.leave_balance_days) > 0) {
+        const empRec = employees.find((e) => e.id === s.employee_id);
+        if (empRec) {
+          const days = Math.round((Number(s.leave_balance_days) || 0) * 100) / 100;
+          await base44.entities.Employee.update(empRec.id, {
+            eos_settled_leave_days: Math.max(0, Math.round(((Number(empRec.eos_settled_leave_days) || 0) - days) * 100) / 100),
+          });
+        }
+      }
     } catch (e) {}
     setBusy(false); setActing(null); setNote(""); load();
   };

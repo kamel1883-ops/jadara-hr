@@ -298,11 +298,11 @@ export default function EmployeeForm({ open, onClose, onSaved, employee, unified
               )}
             </Field>
             <Field label={t.priorUsed}>
-              <Input type="number" min="0" disabled={!fromExcel} value={fromExcel ? (form.prior_used_leave ?? 0) : 0} onChange={(e) => set("prior_used_leave", e.target.value)} />
+              <Input type="number" min="0" step="0.01" inputMode="decimal" disabled={!fromExcel} value={fromExcel ? (form.prior_used_leave ?? 0) : 0} onChange={(e) => set("prior_used_leave", e.target.value)} />
               <p className="text-xs text-muted-foreground mt-1.5 leading-relaxed">{fromExcel ? t.priorUsedHint : t.priorUsedExcelOnly}</p>
             </Field>
             <Field label={t.manualUsed}>
-              <Input type="number" min="0" value={form.leave_used_manual ?? ""} onChange={(e) => set("leave_used_manual", e.target.value === "" ? null : Number(e.target.value) || 0)} placeholder={t.manualAuto} />
+              <Input type="number" min="0" step="0.01" inputMode="decimal" value={form.leave_used_manual ?? ""} onChange={(e) => set("leave_used_manual", e.target.value === "" ? null : e.target.value)} placeholder={t.manualAuto} />
             </Field>
             <Field label={t.contractStart}><Input type="date" lang={isAr ? "ar" : "en"} value={form.contract_start_date} onChange={(e) => set("contract_start_date", e.target.value)} /></Field>
             <Field label={t.contractEnd}><Input type="date" lang={isAr ? "ar" : "en"} value={form.contract_end_date} onChange={(e) => set("contract_end_date", e.target.value)} /></Field>

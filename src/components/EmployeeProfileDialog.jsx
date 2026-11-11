@@ -86,7 +86,7 @@ export default function EmployeeProfileDialog({ open, onClose, employee, org, on
   const annualDays = getEmployeeAnnualDays(employee, org);
   const entitled = employee ? entitledLeaveDays(employee, org) : 0;
   const used = usedLeaveTotal(employee, leaves);
-  const remaining = Math.round((entitled - used) * 10) / 10;
+  const remaining = Math.round((entitled - used) * 100) / 100;
   const eos = employee ? computeSettlement({
     employee, org,
     lastWorkingDate: employee.termination_date || new Date().toISOString().slice(0, 10),

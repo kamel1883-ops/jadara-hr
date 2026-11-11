@@ -27,8 +27,8 @@ export async function generateLeaveSettlement(leave, emp, org, allLeavesForEmp) 
     (allLeavesForEmp || []).filter((l) => l.id !== leave?.id && l.employee_id === empId)
   );
   // القيم الصريحة بلا تصفير: صفر يُكتب صفر، ومتجاوز الاستحقاق يظهر بالسالب في المخالصة.
-  const bBefore = Math.round((entitled - usedBefore) * 10) / 10;
-  const bAfter = Math.round((bBefore - granted) * 10) / 10;
+  const bBefore = Math.round((entitled - usedBefore) * 100) / 100;
+  const bAfter = Math.round((bBefore - granted) * 100) / 100;
   const mw = (Number(emp?.base_salary) || 0) + (Number(emp?.housing_allowance) || 0) + (Number(emp?.transport_allowance) || 0) + (Number(emp?.other_allowances) || 0);
   const dailyWage = mw / 30;
   const daysCash = (leave?.leave_type === "annual" || leave?.is_full_clearance) ? Math.round(granted * dailyWage * 100) / 100 : 0;
