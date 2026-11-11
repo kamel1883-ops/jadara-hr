@@ -48,8 +48,8 @@ export default function CustomerSurveyTake() {
     setError("");
     const em = email.trim().toLowerCase();
     const u = unified.replace(/\D/g, "");
-    if (!em) { setError("أدخل البريد الإلكتروني"); return; }
-    if (!/^7\d{9}$/.test(u)) { setError("أدخل الرقم الوطني الموحد للمنشآت (10 خانات تبدأ بـ7)"); return; }
+    if (em && !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(em)) { setError("صيغة البريد الإلكتروني غير صحيحة"); return; }
+    if (u && !/^7\d{9}$/.test(u)) { setError("الرقم الموحد يجب أن يكون 10 خانات تبدأ بـ7 (أو اتركه فارغاً)"); return; }
     if (!captchaToken) { setError("أكّد أنك لست روبوت"); return; }
     const qs = survey.questions || [];
     if (qs.length === 0) { setError("الاستبيان فارغ"); return; }
@@ -71,7 +71,9 @@ export default function CustomerSurveyTake() {
       if (d.already) { setError("لقد شاركت في هذا الاستبيان سابقاً. شكراً لك!"); return; }
       if (d.suspended) { setError("حالة اشتراك منشأتك غير نشطة حاليًا."); return; }
       if (d.closed) { setError("هذا الاستبيان مغلق ولم يعد يقبل الردود."); return; }
-      setError(d.captcha === false ? "تعذّر التحقّق من أنك لست روبوت. عاود المحاولة." : "بيانات المنشأة غير مطابقة. تأكد من البريد والرقم الوطني الموحد.");
+      if (d.unified_invalid) { setError("الرقم الموحد يجب أن يكون 10 خانات تبدأ بـ7 (أو اتركه فارغاً)."); return; }
+      if (d.email_invalid) { setError("صيغة البريد الإلكتروني غير صحيحة."); return; }
+      setError(d.captcha === false ? "تعذّر التحقّق من أنك لست روبوت. عاود المحاولة." : "تعذّر إرسال التقييم. عاود المحاولة بعد قليل.");
     } catch (e) {
       setError(e?.message || "تعذّر الإرسال");
     } finally {
@@ -172,14 +174,15 @@ export default function CustomerSurveyTake() {
             {/* contact */}
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mt-5">
               <div className="space-y-1.5">
-                <Label className="text-xs text-muted-foreground">البريد الإلكتروني للمنشأة</Label>
+                <Label className="text-xs text-muted-foreground">البريد الإلكتروني (اختياري)</Label>
                 <Input type="email" value={email} onChange={e => setEmail(e.target.value)} className="h-11" dir="ltr" placeholder="you@company.com" />
               </div>
               <div className="space-y-1.5">
-                <Label className="text-xs text-muted-foreground">الرقم الوطني الموحد للمنشآت (١٠ خانات تبدأ بـ٧)</Label>
+                <Label className="text-xs text-muted-foreground">الرقم الوطني الموحد — إن توفّر (اختياري)</Label>
                 <Input inputMode="numeric" value={unified} onChange={e => setUnified(e.target.value.replace(/\D/g, "").slice(0, 10))} className="h-11" dir="ltr" placeholder="7XXXXXXXXX" />
               </div>
             </div>
+            <p className="text-[11px] text-muted-foreground mt-2">هذان الحقلان اختياريان تماماً — اتركهما فارغين إن لم تتوفر لديك البيانات، وتقييمك يُحتسب كما هو.</p>
 
             <div className="space-y-1.5 mt-3">
               <Label className="text-xs text-muted-foreground">التحسينات التي توصي بها (اختياري)</Label>

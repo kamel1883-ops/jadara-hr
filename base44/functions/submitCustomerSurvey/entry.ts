@@ -23,9 +23,10 @@ export default async function (req) {
     const answers = body.answers;
     const comment = String(body.comment || '').slice(0, 1000);
 
-    if (!surveyId || !email || !unified || !/^7\d{9}$/.test(unified)) {
-      return Response.json({ ok: false });
-    }
+    // البريد والرقم الموحد اختياريان: يُتحقّق من صيغتهما فقط عند إدخالهما.
+    if (!surveyId) return Response.json({ ok: false });
+    if (unified && !/^7\d{9}$/.test(unified)) return Response.json({ ok: false, unified_invalid: true });
+    if (email && !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) return Response.json({ ok: false, email_invalid: true });
     if (!Array.isArray(answers) || answers.length === 0) return Response.json({ ok: false });
 
     const base44 = createClientFromRequest(req);
@@ -34,19 +35,26 @@ export default async function (req) {
     if (!survey) return Response.json({ ok: false, not_found: true });
     if (survey.status !== 'active') return Response.json({ ok: false, closed: true });
 
-    const tenants = await base44.asServiceRole.entities.Tenant.filter({ unified_number: unified }, undefined, 50);
-    const tenant = (tenants || []).find(
-      (tt) => String(tt.contact_email || '').trim().toLowerCase() === email
-    );
-    if (!tenant) return Response.json({ ok: false });
-    if (!['trial', 'active'].includes(tenant.status)) return Response.json({ ok: false, suspended: true });
+    // تُطابَق المنشأة فقط عند توفر بياناتها؛ التقييم يُقبل بدونها.
+    let tenant = null;
+    if (unified) {
+      const tenants = await base44.asServiceRole.entities.Tenant.filter({ unified_number: unified }, undefined, 50);
+      tenant = (tenants || []).find(
+        (tt) => !email || String(tt.contact_email || '').trim().toLowerCase() === email
+      ) || null;
+    } else if (email) {
+      const tenants = await base44.asServiceRole.entities.Tenant.filter({ contact_email: email }, undefined, 50);
+      tenant = (tenants || [])[0] || null;
+    }
+    if (tenant && !['trial', 'active'].includes(tenant.status)) return Response.json({ ok: false, suspended: true });
 
-    let already = await base44.asServiceRole.entities.CustomerSurveyResponse.filter(
-      { survey_id: surveyId, tenant_id: tenant.id },
-      undefined,
-      1
-    );
-    if (already && already.length) return Response.json({ ok: false, already: true });
+    const dupeQuery = tenant
+      ? { survey_id: surveyId, tenant_id: tenant.id }
+      : (email ? { survey_id: surveyId, contact_email: email } : null);
+    if (dupeQuery) {
+      const already = await base44.asServiceRole.entities.CustomerSurveyResponse.filter(dupeQuery, undefined, 1);
+      if (already && already.length) return Response.json({ ok: false, already: true });
+    }
 
     const ratings = answers
       .map((a) => Number(a?.rating))
@@ -62,8 +70,8 @@ export default async function (req) {
     await base44.asServiceRole.entities.CustomerSurveyResponse.create({
       survey_id: surveyId,
       survey_title: survey.title,
-      tenant_id: tenant.id,
-      tenant_name: tenant.name,
+      tenant_id: tenant?.id || '',
+      tenant_name: tenant?.name || '',
       unified_number: unified,
       contact_email: email,
       submitted_date: today,
