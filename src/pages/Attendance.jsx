@@ -8,7 +8,7 @@ import Time24Input from "@/components/ui/time24";
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue
 } from "@/components/ui/select";
-import { CalendarCheck, Plus, CalendarOff } from "lucide-react";
+import { CalendarCheck, Plus, CalendarOff, Trash2, Lock } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { todayISO, attendanceDisplayStatus, isOrgWeeklyOff, dayNameAr, attendanceOpDate, attendanceElapsedMs, formatWorkDuration } from "@/lib/hr";
 import { resolveWorkHours } from "@/lib/branchHours";
@@ -29,12 +29,14 @@ export default function Attendance() {
     newH: "تسجيل حضور جديد", emp: "الموظف", choose: "اختر الموظف", in: "الحضور", out: "الانصراف", record: "تسجيل",
     loading: "جارٍ التحميل...", empty: "لا توجد سجلات لهذا اليوم", del: "حذف",
     allBranches: "كل الفروع", branch: "الفرع", thEmp: "الموظف", thBranch: "الفرع", thIn: "الحضور", thOut: "الانصراف", thStatus: "الحالة", thActions: "إجراءات",
+    confirmDel: "حذف سجل الحضور اليدوي؟", locked: "سجّله الموظف بنفسه من بوابته — غير قابل للحذف", manualTag: "تسجيل يدوي",
   } : {
     title: "Attendance", subtitle: "Track daily employee attendance",
     date: "Date", status: "Status", all: "All statuses", present: "Present", late: "Late", absent: "Absent", leave: "Leave",
     newH: "New attendance record", emp: "Employee", choose: "Select employee", in: "Check in", out: "Check out", record: "Record",
     loading: "Loading...", empty: "No records for this day", del: "Delete",
     allBranches: "All branches", branch: "Branch", thEmp: "Employee", thBranch: "Branch", thIn: "Check in", thOut: "Check out", thStatus: "Status", thActions: "Actions",
+    confirmDel: "Delete this manual attendance record?", locked: "Recorded by the employee from their portal — cannot be deleted", manualTag: "Manual entry",
   };
 
   const [records, setRecords] = useState([]);
@@ -112,7 +114,7 @@ export default function Attendance() {
       emp_ref: emp?.emp_ref || "",
       date, check_in: newRec.check_in, check_out: newRec.check_out,
       check_in_at: stampOf(newRec.check_in), check_out_at: stampOf(newRec.check_out),
-      status: newRec.status, work_hours: 8,
+      status: newRec.status, work_hours: 8, source: "manual",
       branch_id: emp?.branch_id || null, branch_name: br?.name || emp?.branch_name || "",
     });
     setNewRec({ employee_id: "", check_in: "08:00", check_out: "16:00", status: "present" });
@@ -121,7 +123,13 @@ export default function Attendance() {
   };
 
   const updateStatus = async (rec, status) => { await base44.entities.Attendance.update(rec.id, { status }); load(); };
-  const remove = async (rec) => { await base44.entities.Attendance.delete(rec.id); load(); };
+  // الحذف متاح فقط للسجلات التي أدخلها مسؤول الموارد البشرية — لا لسجلات بوابة الموظف.
+  const remove = async (rec) => {
+    if (rec.source === "portal") return;
+    if (!confirm(t.confirmDel)) return;
+    await base44.entities.Attendance.delete(rec.id);
+    load();
+  };
 
   return (
     <PullToRefresh onRefresh={() => load(true)}>
@@ -244,15 +252,22 @@ export default function Attendance() {
                         </td>
                         <td className="px-4 py-3"><StatusBadge record={r} employees={employees} branches={branches} org={org} isAr={isAr} /></td>
                         <td className="px-4 py-3">
-                          <Select value={r.status} onValueChange={(v) => updateStatus(r, v)}>
-                            <SelectTrigger className="w-32 h-8 text-xs"><SelectValue /></SelectTrigger>
-                            <SelectContent>
-                              <SelectItem value="present">{t.present}</SelectItem>
-                              <SelectItem value="late">{t.late}</SelectItem>
-                              <SelectItem value="absent">{t.absent}</SelectItem>
-                              <SelectItem value="leave">{t.leave}</SelectItem>
-                            </SelectContent>
-                          </Select>
+                          <div className="flex items-center gap-1.5">
+                            <Select value={r.status} onValueChange={(v) => updateStatus(r, v)}>
+                              <SelectTrigger className="w-32 h-8 text-xs"><SelectValue /></SelectTrigger>
+                              <SelectContent>
+                                <SelectItem value="present">{t.present}</SelectItem>
+                                <SelectItem value="late">{t.late}</SelectItem>
+                                <SelectItem value="absent">{t.absent}</SelectItem>
+                                <SelectItem value="leave">{t.leave}</SelectItem>
+                              </SelectContent>
+                            </Select>
+                            {r.source === "portal" ? (
+                              <span title={t.locked} className="p-1.5 text-slate-300"><Lock size={15} /></span>
+                            ) : (
+                              <button onClick={() => remove(r)} title={t.del} className="p-1.5 rounded-lg hover:bg-rose-50 text-rose-600"><Trash2 size={16} /></button>
+                            )}
+                          </div>
                         </td>
                       </tr>
                     ))}

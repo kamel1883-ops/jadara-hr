@@ -4,6 +4,7 @@ import { listCurrentOrg } from "@/lib/currentOrg";
 import PageHeader from "@/components/PageHeader";
 import EmployeeForm from "@/components/EmployeeForm";
 import EmployeeImport from "@/components/EmployeeImport";
+import DatesUpdateDialog from "@/components/employees/DatesUpdateDialog";
 import BranchManager from "@/components/BranchManager";
 import EmployeeTripsDialog from "@/components/EmployeeTripsDialog";
 import EmployeeProfileDialog from "@/components/EmployeeProfileDialog";
@@ -16,7 +17,7 @@ import {
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription,
 } from "@/components/ui/dialog";
-import { Plus, Search, Pencil, Users, Network, Upload, GitBranch, Plane, FileText, UserX, Printer } from "lucide-react";
+import { Plus, Search, Pencil, Users, Network, Upload, GitBranch, Plane, FileText, UserX, Printer, IdCard, FileClock } from "lucide-react";
 import { Link } from "react-router-dom";
 import { cn } from "@/lib/utils";
 import { formatCurrency, statusEmployeeLabel } from "@/lib/hr";
@@ -35,6 +36,7 @@ export default function Employees() {
   const isAr = lang === "ar";
   const t = isAr ? {
     title: "الموظفون", subtitle: "إدارة بيانات وملفات الموظفين", add: "موظف جديد", importBtn: "استيراد من Excel", branchesBtn: "إدارة الفروع",
+    iqamaBtn: "تحديث تواريخ الإقامات", contractBtn: "تحديث تواريخ انتهاء العقود",
     search: "ابحث بالاسم أو الرقم الوظيفي أو الهوية... (يشمل النشطين وغير النشطين)", allDepts: "كل الإدارات", allRoles: "كل المستويات", allBranches: "كل الفروع", loading: "جارٍ التحميل...",
     empty: "لا يوجد موظفون مطابقون",
     activeHead: "الموظفون النشطون", inactiveHead: "الموظفون غير النشطون (الأرشيف)",
@@ -45,6 +47,7 @@ export default function Employees() {
     exportPdf: "طباعة PDF", close: "إغلاق",
   } : {
     title: "Employees", subtitle: "Manage employee data and profiles", add: "New employee", importBtn: "Import from Excel", branchesBtn: "Branches",
+    iqamaBtn: "Update Iqama dates", contractBtn: "Update contract end dates",
     search: "Search by name, employee number or ID... (active & inactive)", allDepts: "All departments", allRoles: "All levels", allBranches: "All branches", loading: "Loading...",
     empty: "No matching employees",
     activeHead: "Active employees", inactiveHead: "Inactive employees (archive)",
@@ -64,6 +67,7 @@ export default function Employees() {
   const [yearFilter, setYearFilter] = useState("all");
   const [formOpen, setFormOpen] = useState(false);
   const [importOpen, setImportOpen] = useState(false);
+  const [datesKind, setDatesKind] = useState(null);
   const [branchOpen, setBranchOpen] = useState(false);
   const [editTarget, setEditTarget] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -176,6 +180,8 @@ export default function Employees() {
             <Button onClick={() => { setEditTarget(null); setFormOpen(true); }} className="gap-2"><Plus size={18} /> {t.add}</Button>
             <Button variant="outline" onClick={() => setBranchOpen(true)} className="gap-2"><GitBranch size={18} /> {t.branchesBtn}</Button>
             <Button variant="outline" onClick={() => setImportOpen(true)} className="gap-2"><Upload size={18} /> {t.importBtn}</Button>
+            <Button variant="outline" onClick={() => setDatesKind("iqama")} className="gap-2"><IdCard size={18} /> {t.iqamaBtn}</Button>
+            <Button variant="outline" onClick={() => setDatesKind("contract")} className="gap-2"><FileClock size={18} /> {t.contractBtn}</Button>
           </div>
         )}
       />
@@ -379,6 +385,7 @@ export default function Employees() {
 
       <EmployeeForm open={formOpen} onClose={() => setFormOpen(false)} onSaved={handleEmployeeSaved} employee={editTarget} unifiedNumber={myUnified} />
       <EmployeeImport open={importOpen} onClose={() => setImportOpen(false)} onSaved={load} />
+      <DatesUpdateDialog open={!!datesKind} kind={datesKind || "iqama"} employees={employees} onClose={() => setDatesKind(null)} onSaved={load} />
       <BranchManager open={branchOpen} onClose={() => setBranchOpen(false)} onSaved={load} org={org} />
       <EmployeeTripsDialog open={tripsOpen} onClose={() => setTripsOpen(false)} employee={tripsEmp} />
       <EmployeeProfileDialog open={profileOpen} onClose={() => setProfileOpen(false)} employee={profileEmp} org={org} onOpenTrips={() => { setProfileOpen(false); setTripsOpen(true); }} />
