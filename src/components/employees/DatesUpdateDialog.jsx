@@ -25,7 +25,7 @@ export default function DatesUpdateDialog({ open, onClose, kind = "iqama", emplo
   const meta = COPY[kind]?.[isAr ? "ar" : "en"] || COPY.iqama.ar;
   const field = meta.field;
   const t = isAr ? {
-    desc: "ارفع الملف بأي صيغة (Excel أو PDF أو CSV أو صورة). يُقرأ الملف ويُطابَق كل صف برقم الهوية/الإقامة للموظف، ثم يُحدَّث التاريخ فقط لمن تختلف قيمته في النظام عما ورد في الملف.",
+    desc: "ارفع الملف (Excel أو CSV أو PDF أو صورة). يُطابَق كل صف برقم الهوية/الإقامة للموظف، ويُحدَّث التاريخ فقط لمن تختلف قيمته في النظام عما ورد في الملف. التواريخ الهجرية تُحوَّل تلقائياً إلى ميلادية بتقويم أم القرى.",
     pick: "اختر الملف",
     analyze: "تحليل الملف",
     analyzing: "جارٍ قراءة الملف…",
@@ -35,12 +35,15 @@ export default function DatesUpdateDialog({ open, onClose, kind = "iqama", emplo
     colEmp: "الموظف", colId: "الهوية/الإقامة", colFrom: "التاريخ الحالي", colTo: "التاريخ الجديد",
     done: (n) => `تم تحديث ${n} سجل بنجاح`,
     errNoRows: "لم أتمكن من قراءة أي رقم هوية وتاريخ انتهاء من هذا الملف — تأكد أن الملف يحتوي على رقم الهوية وتاريخ الانتهاء.",
+    errXls: "ملف Excel القديم (.xls) غير مدعوم — احفظ الملف بصيغة .xlsx ثم ارفعه.",
     errGeneric: "تعذّر قراءة الملف، عاود المحاولة.",
+    hijriNote: (n) => `تم تحويل ${n} تاريخ هجري إلى ميلادي (أم القرى)`,
+    aiNote: "قُرئ الملف ضوئياً من PDF/صورة — راجع التواريخ الجديدة قبل التأكيد.",
     close: "إغلاق",
     note: "المطابقة برقم الهوية/الإقامة فقط — لا يُعدَّل أي موظف بلا تطابق.",
     unmatchedTitle: "أرقام هوية في الملف غير موجودة في المنشأة",
   } : {
-    desc: "Upload the file in any format (Excel, PDF, CSV or an image). Every row is matched to an employee by national ID / Iqama, and only dates that differ from the system are updated.",
+    desc: "Upload the file (Excel, CSV, PDF or an image). Every row is matched to an employee by national ID / Iqama, and only dates that differ from the system are updated. Hijri dates are converted automatically to Gregorian (Umm al-Qura).",
     pick: "Choose file",
     analyze: "Analyze file",
     analyzing: "Reading the file…",
@@ -50,7 +53,10 @@ export default function DatesUpdateDialog({ open, onClose, kind = "iqama", emplo
     colEmp: "Employee", colId: "National ID", colFrom: "Current", colTo: "New",
     done: (n) => `${n} record(s) updated successfully`,
     errNoRows: "Could not read any national ID with an expiry date from this file — make sure both are present.",
+    errXls: "Legacy .xls files are not supported — save the file as .xlsx and upload it again.",
     errGeneric: "Could not read the file, please retry.",
+    hijriNote: (n) => `${n} Hijri date(s) converted to Gregorian (Umm al-Qura)`,
+    aiNote: "Read visually from a PDF/image — please review the new dates before confirming.",
     close: "Close",
     note: "Matched by national ID / Iqama only — employees without a match are never modified.",
     unmatchedTitle: "IDs in the file that are not in this organization",
@@ -70,10 +76,10 @@ export default function DatesUpdateDialog({ open, onClose, kind = "iqama", emplo
     if (!file) return;
     setBusy(true); setErr(""); setPlan(null); setDone(null);
     try {
-      const records = await extractDatesFromFile(file, kind);
-      setPlan(planDateUpdates(records, employees, field));
+      const { records, hijriCount, aiUsed } = await extractDatesFromFile(file, kind);
+      setPlan({ ...planDateUpdates(records, employees, field), hijriCount, aiUsed });
     } catch (e) {
-      setErr(e?.message === "no_rows" ? t.errNoRows : t.errGeneric);
+      setErr(e?.message === "no_rows" ? t.errNoRows : e?.message === "legacy_xls" ? t.errXls : t.errGeneric);
     } finally {
       setBusy(false);
     }
@@ -133,6 +139,17 @@ export default function DatesUpdateDialog({ open, onClose, kind = "iqama", emplo
                   <Metric label={t.same} value={plan.unchanged.length} />
                   <Metric label={t.missing} value={plan.unmatched.length} tone="amber" />
                 </div>
+
+                {plan.hijriCount > 0 && (
+                  <div className="text-[12px] text-violet-700 bg-violet-50 border border-violet-200 rounded-xl px-3 py-2">
+                    {t.hijriNote(plan.hijriCount)}
+                  </div>
+                )}
+                {plan.aiUsed && (
+                  <div className="text-[12px] text-amber-700 bg-amber-50 border border-amber-200 rounded-xl px-3 py-2">
+                    {t.aiNote}
+                  </div>
+                )}
 
                 {plan.updates.length > 0 && (
                   <div className="rounded-xl bg-white border border-border overflow-hidden">

@@ -1,98 +1,225 @@
 /**
  * dateReportImport — قراءة ملفات تحديث تواريخ الإقامة/العقود ومطابقتها برقم الهوية.
+ *
+ * Excel / CSV / JSON / HTML تُقرأ محلياً خلية بخلية (دقيقة ولا تعتمد على تقدير أي نموذج).
+ * PDF والصور تُقرأ بذكاء اصطناعي، لكن التاريخ يُستخرج كما هو مكتوب فقط،
+ * والتحويل الهجري → ميلادي يتم دائماً داخل التطبيق عبر تقويم أم القرى.
  * الملف يُرفع للخزنة الخاصة (stored privately) ويُقرأ عبر رابط موقّع مؤقت.
  */
+import ExcelJS from "exceljs";
 import { base44 } from "@/api/base44Client";
+import { digitsOnly, parseAnyDate, isHijri, toEn } from "@/lib/hijri";
 
-const AR_DIGITS = "٠١٢٣٤٥٦٧٨٩";
-const toEn = (s) => String(s ?? "").replace(/[٠-٩]/g, (d) => String(AR_DIGITS.indexOf(d)));
+export { digitsOnly };
+export const normalizeDate = parseAnyDate;
 
-export function digitsOnly(v) {
-  return toEn(v).replace(/\D/g, "");
+const VALID_ID = /^[127]\d{9}$/;
+
+const arNorm = (s) => toEn(s)
+  .replace(/[\u064B-\u0652\u0640]/g, "")
+  .replace(/[أإآ]/g, "ا")
+  .replace(/ى/g, "ي")
+  .replace(/ة/g, "ه")
+  .replace(/\s+/g, " ")
+  .trim();
+
+const ID_COL = /(هوي|اقام|إقام|iqama|national|resident|identity|passport|\bid\b)/;
+const NOT_ID = /(تاريخ|انتها|نهاي|بداي|date|expir|start|end)/;
+const DATE_EXCLUDE = /(بداي|بداية|مباشر|تعيين|ميلاد|اصدار|إصدار|birth|hire|start|issue)/;
+
+/** يحدد صف العناوين وعمود الهوية وعمود التاريخ */
+function findHeader(rows, kind) {
+  const isId = (c) => ID_COL.test(c) && !NOT_ID.test(c);
+  const isEnd = (c) => /(انتها|انتهاء|نهاية|نهاي|expir|end|terminat)/.test(c);
+  const anyDate = (c) => /(تاريخ|date)/.test(c) && !DATE_EXCLUDE.test(c);
+  const preferred = kind === "contract" ? /(عقد|contract)/ : /(اقام|إقام|هوي|iqama|id)/;
+  const limit = Math.min(rows.length, 15);
+
+  for (let i = 0; i < limit; i++) {
+    const cells = (rows[i] || []).map((c) => arNorm(c).toLowerCase());
+    const idIdx = cells.findIndex((c) => c && isId(c));
+    if (idIdx < 0) continue;
+
+    let dateIdx = cells.findIndex((c, idx) => idx !== idIdx && isEnd(c) && preferred.test(c));
+    if (dateIdx < 0) dateIdx = cells.findIndex((c, idx) => idx !== idIdx && isEnd(c));
+    if (dateIdx < 0) dateIdx = cells.findIndex((c, idx) => idx !== idIdx && anyDate(c));
+    if (dateIdx >= 0) return { headerRow: i, idIdx, dateIdx };
+  }
+  return null;
 }
 
-const pad = (n) => String(n).padStart(2, "0");
+/** يحوّل صفوف الجدول إلى [{ national_id, expiry_date }] */
+function buildRecords(rows, kind) {
+  const header = findHeader(rows, kind);
+  const out = [];
+  let hijriCount = 0;
+  const start = header ? header.headerRow + 1 : 0;
 
-function iso(y, m, d) {
-  const yy = Number(y), mm = Number(m), dd = Number(d);
-  if (!yy || mm < 1 || mm > 12 || dd < 1 || dd > 31) return "";
-  return `${yy}-${pad(mm)}-${pad(dd)}`;
+  for (let i = start; i < rows.length; i++) {
+    const row = rows[i] || [];
+    let nid = "";
+    let raw = "";
+    let date = "";
+
+    if (header) {
+      const idv = digitsOnly(row[header.idIdx]);
+      nid = VALID_ID.test(idv) ? idv : "";
+      raw = row[header.dateIdx];
+      date = parseAnyDate(raw);
+    } else {
+      // بلا صف عناوين: نلتقط أول رقم هوية/إقامة، وآخر تاريخ صالح في الصف (نهاية المدة)
+      for (const cell of row) {
+        const dv = digitsOnly(cell);
+        if (!nid && VALID_ID.test(dv)) nid = dv;
+      }
+      const dates = row.map((c) => parseAnyDate(c)).filter(Boolean);
+      if (dates.length) {
+        date = dates[dates.length - 1];
+        raw = row.find((c) => parseAnyDate(c) === date);
+      }
+    }
+
+    if (!nid || !date) continue;
+    if (isHijri(raw)) hijriCount++;
+    out.push({ national_id: nid, expiry_date: date });
+  }
+  return { records: out, hijriCount };
 }
 
-function excelSerialToISO(n) {
-  if (!Number.isFinite(n) || n < 20000 || n > 80000) return "";
-  const d = new Date(Math.round((n - 25569) * 86400000));
-  if (isNaN(d.getTime())) return "";
-  return iso(d.getUTCFullYear(), d.getUTCMonth() + 1, d.getUTCDate());
+/* ── قارئات محلية ───────────────────────────────────────────── */
+
+async function rowsFromXlsx(file) {
+  const wb = new ExcelJS.Workbook();
+  await wb.xlsx.load(await file.arrayBuffer());
+  const rows = [];
+  wb.eachSheet((sheet) => {
+    sheet.eachRow({ includeEmpty: false }, (row) => {
+      const vals = (row.values || []).slice(1).map((v) => (v && typeof v === "object" && "result" in v ? v.result : v));
+      rows.push(vals);
+    });
+  });
+  return rows;
 }
 
-/** يحوّل أي تاريخ مقروء (YYYY-MM-DD أو DD/MM/YYYY أو تاريخ Excel) إلى YYYY-MM-DD */
-export function normalizeDate(v) {
-  if (v === null || v === undefined || v === "") return "";
-  if (typeof v === "number") return excelSerialToISO(v);
-  const s = toEn(v).trim();
-  let m = s.match(/^(\d{4})[-/.](\d{1,2})[-/.](\d{1,2})/);
-  if (m) return iso(m[1], m[2], m[3]);
-  m = s.match(/^(\d{1,2})[-/.](\d{1,2})[-/.](\d{4})/);
-  if (m) return iso(m[3], m[2], m[1]);
-  const d = new Date(s);
-  if (!isNaN(d.getTime())) return iso(d.getFullYear(), d.getMonth() + 1, d.getDate());
-  return "";
+function rowsFromDelimited(text) {
+  const src = toEn(text).replace(/^\ufeff/, "");
+  const lines = src.split(/\r?\n/).filter((l) => l.trim() !== "");
+  const delim = (lines[0].match(/\t/g) || []).length > (lines[0].match(/,/g) || []).length ? "\t" : ",";
+  return lines.map((line) => {
+    const cells = [];
+    let cur = "";
+    let quoted = false;
+    for (let i = 0; i < line.length; i++) {
+      const ch = line[i];
+      if (ch === '"') {
+        if (quoted && line[i + 1] === '"') { cur += '"'; i++; } else quoted = !quoted;
+      } else if (ch === delim && !quoted) {
+        cells.push(cur.trim()); cur = "";
+      } else cur += ch;
+    }
+    cells.push(cur.trim());
+    return cells;
+  });
 }
 
-const EXTRACT_SCHEMA = {
+function rowsFromHtml(text) {
+  const doc = new DOMParser().parseFromString(text, "text/html");
+  const rows = [];
+  doc.querySelectorAll("tr").forEach((tr) => {
+    rows.push(Array.from(tr.querySelectorAll("th,td")).map((td) => td.textContent.trim()));
+  });
+  return rows;
+}
+
+function rowsFromJson(text) {
+  const data = JSON.parse(text);
+  const list = Array.isArray(data) ? data : (data.records || data.rows || data.data || []);
+  if (!Array.isArray(list) || !list.length) return [];
+  if (Array.isArray(list[0])) return list.map((r) => r.map((c) => (c === null ? "" : c)));
+  const keys = Object.keys(list[0]);
+  return [keys, ...list.map((o) => keys.map((k) => (o[k] === null || o[k] === undefined ? "" : o[k])))];
+}
+
+/** يعيد صفوف الجدول، أو null إذا كانت الصيغة تحتاج قراءة بالذكاء الاصطناعي (PDF/صورة) */
+async function localRows(file) {
+  const name = (file.name || "").toLowerCase();
+  if (name.endsWith(".xls")) throw new Error("legacy_xls");
+  if (name.endsWith(".xlsx") || name.endsWith(".xlsm")) return rowsFromXlsx(file);
+  if (name.endsWith(".csv") || name.endsWith(".tsv") || name.endsWith(".txt")) return rowsFromDelimited(await file.text());
+  if (name.endsWith(".json")) return rowsFromJson(await file.text());
+  if (name.endsWith(".html") || name.endsWith(".htm")) return rowsFromHtml(await file.text());
+  return null;
+}
+
+/* ── قراءة PDF/الصور ─────────────────────────────────────────── */
+
+const RAW_SCHEMA = {
   type: "object",
   properties: {
-    records: {
+    rows: {
       type: "array",
       items: {
         type: "object",
         properties: {
-          national_id: { type: "string", description: "رقم الهوية الوطنية أو الإقامة كما هو في الملف" },
-          expiry_date: { type: "string", description: "تاريخ الانتهاء بالصيغة YYYY-MM-DD" },
+          national_id: { type: "string", description: "رقم الهوية أو الإقامة كما هو (10 أرقام)" },
+          date_raw: { type: "string", description: "تاريخ الانتهاء كما هو مكتوب في الملف تماماً، دون تحويل" },
         },
-        required: ["national_id", "expiry_date"],
       },
     },
   },
-  required: ["records"],
 };
 
 function labelOf(kind) {
   return kind === "contract" ? "تاريخ نهاية العقد" : "تاريخ انتهاء الهوية أو الإقامة";
 }
 
-/**
- * يقرأ ملف (PDF/Excel/CSV/صورة/أي صيغة) ويعيد [{ national_id, expiry_date }].
- */
-export async function extractDatesFromFile(file, kind) {
-  const { file_uri } = await base44.integrations.Core.UploadPrivateFile({ file });
-  const { signed_url } = await base44.integrations.Core.CreateFileSignedUrl({ file_uri, expires_in: 900 });
+async function recordsFromAI(url, kind) {
+  const prompt = `هذا ملف يخص موظفي منشأة. استخرج لكل صف موجود: رقم الهوية الوطنية أو رقم الإقامة (10 أرقام)، و${labelOf(kind)} كما هو مكتوب في الملف تماماً (date_raw) دون تحويله ولا تفسيره — سواء كان ميلادياً أو هجرياً. لا تختلق أي رقم أو تاريخ غير موجود في الملف.`;
 
   let rows = [];
   try {
-    const res = await base44.integrations.Core.ExtractDataFromUploadedFile({
-      file_url: signed_url,
-      json_schema: EXTRACT_SCHEMA,
-    });
+    const res = await base44.integrations.Core.ExtractDataFromUploadedFile({ file_url: url, json_schema: RAW_SCHEMA });
     const out = res?.output;
-    rows = Array.isArray(out) ? out : (out?.records || []);
+    rows = Array.isArray(out) ? out : (out?.rows || []);
   } catch { rows = []; }
 
   if (!rows.length) {
     const res = await base44.integrations.Core.InvokeLLM({
-      prompt: `هذا ملف يخص موظفي منشأة. استخرج منه لكل صف موجود: رقم الهوية الوطنية أو رقم الإقامة (10 أرقام) و${labelOf(kind)} بالصيغة YYYY-MM-DD. لا تختلق أي رقم أو تاريخ غير موجود في الملف، وتجاهل الصفوف بلا رقم هوية.`,
-      file_urls: [signed_url],
-      response_json_schema: EXTRACT_SCHEMA,
+      prompt, file_urls: [url], response_json_schema: RAW_SCHEMA,
     });
-    rows = res?.records || [];
+    rows = res?.rows || [];
+  }
+  return rows;
+}
+
+/**
+ * يقرأ ملفاً ويعيد { records: [{ national_id, expiry_date }], hijriCount, aiUsed }.
+ */
+export async function extractDatesFromFile(file, kind) {
+  const rows = await localRows(file);
+
+  if (rows) {
+    const { records, hijriCount } = buildRecords(rows, kind);
+    if (!records.length) throw new Error("no_rows");
+    return { records, hijriCount, aiUsed: false };
   }
 
-  const cleaned = (rows || [])
-    .map((r) => ({ national_id: digitsOnly(r?.national_id), expiry_date: normalizeDate(r?.expiry_date) }))
-    .filter((r) => r.national_id && r.expiry_date);
-  if (!cleaned.length) throw new Error("no_rows");
-  return cleaned;
+  const { file_uri } = await base44.integrations.Core.UploadPrivateFile({ file });
+  const { signed_url } = await base44.integrations.Core.CreateFileSignedUrl({ file_uri, expires_in: 900 });
+  const aiRows = await recordsFromAI(signed_url, kind);
+
+  let hijriCount = 0;
+  const records = [];
+  for (const r of aiRows || []) {
+    const nid = digitsOnly(r?.national_id);
+    const raw = r?.date_raw;
+    const date = parseAnyDate(raw);
+    if (!VALID_ID.test(nid) || !date) continue;
+    if (isHijri(raw)) hijriCount++;
+    records.push({ national_id: nid, expiry_date: date });
+  }
+  if (!records.length) throw new Error("no_rows");
+  return { records, hijriCount, aiUsed: true };
 }
 
 /**
