@@ -1,0 +1,48 @@
+{
+  "name": "Tamm Vehicle Sync",
+  "description": "مزامنة أسبوعية (كل سبت) لتواريخ رخصة السير والتأمين والفحص الدوري لمركبات العملاء من منصة «تم» عبر الاستعلامات فقط، ثم تتحدث التنبيهات والتقارير تلقائياً من آخر تواريخ محدثة.",
+  "trigger": {
+    "condition": null,
+    "config": {
+      "trigger_type": "scheduled",
+      "events": [],
+      "schedule_mode": "recurring",
+      "cron_expression": "0 8 * * 6",
+      "one_time_date": null,
+      "timezone": "Asia/Riyadh",
+      "interval_value": null,
+      "interval_unit": null,
+      "interval_anchor": null,
+      "ends_type": "never",
+      "ends_on_date": null,
+      "ends_after_count": null
+    }
+  },
+  "definition": {
+    "document": {
+      "dsl": "1.0.0",
+      "name": "tamm_vehicle_sync",
+      "version": "1.0",
+      "namespace": "base44"
+    },
+    "do": [
+      {
+        "sync": {
+          "call": "invoke_backend_function",
+          "with": {
+            "function_name": "vehicleSync",
+            "args": {
+              "action": "syncAll",
+              "cron_secret": "${ env.CRON_SECRET }"
+            }
+          },
+          "then": "end",
+          "x-base44": {
+            "title": "مزامنة مركبات «تم»",
+            "description": "كل سبت 8 صباحاً — استعلام تواريخ رخصة السير والتأمين والفحص لكل مركبة مستحقة (بحد مرة كل 7 أيام للمركبة)"
+          }
+        }
+      }
+    ]
+  }
+}
