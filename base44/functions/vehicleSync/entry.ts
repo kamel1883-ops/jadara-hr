@@ -77,6 +77,9 @@ async function applySync(entities: any, vehicle: any) {
   patch.tamm_sync_status = status;
   patch.tamm_sync_message = message.slice(0, 500);
 
+  // عند الفشل الكامل لا نحتجز المركبة في مهلة السبعة أيام، فتُعاد المحاولة في التشغيل التالي
+  if (status === "failed") delete patch.tamm_sync_at;
+
   await entities.Vehicle.update(vehicle.id, patch);
   return { id: vehicle.id, plate: vehicle.plate_number || vehicle.plate_number_en || "", status, message, patch };
 }
@@ -204,7 +207,9 @@ export default async function (req: Request) {
 
     // ─── مزامنة الكل (الجدولة الأسبوعية) ────────────────────────
     if (action === "syncAll") {
-      if (!isCron) {
+      // الجدولة الأسبوعية تُستدعى بجلسة مسؤول (سير العمل يعمل باسم منشئه)،
+      // ويبقى الاستدعاء بمفتاح المهام المجدولة مسموحاً للتوافق.
+      if (!isCron && user?.role !== "admin") {
         return Response.json({ error: "Forbidden" }, { status: 403 });
       }
       if (!configured) {
@@ -230,7 +235,6 @@ export default async function (req: Request) {
             } catch (e: any) {
               const msg = (e?.message || String(e)).slice(0, 500);
               await sr.Vehicle.update(v.id, {
-                tamm_sync_at: new Date().toISOString(),
                 tamm_sync_status: "failed",
                 tamm_sync_message: msg,
               }).catch(() => {});

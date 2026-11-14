@@ -239,8 +239,9 @@ export async function fetchInsuranceExpiry(vehicle: any): Promise<string | null>
 /** استعلام الفحص الدوري — أحدث فحص */
 export async function fetchInspectionExpiry(vehicle: any): Promise<string | null> {
   const data = await tammPost(TAMM_PATHS.inspection, buildPlateDto(vehicle));
+  // لا نستخدم تاريخ إجراء الفحص نفسه (inspectionDate) — المطلوب تاريخ انتهاء صلاحيته فقط
   return findDateByKeys(data, [
-    "expiryDate", "inspectionExpiry", "validTo", "endDate", "expiry", "inspectionDate",
+    "expiryDate", "inspectionExpiry", "validTo", "endDate", "expiry",
   ]);
 }
 
