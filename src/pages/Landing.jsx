@@ -315,6 +315,9 @@ export default function Landing() {
             <Link to="/portal" className="shrink-0 inline-flex items-center gap-1.5 rounded-full border border-violet-200 bg-white text-violet-700 px-3.5 py-2 text-xs font-semibold">
               <Users size={14} /> {t.portalShort}
             </Link>
+            <Link to="/course" className="shrink-0 inline-flex items-center gap-1.5 rounded-full border border-border bg-card text-primary px-3.5 py-2 text-xs font-semibold">
+              <GraduationCap size={14} /> {isAr ? "الدورة التدريبية" : "Training Course"}
+            </Link>
           </div>
         </div>
       </header>
@@ -396,6 +399,17 @@ export default function Landing() {
       {/* بوابة الاشتراكات — للمنشآت المشتركة */}
       <section id="subscriptions-portal" className="max-w-[1600px] mx-auto px-6 lg:px-14 pb-10">
         <PortalEntryCard icon={CreditCard} title={t.subTitle} desc={t.subDesc} cta={t.subCta} to="/company-login?returnTo=/app" isAr={isAr} />
+      </section>
+
+      <section id="training-course" className="max-w-[1600px] mx-auto px-6 lg:px-14 pb-10">
+        <PortalEntryCard
+          icon={GraduationCap}
+          title={isAr ? "الدورة التدريبية" : "Training Course"}
+          desc={isAr ? "تعرّف على استخدام جداره من التوظيف وإدارة الموظفين إلى الحضور والرواتب ونهاية الخدمة. الدورة متاحة لجميع الزوار، بدون اشتراك أو حساب أو تسجيل دخول." : "Explore Jadara workflows from recruitment and employee management to attendance, payroll and end of service. Open to all visitors, with no subscription, account or sign-in required."}
+          cta={isAr ? "استعرض الدورة التدريبية" : "Explore the Training Course"}
+          to="/course"
+          isAr={isAr}
+        />
       </section>
 
       {/* مزوّدو حجوزات الطيران */}
@@ -610,6 +624,7 @@ export default function Landing() {
             <div className="font-semibold text-base text-foreground mb-1">{t.footPlatform}</div>
             <button onClick={() => scrollTo("features")} className="block hover:text-violet-700">{t.nav.features}</button>
             <button onClick={() => scrollTo("pricing")} className="block hover:text-violet-700">{t.nav.pricing}</button>
+            <Link to="/course" className="block hover:text-violet-700">{isAr ? "الدورة التدريبية" : "Training Course"}</Link>
             <Link to="/about" className="block hover:text-violet-700">{isAr ? "من نحن" : "About"}</Link>
             <Link to="/contact" className="block hover:text-violet-700">{t.nav.contact}</Link>
             <Link to="/company-login?returnTo=/app" className="block hover:text-violet-700">{t.login}</Link>

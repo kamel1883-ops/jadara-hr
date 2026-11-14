@@ -60,6 +60,7 @@ const Login = lazy(() => import("@/pages/Login"));
 const Register = lazy(() => import("@/pages/Register"));
 const ForgotPassword = lazy(() => import("@/pages/ForgotPassword"));
 const ResetPassword = lazy(() => import("@/pages/ResetPassword"));
+const Mfa = lazy(() => import("@/pages/Mfa"));
 const About = lazy(() => import("@/pages/About"));
 const Contact = lazy(() => import("@/pages/Contact"));
 const Quote = lazy(() => import("@/pages/Quote"));
@@ -114,7 +115,7 @@ const CompanyAdminPending = () => (
 
 // الصفحات العامة فقط: التسويق والتعريف وبوابات الدخول والمستندات القانونية.
 // لا يظهر أي قسم داخلي أو مستند خاص بالمالك ضمن هذه القائمة.
-const PUBLIC_PATHS = ["/", "/about", "/contact", "/quote", "/login", "/register", "/forgot-password", "/reset-password", "/company-login", "/company-forgot-password", "/company-register", "/portal", "/owner-portal", "/qiwa-mudad", "/wps-mudad", "/eos-calculator", "/contracts", "/hr-system", "/payroll-system", "/attendance-system", "/performance-system", "/privacy", "/refund-policy", "/affiliate-program"];
+const PUBLIC_PATHS = ["/", "/course", "/about", "/contact", "/quote", "/login", "/register", "/forgot-password", "/reset-password", "/mfa", "/company-login", "/company-forgot-password", "/company-register", "/portal", "/owner-portal", "/qiwa-mudad", "/wps-mudad", "/eos-calculator", "/contracts", "/hr-system", "/payroll-system", "/attendance-system", "/performance-system", "/privacy", "/refund-policy", "/affiliate-program"];
 
 // مستندات المالك الخاصة (البروشور، العينات، العقد، الخطة الاستراتيجية، التصاميم) —
 // لا تُفتح إلا بجلسة مالك حقيقية مُوثّقة خادمياً من بوابة المالك.
@@ -163,6 +164,8 @@ const AuthenticatedApp = () => {
           <Route path="/register" element={<Register />} />
           <Route path="/forgot-password" element={<ForgotPassword />} />
           <Route path="/reset-password" element={<ResetPassword />} />
+          <Route path="/mfa" element={<Mfa />} />
+          <Route path="/course" element={<TrainingCourse />} />
           <Route path="/about" element={<About />} />
           <Route path="/contact" element={<Contact />} />
           <Route path="/quote" element={<Quote />} />
@@ -224,7 +227,6 @@ const AuthenticatedApp = () => {
         <Route path="/end-of-service" element={<EndOfService />} />
         <Route path="/performance" element={<Performance />} />
         <Route path="/training" element={<Training />} />
-        <Route path="/course" element={<TrainingCourse />} />
         <Route path="/succession" element={<Succession />} />
         <Route path="/org-structure" element={<OrgStructure />} />
         <Route path="/workforce-planning" element={<WorkforcePlanning />} />

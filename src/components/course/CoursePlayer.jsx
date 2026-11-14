@@ -22,13 +22,13 @@ export default function CoursePlayer({
         </div>
         <h2 className="mt-2 text-xl sm:text-2xl font-bold leading-snug">{lesson.title}</h2>
         <p className="mt-1 text-sm text-white/85">{lesson.desc}</p>
-        <div className="mt-3 flex flex-wrap gap-2">
+        {isAdmin && <div className="mt-3 flex flex-wrap gap-2">
           {lesson.routes.map((r) => (
             <Button key={r.path} asChild size="sm" variant="secondary" className="h-8 rounded-full text-[13px]">
               <Link to={r.path}>افتح {r.label} <ArrowLeft size={14} /></Link>
             </Button>
           ))}
-        </div>
+        </div>}
       </div>
 
       <CourseMedia key={lesson.key} lesson={lesson} video={video} isAdmin={isAdmin} generating={generating} onGenerateVoice={onGenerateVoice} />

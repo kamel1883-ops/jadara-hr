@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import { base44 } from "@/api/base44Client";
-import { LogOut, X, UserCircle, LayoutDashboard, Users, Settings as SettingsIcon, ArrowRight, Fingerprint, CheckCircle2, CalendarDays, Plane, PlaneTakeoff, Wallet, Shield, Car, FileText, Target, GitBranch, Network, CalendarRange, MessageSquare, ClipboardList, ShieldAlert, FileSearch, BarChart3, FileBadge, Crown, Briefcase, GraduationCap, PlayCircle, Globe, ScrollText, Gift, Bell, Package, MessageSquareWarning, ShieldCheck, HeartPulse, Headphones, Gauge, Calculator } from "lucide-react";
+import { LogOut, X, UserCircle, LayoutDashboard, Users, Settings as SettingsIcon, ArrowRight, Fingerprint, CheckCircle2, CalendarDays, Plane, PlaneTakeoff, Wallet, Shield, Car, FileText, Target, GitBranch, Network, CalendarRange, MessageSquare, ClipboardList, ShieldAlert, FileSearch, BarChart3, FileBadge, Crown, Briefcase, GraduationCap, Globe, ScrollText, Gift, Bell, Package, MessageSquareWarning, ShieldCheck, HeartPulse, Headphones, Gauge, Calculator } from "lucide-react";
 import { motion } from "framer-motion";
 import { cn } from "@/lib/utils";
 import Logo from "@/components/Logo";
@@ -43,7 +43,6 @@ const appNav = [
   { to: "/health-insurance", ar: "التأمين الصحي", en: "Health Insurance", icon: HeartPulse, tile: "from-red-500 to-rose-500" },
   { to: "/end-of-service", ar: "إدارة نهاية الخدمة", en: "End of Service", icon: FileText, tile: "from-fuchsia-500 to-purple-600" },
   { to: "/performance", ar: "إدارة الأداء", en: "Performance", icon: Target, tile: "from-orange-400 to-amber-500" },
-  { to: "/course", ar: "الدورة التعليمية", en: "Training Course", icon: PlayCircle, tile: "from-violet-500 to-fuchsia-500" },
   { to: "/training", ar: "إدارة التدريب والتطوير", en: "Training & Development", icon: GraduationCap, tile: "from-blue-500 to-violet-500" },
   { to: "/workforce-planning", ar: "تخطيط القوى العاملة", en: "Workforce Planning", icon: CalendarRange, tile: "from-indigo-500 to-sky-500" },
   { to: "/succession", ar: "إدارة التعاقب الوظيفي", en: "Succession", icon: GitBranch, tile: "from-teal-500 to-cyan-500" },

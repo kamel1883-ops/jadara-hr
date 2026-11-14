@@ -5,6 +5,7 @@ import { GraduationCap, Video, CheckCircle2, Sparkles, Mic, Loader2 } from "luci
 import { Button } from "@/components/ui/button";
 import { COURSE_LESSONS } from "@/lib/courseContent";
 import { generateLessonVoice } from "@/lib/courseVoice";
+import CoursePublicHeader from "@/components/course/CoursePublicHeader";
 import LessonNav from "@/components/course/LessonNav";
 import CoursePlayer from "@/components/course/CoursePlayer";
 import VideoLinkDialog from "@/components/course/VideoLinkDialog";
@@ -25,16 +26,28 @@ export default function TrainingCourse() {
       const raw = localStorage.getItem(PROGRESS_KEY);
       if (raw) setCompleted(JSON.parse(raw) || []);
     } catch {}
-    base44.auth.me().then((u) => setIsAdmin(u?.role === "admin")).catch(() => {});
-    base44.entities.CourseLesson.list()
-      .then((rows) => {
-        const list = Array.isArray(rows) ? rows : rows?.items || [];
-        const map = {};
-        list.forEach((r) => { if (r.lesson_key) map[r.lesson_key] = r; });
-        setVideos(map);
-      })
-      .catch(() => {});
+
   }, []);
+
+  const { data: courseData, isLoading: mediaLoading, error: mediaError } = useQuery({
+    queryKey: ["public-course-media"],
+    queryFn: async () => {
+      const user = await base44.auth.me().catch((error) => error.status === 401 ? null : Promise.reject(error));
+      const { items } = await base44.entities.CourseLesson.filter(
+        { lesson_key: { $in: COURSE_LESSONS.map((l) => l.key) } },
+        { sort: "-updated_date", limit: 100 }
+      );
+      return { items, isAdmin: user?.role === "admin" };
+    },
+  });
+
+  useEffect(() => {
+    if (!courseData) return;
+    const map = {};
+    courseData.items.forEach((record) => { if (!map[record.lesson_key]) map[record.lesson_key] = record; });
+    setVideos(map);
+    setIsAdmin(courseData.isAdmin);
+  }, [courseData]);
 
   const lesson = useMemo(() => COURSE_LESSONS.find((l) => l.key === activeKey) || COURSE_LESSONS[0], [activeKey]);
   const index = COURSE_LESSONS.findIndex((l) => l.key === lesson.key);
@@ -101,18 +114,20 @@ export default function TrainingCourse() {
   };
 
   return (
-    <div className="max-w-6xl mx-auto space-y-5">
+    <div dir="rtl" className="min-h-screen bg-background px-4 py-5 sm:px-6 sm:py-8">
+      <div className="max-w-6xl mx-auto space-y-5">
+      <CoursePublicHeader />
       <div className="rounded-2xl border bg-gradient-to-l from-violet-50 via-card to-amber-50 dark:from-violet-500/10 dark:via-card dark:to-amber-500/10 p-5 sm:p-6">
         <div className="flex items-start gap-3">
           <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-violet-500 to-indigo-600 text-white shadow">
             <GraduationCap size={24} />
           </span>
           <div className="min-w-0 flex-1">
-            <h1 className="text-xl sm:text-2xl font-bold">الدورة التعليمية — بوابة الشركات</h1>
+            <h1 className="text-xl sm:text-2xl font-bold">الدورة التدريبية</h1>
             <p className="mt-1 text-sm text-muted-foreground leading-relaxed">
               {COURSE_LESSONS.length} درساً باللهجة السعودية تشرح كل أقسام إدارة الشركة: التوظيف وملفات الموظفين،
               الحضور والبصمات والإجازات، الرواتب والسلف، المركبات والتراخيص، الأداء والمغادرة ونهاية الخدمة.
-              فيديوهات الدروس تتطلب تسجيلات شاشة فعلية متصلة، وتظهر حالة كل درس بوضوح إلى أن يُضاف تسجيله.
+              متاحة للجميع بدون اشتراك أو حساب أو تسجيل دخول. تظهر حالة كل درس إلى أن يُضاف تسجيله الفعلي.
             </p>
           </div>
         </div>
@@ -144,6 +159,8 @@ export default function TrainingCourse() {
         </div>
       </div>
 
+      {mediaLoading && <p role="status" className="flex items-center gap-2 text-sm text-muted-foreground"><Loader2 size={16} className="animate-spin" /> جارٍ تحميل مواد الدورة…</p>}
+      {mediaError && <p role="alert" className="text-sm text-destructive">تعذّر تحميل مواد الدورة. أعد تحميل الصفحة للمحاولة مجدداً.</p>}
       <div className="grid gap-4 lg:grid-cols-[290px_1fr]">
         <LessonNav activeKey={activeKey} completed={completed} onSelect={setActiveKey} />
         <CoursePlayer
@@ -169,6 +186,7 @@ export default function TrainingCourse() {
         existing={videos[lesson.key]}
         onSaved={onSaved}
       />
+      </div>
     </div>
   );
 }
