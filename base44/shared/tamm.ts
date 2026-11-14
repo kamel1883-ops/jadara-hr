@@ -1,19 +1,26 @@
 import { secrets } from "base44:runtime";
 
 /**
- * عميل تكامل منصة «تم» (حلول رابط) — استعلامات فقط.
+ * عميل تكامل منصة «تم» (حلول رابط) — استعلامات فقط، مطابق لمواصفات OpenAPI الرسمية:
  *
- * الخدمات المستخدمة (Inquiry فقط، بلا أي خدمة تنفيذية):
- *  1) POST /api/v1/inquiry/vehicle-insurance        → انتهاء التأمين
- *  2) POST /api/v1/inquiry/mvpi/latest-inspection   → انتهاء الفحص الفوري
- *  3) POST /api/v1/plate-change-request/verify-vehicle → انتهاء رخصة السير (نستدعي الخطوة 1 فقط)
+ *  POST /api/v1/inquiry/vehicle-insurance
+ *      Body: { searchType:"PLATE", plate: PlateDto }
+ *      Resp: { list:[{ policyEndDate, ... }] }               → انتهاء التأمين
  *
- * الأسرار المطلوبة (تُدار في إعدادات الأسرار، ولا تُكتب في المصدر أبداً):
- *  TAMM_CLIENT_ID, TAMM_CLIENT_SECRET
- * اختيارية:
- *  TAMM_BASE_URL   (افتراضي https://www.rabet.sa)
- *  TAMM_TOKEN_URL  (افتراضي: مشتق من TAMM_IDP_BASE_URL + TAMM_REALM)
- *  TAMM_IDP_BASE_URL, TAMM_REALM, TAMM_SCOPE
+ *  POST /api/v1/inquiry/mvpi/latest-inspection
+ *      Body: { searchType:"PLATE", plate: PlateDto }
+ *      Resp: { mvpiStatus, mvpiExpiryDate }                  → انتهاء الفحص الدوري
+ *
+ *  POST /api/v1/plate-change-request/verify-vehicle
+ *      Body: PlateDto مباشرة (الخطوة 1 فقط — لا نُقدّم أي طلب)
+ *      Resp: { vehicle:{ istemarahExpiryDate } }             → انتهاء رخصة السير
+ *
+ * PlateDto كما تعرّفه المنصة (كل الحقول مطلوبة):
+ *   { text1, text2, text3, number, type:{ code, nameAr, nameEn } }
+ *
+ * الأسرار: TAMM_CLIENT_ID, TAMM_CLIENT_SECRET  (إلزامية)
+ * اختيارية: TAMM_BASE_URL, TAMM_TOKEN_URL, TAMM_IDP_BASE_URL, TAMM_REALM,
+ *           TAMM_SCOPE, TAMM_USER_ID (ترويسة X-User-Id), TAMM_PLATE_TYPE_CODE
  */
 
 export const TAMM_PATHS = {
@@ -45,6 +52,7 @@ export function tammConfig() {
     clientId: env("TAMM_CLIENT_ID"),
     clientSecret: env("TAMM_CLIENT_SECRET"),
     scope: env("TAMM_SCOPE", ""),
+    userId: env("TAMM_USER_ID", ""),
   };
 }
 
@@ -53,7 +61,7 @@ export function tammConfigured(): boolean {
   return Boolean(c.clientId && c.clientSecret);
 }
 
-// تخزين مؤقت للرمز على مستوى النسخة (isolate) — الرمز صالح مدة كافية ولا نطلبه لكل مركبة.
+// تخزين مؤقت للرمز على مستوى النسخة (isolate)
 let cachedToken: { value: string; expiresAt: number } | null = null;
 
 export async function getTammToken(force = false): Promise<string> {
@@ -77,15 +85,19 @@ export async function getTammToken(force = false): Promise<string> {
       method: "POST",
       headers: { "Content-Type": "application/x-www-form-urlencoded", Accept: "application/json" },
       body: body.toString(),
+      signal: AbortSignal.timeout(20000),
     });
   } catch (e: any) {
     throw new Error(
-      `tamm_token_unreachable: تعذّر الوصول لخادم المصادقة (${c.tokenUrl}) — ${e?.message || e}`
+      `tamm_token_unreachable: تعذّر الوصول لخادم مصادقة «تم» (${c.tokenUrl}) — ${e?.message || e}`
     );
   }
 
   const text = await res.text();
   if (!res.ok) {
+    if (res.status === 401 || res.status === 400) {
+      throw new Error(`tamm_credentials_rejected: رفض خادم «تم» بيانات الاعتماد — ${text.slice(0, 200)}`);
+    }
     throw new Error(`tamm_token_failed: HTTP ${res.status} — ${text.slice(0, 300)}`);
   }
   let json: any = {};
@@ -105,16 +117,20 @@ async function tammPost(path: string, payload: unknown): Promise<any> {
   const c = tammConfig();
   const token = await getTammToken();
   const url = c.baseUrl + path;
+  const headers: Record<string, string> = {
+    Authorization: `Bearer ${token}`,
+    "Content-Type": "application/json",
+    Accept: "application/json",
+  };
+  if (c.userId) headers["X-User-Id"] = c.userId;
+
   let res: Response;
   try {
     res = await fetch(url, {
       method: "POST",
-      headers: {
-        Authorization: `Bearer ${token}`,
-        "Content-Type": "application/json",
-        Accept: "application/json",
-      },
+      headers,
       body: JSON.stringify(payload ?? {}),
+      signal: AbortSignal.timeout(20000),
     });
   } catch (e: any) {
     throw new Error(`tamm_unreachable: تعذّر الوصول إلى ${path} — ${e?.message || e}`);
@@ -126,12 +142,9 @@ async function tammPost(path: string, payload: unknown): Promise<any> {
     const fresh = await getTammToken(true);
     const retry = await fetch(url, {
       method: "POST",
-      headers: {
-        Authorization: `Bearer ${fresh}`,
-        "Content-Type": "application/json",
-        Accept: "application/json",
-      },
+      headers: { ...headers, Authorization: `Bearer ${fresh}` },
       body: JSON.stringify(payload ?? {}),
+      signal: AbortSignal.timeout(20000),
     });
     const t2 = await retry.text();
     if (!retry.ok) throw new Error(`tamm_error: HTTP ${retry.status} على ${path} — ${t2.slice(0, 300)}`);
@@ -163,18 +176,21 @@ export function normalizeDigits(s: string): string {
   return String(s || "").replace(/[٠-٩۰-۹]/g, (d) => map[d] ?? d);
 }
 
-/** يبني جسم الطلب لبيانات اللوحة من ملف المركبة */
-export function buildPlateDto(vehicle: any) {
-  const plate = normalizeDigits(
-    String(vehicle?.plate_number || vehicle?.plate_number_en || "").trim()
-  );
-  const dto: Record<string, any> = {
-    plateNumber: plate,
-    plateLetters: String(vehicle?.plate_letters || "").trim(),
-  };
-  const ptype = String(vehicle?.plate_type || "").trim();
-  if (ptype) dto.plateType = ptype;
-  return dto;
+/** تحويل تاريخ هجري (تقويم حسابي) إلى ميلادي YYYY-MM-DD */
+function hijriToGregorian(y: number, m: number, d: number): string {
+  const jd =
+    Math.floor((11 * y + 3) / 30) + 354 * y + 30 * m - Math.floor((m - 1) / 2) + d + 1948440 - 385;
+  let l = jd + 68569;
+  const n = Math.floor((4 * l) / 146097);
+  l -= Math.floor((146097 * n + 3) / 4);
+  const i = Math.floor((4000 * (l + 1)) / 1461001);
+  l = l - Math.floor((1461 * i) / 4) + 31;
+  const j = Math.floor((80 * l) / 2447);
+  const day = l - Math.floor((2447 * j) / 80);
+  l = Math.floor(j / 11);
+  const month = j + 2 - 12 * l;
+  const year = 100 * (n - 49) + i + l;
+  return `${year}-${String(month).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
 }
 
 /** يحول تاريخاً بأي صيغة شائعة إلى YYYY-MM-DD، أو null */
@@ -184,74 +200,97 @@ export function toISODate(raw: any): string | null {
     const d = new Date(raw > 1e12 ? raw : raw * 1000);
     return isNaN(d.getTime()) ? null : d.toISOString().slice(0, 10);
   }
-  let s = normalizeDigits(String(raw).trim());
-  // ISO أو نص يحتوي تاريخاً
+  if (typeof raw !== "string") return null;
+  const s = normalizeDigits(raw.trim());
   const isoMatch = s.match(/(\d{4})-(\d{2})-(\d{2})/);
   if (isoMatch) return `${isoMatch[1]}-${isoMatch[2]}-${isoMatch[3]}`;
-  // DD/MM/YYYY أو DD-MM-YYYY
   const dmy = s.match(/(\d{1,2})[/\-.](\d{1,2})[/\-.](\d{4})/);
   if (dmy) {
-    const d = dmy[1].padStart(2, "0");
-    const m = dmy[2].padStart(2, "0");
-    return `${dmy[3]}-${m}-${d}`;
+    return `${dmy[3]}-${dmy[2].padStart(2, "0")}-${dmy[1].padStart(2, "0")}`;
   }
   const parsed = new Date(s);
   return isNaN(parsed.getTime()) ? null : parsed.toISOString().slice(0, 10);
 }
 
-/** يبحث في كائن متداخل عن أول تاريخ يطابق أي من المفاتيح المطلوبة */
-export function findDateByKeys(node: any, keys: string[], depth = 0): string | null {
-  if (!node || typeof node !== "object" || depth > 6) return null;
-  const lower = (x: string) => x.toLowerCase().replace(/[_\s-]/g, "");
-  const wanted = keys.map(lower);
-  if (Array.isArray(node)) {
-    let best: string | null = null;
-    for (const item of node) {
-      const found = findDateByKeys(item, keys, depth + 1);
-      if (found && (!best || found > best)) best = found;
-    }
-    return best;
-  }
-  for (const [k, v] of Object.entries(node)) {
-    if (wanted.includes(lower(k))) {
-      const d = toISODate(v);
-      if (d) return d;
+/** تاريخ «تم» قد يأتي نصاً ميلادياً أو كائن تاريخ هجري */
+export function parseTammDate(raw: any): string | null {
+  const direct = toISODate(raw);
+  if (direct) return direct;
+  if (raw && typeof raw === "object") {
+    const y = Number(raw.year ?? raw.hijriYear ?? raw.yearOfEra);
+    const m = Number(raw.month ?? raw.monthValue ?? raw.hijriMonth);
+    const d = Number(raw.day ?? raw.dayOfMonth ?? raw.dayOfMonthValue ?? raw.hijriDay);
+    if (y > 1300 && y < 1600 && m >= 1 && m <= 12 && d >= 1 && d <= 31) {
+      return hijriToGregorian(y, m, d);
     }
   }
+  return null;
+}
+
+const PLATE_TYPE_FALLBACK = { code: 1, nameAr: "خاص", nameEn: "private" };
+
+/**
+ * يبني PlateDto بالشكل الذي تتطلبه «تم» — ويوقف الاستعلام برسالة واضحة
+ * إذا كانت بيانات اللوحة ناقصة (رقم + ثلاثة حروف + نوع اللوحة).
+ */
+export function buildPlateDto(vehicle: any) {
+  const plateRaw = normalizeDigits(
+    String(vehicle?.plate_number || vehicle?.plate_number_en || "").trim()
+  );
+  const numMatch = plateRaw.match(/\d{1,5}/);
+  const number = numMatch ? Number(numMatch[0]) : null;
+
+  const letters = String(vehicle?.plate_letters || "")
+    .trim()
+    .split(/[\s,،]+/)
+    .filter(Boolean);
+
+  const missing: string[] = [];
+  if (!number) missing.push("رقم اللوحة");
+  if (letters.length < 3) missing.push("حروف اللوحة الثلاثة (مثال: أ ب ج)");
+  if (missing.length > 0) {
+    throw new Error(`بيانات اللوحة ناقصة: ${missing.join(" و ")} — أكملها في بيانات المركبة أولاً.`);
+  }
+
+  const customName = String(vehicle?.plate_type || "").trim();
+  const typeCode = Number(env("TAMM_PLATE_TYPE_CODE", "1")) || 1;
+
+  return {
+    text1: letters[0],
+    text2: letters[1],
+    text3: letters[2],
+    number,
+    type: customName
+      ? { code: typeCode, nameAr: customName, nameEn: PLATE_TYPE_FALLBACK.nameEn }
+      : { ...PLATE_TYPE_FALLBACK },
+  };
+}
+
+/** استعلام التأمين — أبعد تاريخ انتهاء بين الوثائق المسجلة */
+export async function fetchInsuranceExpiry(vehicle: any): Promise<string | null> {
+  const plate = buildPlateDto(vehicle);
+  const data = await tammPost(TAMM_PATHS.insurance, { searchType: "PLATE", plate });
+  const list: any[] = Array.isArray(data?.list) ? data.list : [];
   let best: string | null = null;
-  for (const v of Object.values(node)) {
-    if (v && typeof v === "object") {
-      const found = findDateByKeys(v, keys, depth + 1);
-      if (found && (!best || found > best)) best = found;
-    }
+  for (const policy of list) {
+    const d = toISODate(policy?.policyEndDate);
+    if (d && (!best || d > best)) best = d;
   }
   return best;
 }
 
-/** استعلام التأمين — يأخذ أبعد تاريخ انتهاء بين الوثائق السارية */
-export async function fetchInsuranceExpiry(vehicle: any): Promise<string | null> {
-  const data = await tammPost(TAMM_PATHS.insurance, buildPlateDto(vehicle));
-  return findDateByKeys(data, [
-    "expiryDate", "policyExpiryDate", "endDate", "expiry", "toDate", "policyEndDate",
-  ]);
-}
-
-/** استعلام الفحص الدوري — أحدث فحص */
+/** استعلام الفحص الدوري (MVPI) — تاريخ انتهاء شهادة الفحص */
 export async function fetchInspectionExpiry(vehicle: any): Promise<string | null> {
-  const data = await tammPost(TAMM_PATHS.inspection, buildPlateDto(vehicle));
-  // لا نستخدم تاريخ إجراء الفحص نفسه (inspectionDate) — المطلوب تاريخ انتهاء صلاحيته فقط
-  return findDateByKeys(data, [
-    "expiryDate", "inspectionExpiry", "validTo", "endDate", "expiry",
-  ]);
+  const plate = buildPlateDto(vehicle);
+  const data = await tammPost(TAMM_PATHS.inspection, { searchType: "PLATE", plate });
+  return parseTammDate(data?.mvpiExpiryDate);
 }
 
-/** استعلام رخصة السير — الخطوة 1 فقط، لا نُقدّم أي طلب */
+/** استعلام رخصة السير — الخطوة 1 فقط (تحقق من المركبة)، لا نُقدّم أي طلب تغيير */
 export async function fetchLicenseExpiry(vehicle: any): Promise<string | null> {
-  const data = await tammPost(TAMM_PATHS.plateVerify, buildPlateDto(vehicle));
-  return findDateByKeys(data, [
-    "istemarahExpiry", "registrationExpiry", "registrationExpiryDate", "licenseExpiry",
-    "expiryDate", "endDate",
-  ]);
+  const plate = buildPlateDto(vehicle);
+  const data = await tammPost(TAMM_PATHS.plateVerify, plate);
+  return parseTammDate(data?.vehicle?.istemarahExpiryDate);
 }
 
 export type TammSyncResult = {
