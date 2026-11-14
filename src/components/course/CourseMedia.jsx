@@ -11,10 +11,11 @@ export default function CourseMedia({ lesson, video }) {
         <div className="relative bg-muted">
           <video key={`${lesson.key}:${video.video_url}`} src={video.video_url} controls playsInline preload="metadata"
             aria-label={`تسجيل شاشة: ${lesson.title}`} className="w-full aspect-video"
-            onLoadedData={() => setLoading(false)} onWaiting={() => setLoading(true)}
+            onLoadedMetadata={() => setLoading(false)} onLoadedData={() => setLoading(false)}
+            onWaiting={() => setLoading(true)} onPlaying={() => setLoading(false)}
             onCanPlay={() => setLoading(false)} onError={() => { setFailed(true); setLoading(false); }} />
           {loading && !failed && <div role="status" className="pointer-events-none absolute inset-0 flex items-center justify-center gap-2 text-foreground bg-background/80"><Loader2 size={20} className="animate-spin" /> جارٍ تحميل التسجيل…</div>}
-          {failed && <p role="alert" className="p-4 text-sm text-destructive">تعذّر تشغيل التسجيل. يلزم رابط مباشر لملف MP4 أو WebM، وليس رابط صفحة مشاركة.</p>}
+          {failed && <p role="alert" className="p-4 text-sm text-destructive">تعذّر تحميل الفيديو. أعد تحميل الصفحة للمحاولة مجدداً.</p>}
         </div>
       ) : (
         <div className="border-b bg-muted/30 p-6 sm:p-8 text-center space-y-3">
@@ -23,9 +24,7 @@ export default function CourseMedia({ lesson, video }) {
           <p className="mx-auto max-w-lg text-sm leading-relaxed text-muted-foreground">هذا الدرس يحتاج فيديو متصلاً لإجراءات فعلية من واجهات جداره، بمؤشر الماوس وبيانات تجريبية معزولة. الشرح الصوتي والخطوات المكتوبة ليسا بديلاً عن تسجيل الشاشة.</p>
         </div>
       )}
-      {video?.audio_url && <div className="p-4 border-b">
-        <audio key={`${lesson.key}:${video.audio_url}`} src={video.audio_url} controls preload="metadata" className="w-full" aria-label={`التعليق الصوتي: ${lesson.title}`} />
-      </div>}
+
     </div>
   );
 }

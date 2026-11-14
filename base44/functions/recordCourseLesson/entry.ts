@@ -2,6 +2,8 @@ import { createClientFromRequest } from "npm:@base44/sdk@0.8.56";
 import { Stagehand } from "npm:@browserbasehq/stagehand@3.7.3";
 import "npm:zod@4.4.0";
 import { secrets } from "base44:runtime";
+import { prepareRecording, paintRecording, finishRecording } from "./media.ts";
+import { lessonScenes, showScene } from "./scenes.ts";
 
 // يسجّل مقاطع شاشة حقيقية من النظام نفسه بحساب المنشأة التجريبية.
 // لا رسم واجهات، ولا إعادة تمثيل: كل إطار هو ما يعرضه المتصفح فعلاً.
@@ -36,14 +38,16 @@ export default async function(req) {
 
   const body = await req.json().catch(() => ({}));
   const lessons = Array.isArray(body.lessons) ? body.lessons : [];
-  if (!lessons.length) return Response.json({ error: "lessons is required" }, { status: 400 });
-  if (lessons.length > 4) return Response.json({ error: "At most 4 lessons per run" }, { status: 400 });
+  if (!lessons.length || lessons.length > 3 || lessons.some(lesson => !lessonScenes[lesson.key])) return Response.json({ error: "Select 1 to 3 known course lessons" }, { status: 400 });
+  const records = await base44.asServiceRole.entities.CourseLesson.filter({ lesson_key: { $in: lessons.map(lesson => lesson.key) } }, { limit: 50 });
+  const mediaByKey = new Map(records.items.map(record => [record.lesson_key, record]));
+  if (lessons.some(lesson => !mediaByKey.get(lesson.key)?.audio_url)) return Response.json({ error: "Each lesson needs saved narration" }, { status: 400 });
 
-  const token = await login(APP_URL);
-  const session = await base44.asServiceRole.browser.getSession({ sessionTimeoutSeconds: 280 });
-  let stagehand, socket, page, canvasPage;
-  let phase = "open_browser";
+  let stagehand, socket, page, canvasPage, session;
+  let phase = "demo_sign_in";
   try {
+    const token = await login(APP_URL);
+    session = await base44.asServiceRole.browser.getSession({ sessionTimeoutSeconds: 280 });
     const { baseURL, token: gatewayToken, headers } = base44.asServiceRole.aiGateway.connection();
     stagehand = new Stagehand({
       env: "LOCAL",
@@ -105,95 +109,76 @@ export default async function(req) {
 
     phase = "prepare_encoder";
     canvasPage = await stagehand.context.newPage();
-    await canvasPage.evaluate(() => {
-      const canvas = document.createElement("canvas");
-      canvas.width = 1280;
-      canvas.height = 720;
-      const mimeType = "video/webm;codecs=vp8";
-      if (!MediaRecorder.isTypeSupported(mimeType)) throw new Error("WebM recording is unavailable");
-      const stream = canvas.captureStream(15);
-      const recorder = new MediaRecorder(stream, { mimeType, videoBitsPerSecond: 3500000 });
-      window.courseCapture = { canvas, context: canvas.getContext("2d"), recorder, stream, chunks: [] };
-      recorder.ondataavailable = (event) => { if (event.data.size) window.courseCapture.chunks.push(event.data); };
-    });
-    const paint = (data) => canvasPage.evaluate(async (jpeg) => {
-      const image = new Image();
-      image.src = `data:image/jpeg;base64,${jpeg}`;
-      await image.decode();
-      window.courseCapture.context.drawImage(image, 0, 0, 1280, 720);
-    }, data);
-
-    const results = [];
-    await send("Target.activateTarget", { targetId: target.targetId });
-    await send("Page.startScreencast", { format: "jpeg", quality: 82, maxWidth: 1280, maxHeight: 720, everyNthFrame: 1 }, targetSession);
+    await canvasPage.goto('data:text/html,<title>course-media-encoder</title>', { waitUntil: 'load' });
+    const encoderTargets = (await send('Target.getTargets')).targetInfos;
+    const encoderTarget = encoderTargets.find(item => item.type === 'page' && item.url.includes('course-media-encoder'));
+    if (!encoderTarget) throw new Error('Media encoder target not found');
+    const encoderSession = (await send('Target.attachToTarget', { targetId: encoderTarget.targetId, flatten: true })).sessionId;
     let queue = Promise.resolve();
     let frameFailure = null;
-    drawFrame = ({ data, sessionId }) => {
-      queue = queue.then(async () => {
-        await paint(data);
-        await send("Page.screencastFrameAck", { sessionId }, targetSession);
-      }).catch((error) => { frameFailure = error; });
-    };
-    await paint((await send("Page.captureScreenshot", { format: "jpeg", quality: 82 }, targetSession)).data);
-    await canvasPage.evaluate(() => window.courseCapture.recorder.start(500));
-
+    let pointer = { x: 820, y: 350 };
+    const results = [];
     for (const lesson of lessons) {
-      if (frameFailure) throw frameFailure;
-      const paths = (Array.isArray(lesson.paths) ? lesson.paths : []).filter((p) => typeof p === "string" && p.startsWith("/"));
-      if (!paths.length) { results.push({ lesson_key: lesson.key, error: "No paths" }); continue; }
-      await canvasPage.evaluate(() => { window.courseCapture.chunks.length = 0; });
-      await send("Page.stopScreencast", {}, targetSession).catch(() => {});
-      await send("Page.startScreencast", { format: "jpeg", quality: 82, maxWidth: 1280, maxHeight: 720, everyNthFrame: 1 }, targetSession);
-      await pause(600);
-      const startedAt = Date.now();
-      for (const path of paths) {
-        await page.goto(`${APP_URL}${path}`, { waitUntil: "load", timeoutMs: 40000 });
-        await pause(2800);
-        await page.scroll(640, 420, 0, 90);
-        await pause(900);
-        await page.scroll(640, 420, 0, -90);
-        await pause(1200);
-      }
-      await send("Page.stopScreencast", {}, targetSession);
-      await queue;
-      await pause(400);
-      const encoded = await canvasPage.evaluate(async () => {
-        const capture = window.courseCapture;
-        const blob = new Blob(capture.chunks.slice(), { type: "video/webm" });
-        const dataUrl = await new Promise((resolve, reject) => {
-          const reader = new FileReader();
-          reader.onload = () => resolve(reader.result);
-          reader.onerror = reject;
-          reader.readAsDataURL(blob);
-        });
-        return { base64: dataUrl.split(",")[1], size: blob.size };
-      });
-      if (encoded.size < 8000) { results.push({ lesson_key: lesson.key, error: "Empty recording" }); continue; }
-      const bytes = Uint8Array.from(atob(encoded.base64), (character) => character.charCodeAt(0));
-      const seconds = Math.max(1, Math.round((Date.now() - startedAt) / 1000));
-      const uploaded = await base44.asServiceRole.integrations.Core.UploadPublicFile({
-        file: new File([bytes], `${lesson.key}-${Date.now()}.webm`, { type: "video/webm" }),
-      });
-      const existing = await base44.asServiceRole.entities.CourseLesson.filter({ lesson_key: lesson.key }, { limit: 1 });
-      const payload = {
-        lesson_key: lesson.key,
-        lesson_title: lesson.title || "",
-        video_url: uploaded.file_url,
-        duration_label: `${seconds} ثانية`,
-        updated_by_name: user.full_name || "",
+      const record = mediaByKey.get(lesson.key);
+      phase = `narration:${lesson.key}`;
+      const audioResponse = await fetch(record.audio_url, { signal: AbortSignal.timeout(30000) });
+      if (!audioResponse.ok) throw new Error(`Narration download failed (${audioResponse.status})`);
+      const audioBytes = new Uint8Array(await audioResponse.arrayBuffer());
+      let audioString = '';
+      for (let i = 0; i < audioBytes.length; i += 32768) audioString += String.fromCharCode(...audioBytes.subarray(i, i + 32768));
+      const prepared = await prepareRecording(canvasPage, btoa(audioString));
+      const scenes = lessonScenes[lesson.key];
+      if (prepared.narrationSeconds > 85) throw new Error('Narration exceeds recording time limit');
+      phase = `record:${lesson.key}`;
+      pointer = await showScene(page, send, targetSession, APP_URL, scenes[0]);
+      await send('Target.activateTarget', { targetId: target.targetId });
+      frameFailure = null;
+      drawFrame = ({ data, sessionId }) => {
+        queue = queue.then(async () => {
+          await paintRecording(canvasPage, data, pointer);
+          await send('Page.screencastFrameAck', { sessionId }, targetSession);
+        }).catch(error => { frameFailure = error; });
       };
-      const saved = existing.items[0]
-        ? await base44.asServiceRole.entities.CourseLesson.update(existing.items[0].id, payload)
-        : await base44.asServiceRole.entities.CourseLesson.create(payload);
-      results.push({ lesson_key: lesson.key, video_url: uploaded.file_url, seconds, saved: !!saved });
+      await paintRecording(canvasPage, (await send('Page.captureScreenshot', { format: 'jpeg', quality: 85 }, targetSession)).data, pointer);
+      const activation = await send('Runtime.evaluate', { expression: 'window.courseCapture.audioContext.resume().then(() => window.courseCapture.audioContext.state)', userGesture: true, awaitPromise: true, returnByValue: true }, encoderSession);
+      if (activation.result?.value !== 'running') throw new Error('Narration playback could not start');
+      await send('Page.startScreencast', { format: 'jpeg', quality: 85, maxWidth: 1280, maxHeight: 720, everyNthFrame: 1 }, targetSession);
+      await canvasPage.evaluate(() => { const c = window.courseCapture; c.recorder.start(1000); c.source.start(0.25); });
+      const startedAt = Date.now();
+      const slotMs = prepared.narrationSeconds * 1000 / scenes.length;
+      for (let sceneIndex = 0; sceneIndex < scenes.length; sceneIndex++) {
+        if (sceneIndex) pointer = await showScene(page, send, targetSession, APP_URL, scenes[sceneIndex]);
+        const remaining = startedAt + slotMs * (sceneIndex + 1) - Date.now();
+        if (remaining > 0) await pause(remaining);
+        await paintRecording(canvasPage, (await send('Page.captureScreenshot', { format: 'jpeg', quality: 85 }, targetSession)).data, pointer);
+        if (frameFailure) throw frameFailure;
+      }
+      await pause(Math.max(500, startedAt + prepared.narrationSeconds * 1000 + 600 - Date.now()));
+      await send('Page.stopScreencast', {}, targetSession);
+      await queue;
+      drawFrame = null;
+      if (frameFailure) throw frameFailure;
+      phase = `validate:${lesson.key}`;
+      const encoded = await finishRecording(canvasPage);
+      const bytes = Uint8Array.from(atob(encoded.base64), character => character.charCodeAt(0));
+      const extension = encoded.type === 'video/mp4' ? 'mp4' : 'webm';
+      const uploaded = await base44.asServiceRole.integrations.Core.UploadPublicFile({ file: new File([bytes], `${lesson.key}-with-audio-${Date.now()}.${extension}`, { type: encoded.type }) });
+      const publicResponse = await fetch(uploaded.file_url, { signal: AbortSignal.timeout(30000) });
+      if (!publicResponse.ok || !String(publicResponse.headers.get('content-type')).startsWith('video/')) throw new Error('Public recording is not a direct video file');
+      const publicBytes = new Uint8Array(await publicResponse.arrayBuffer());
+      if (publicBytes.length !== bytes.length || publicBytes.some((value, index) => value !== bytes[index])) throw new Error('Uploaded recording differs from validated file');
+      const seconds = Math.round(encoded.seconds);
+      const label = `${Math.floor(seconds / 60)}:${String(seconds % 60).padStart(2, '0')}`;
+      const checks = { audioVerified: encoded.audioVerified, videoVerified: encoded.videoVerified, audioRms: encoded.audioRms, seconds, frames: encoded.frames, width: encoded.width, height: encoded.height, publicDownloadVerified: true, type: encoded.type, verifiedAt: new Date().toISOString() };
+      await base44.asServiceRole.entities.CourseLesson.update(record.id, { video_url: uploaded.file_url, duration_label: label, note: JSON.stringify(checks), updated_by_name: user.full_name || '' });
+      results.push({ lesson_key: lesson.key, video_url: uploaded.file_url, ...checks, saved: true });
     }
-    if (frameFailure) throw frameFailure;
     return Response.json({ recorded: results });
   } catch (error) {
     return Response.json({ error: error.message.replace(/wss?:\/\/\S+/g, "[browser connection]"), phase }, { status: 500 });
   } finally {
     socket?.close();
     await stagehand?.close().catch(() => {});
-    await session.end();
+    await session?.end();
   }
 }

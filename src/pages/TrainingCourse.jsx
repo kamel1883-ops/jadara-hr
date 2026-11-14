@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { base44 } from "@/api/base44Client";
 import { GraduationCap, Video, CheckCircle2, Sparkles, Loader2 } from "lucide-react";
 import { COURSE_LESSONS } from "@/lib/courseContent";
@@ -14,6 +14,12 @@ export default function TrainingCourse() {
   const [completed, setCompleted] = useState([]);
   const [videos, setVideos] = useState({});
   const [isAdmin, setIsAdmin] = useState(false);
+  const queryClient = useQueryClient();
+
+  useEffect(() => base44.entities.CourseLesson.subscribe(() => {
+    queryClient.invalidateQueries({ queryKey: ["public-course-media"] });
+    queryClient.invalidateQueries({ queryKey: ["course-recording-count"] });
+  }), [queryClient]);
 
   useEffect(() => {
     try {
@@ -108,7 +114,7 @@ export default function TrainingCourse() {
       {mediaLoading && <p role="status" className="flex items-center gap-2 text-sm text-muted-foreground"><Loader2 size={16} className="animate-spin" /> جارٍ تحميل مواد الدورة…</p>}
       {mediaError && <p role="alert" className="text-sm text-destructive">تعذّر تحميل مواد الدورة. أعد تحميل الصفحة للمحاولة مجدداً.</p>}
       <div className="grid gap-4 lg:grid-cols-[290px_1fr]">
-        <LessonNav activeKey={activeKey} completed={completed} onSelect={setActiveKey} />
+        <LessonNav activeKey={activeKey} completed={completed} onSelect={setActiveKey} videos={videos} />
         <CoursePlayer
           lesson={lesson}
           video={videos[lesson.key]}

@@ -4,7 +4,7 @@ import { cn } from "@/lib/utils";
 import { COURSE_GROUPS, COURSE_LESSONS } from "@/lib/courseContent";
 
 // قائمة الدروس مجمّعة حسب المسار — تبقى ملتصقة أعلى الشاشة على سطح المكتب
-export default function LessonNav({ activeKey, completed, onSelect }) {
+export default function LessonNav({ activeKey, completed, onSelect, videos = {} }) {
   return (
     <div className="rounded-2xl border bg-card p-3 max-h-[46vh] overflow-y-auto lg:sticky lg:top-4 lg:max-h-[calc(100vh-2rem)]">
       <div className="px-2 pb-2 text-sm font-bold text-muted-foreground">فيديوهات الدورة</div>
@@ -42,7 +42,7 @@ export default function LessonNav({ activeKey, completed, onSelect }) {
                           {lesson.no}. {lesson.title}
                         </span>
                         <span className="mt-0.5 flex items-center gap-1 text-[12px] text-muted-foreground">
-                          <Clock size={11} /> {lesson.duration}
+                          <Clock size={11} /> <span dir="ltr">{videos[lesson.key]?.duration_label || "…"}</span>
                         </span>
                       </span>
                     </button>
