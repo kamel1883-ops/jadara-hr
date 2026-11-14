@@ -25,7 +25,7 @@ export default function VideoLinkDialog({ open, onClose, lesson, existing, onSav
         lesson_key: lesson.key,
         lesson_title: lesson.title,
         video_url: value,
-        duration_label: lesson.duration,
+        duration_label: existing?.video_url === value ? (existing?.duration_label || "") : "",
         updated_by_name: me?.full_name || "",
       };
       const saved = existing?.id
@@ -46,7 +46,7 @@ export default function VideoLinkDialog({ open, onClose, lesson, existing, onSav
         <DialogHeader>
           <DialogTitle>فيديو الدرس: {lesson.title}</DialogTitle>
           <DialogDescription>
-            الصق رابط الفيديو (MP4 أو رابط مشاركة مباشر). اتركه فارغاً لإظهار الشرح الصوتي التفاعلي.
+            الصق رابطاً مباشراً لتسجيل الشاشة بصيغة MP4 أو WebM، وليس رابط صفحة مشاركة. اتركه فارغاً لتبقى حالة الدرس «بانتظار تسجيل الشاشة».
           </DialogDescription>
         </DialogHeader>
         <div className="space-y-3">

@@ -1,8 +1,9 @@
 import React, { useEffect, useMemo, useState } from "react";
+import { useQuery } from "@tanstack/react-query";
 import { base44 } from "@/api/base44Client";
-import { GraduationCap, Clock, CheckCircle2, Sparkles, Mic, Loader2 } from "lucide-react";
+import { GraduationCap, Video, CheckCircle2, Sparkles, Mic, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { COURSE_LESSONS, COURSE_MINUTES } from "@/lib/courseContent";
+import { COURSE_LESSONS } from "@/lib/courseContent";
 import { generateLessonVoice } from "@/lib/courseVoice";
 import LessonNav from "@/components/course/LessonNav";
 import CoursePlayer from "@/components/course/CoursePlayer";
@@ -38,6 +39,13 @@ export default function TrainingCourse() {
   const lesson = useMemo(() => COURSE_LESSONS.find((l) => l.key === activeKey) || COURSE_LESSONS[0], [activeKey]);
   const index = COURSE_LESSONS.findIndex((l) => l.key === lesson.key);
   const savedVoices = Object.values(videos).filter((v) => v?.audio_url).length;
+  const { data: recordedLessons, refetch: refreshRecordingCount } = useQuery({
+    queryKey: ["course-recording-count"],
+    queryFn: () => base44.entities.CourseLesson.count({
+      lesson_key: { $in: COURSE_LESSONS.map((l) => l.key) },
+      video_url: { $exists: true, $ne: "" },
+    }),
+  });
 
   const persist = (keys) => {
     setCompleted(keys);
@@ -60,6 +68,7 @@ export default function TrainingCourse() {
   const onSaved = (record) => {
     if (!record?.lesson_key) return;
     setVideos((prev) => ({ ...prev, [record.lesson_key]: record }));
+    refreshRecordingCount();
   };
 
   const generateCurrent = async () => {
@@ -103,13 +112,13 @@ export default function TrainingCourse() {
             <p className="mt-1 text-sm text-muted-foreground leading-relaxed">
               {COURSE_LESSONS.length} درساً باللهجة السعودية تشرح كل أقسام إدارة الشركة: التوظيف وملفات الموظفين،
               الحضور والبصمات والإجازات، الرواتب والسلف، المركبات والتراخيص، الأداء والمغادرة ونهاية الخدمة.
-              المشغّل يعرض شاشات النظام الحقيقية مع التعليق الصوتي.
+              فيديوهات الدروس تتطلب تسجيلات شاشة فعلية متصلة، وتظهر حالة كل درس بوضوح إلى أن يُضاف تسجيله.
             </p>
           </div>
         </div>
         <div className="mt-4 flex flex-wrap items-center gap-2 text-[13px]">
           <div className="rounded-xl border bg-card px-3 py-2 flex items-center gap-2">
-            <Clock size={15} className="text-violet-600" /> {COURSE_MINUTES} دقيقة إجمالاً
+            <Video size={15} className="text-primary" /> تسجيلات الشاشة المتاحة: {recordedLessons ?? "…"} من {COURSE_LESSONS.length}
           </div>
           <div className="rounded-xl border bg-card px-3 py-2 flex items-center gap-2">
             <CheckCircle2 size={15} className="text-emerald-600" /> أكملت {completed.length} من {COURSE_LESSONS.length}
