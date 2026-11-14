@@ -1,14 +1,13 @@
 import React from "react";
 import { Link } from "react-router-dom";
-import { CheckCircle2, Circle, ArrowRight, ArrowLeft, Link2, Video } from "lucide-react";
+import { CheckCircle2, Circle, ArrowRight, ArrowLeft, Video } from "lucide-react";
 import CourseMedia from "@/components/course/CourseMedia";
-import CourseLessonSteps from "@/components/course/CourseLessonSteps";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 
 // لا تُعرض واجهات حية أو مشاهد اصطناعية كبديل لتسجيل الشاشة.
 export default function CoursePlayer({
-  lesson, video, isAdmin, generating, onEditVideo, onGenerateVoice,
+  lesson, video, isAdmin,
   completed, onToggleComplete, onPrev, onNext, hasPrev, hasNext,
 }) {
 
@@ -31,8 +30,7 @@ export default function CoursePlayer({
         </div>}
       </div>
 
-      <CourseMedia key={lesson.key} lesson={lesson} video={video} isAdmin={isAdmin} generating={generating} onGenerateVoice={onGenerateVoice} />
-      <CourseLessonSteps lesson={lesson} />
+      <CourseMedia key={lesson.key} lesson={lesson} video={video} />
 
       <div className="flex flex-wrap items-center justify-between gap-2 border-t bg-muted/30 px-3 py-2.5">
         <div className="flex items-center gap-2">
@@ -44,11 +42,7 @@ export default function CoursePlayer({
           </Button>
         </div>
         <div className="flex items-center gap-2">
-          {isAdmin && (
-            <Button variant="ghost" size="sm" className="h-8 gap-1 text-[13px]" onClick={onEditVideo}>
-              <Link2 size={14} /> {video?.video_url ? "تعديل رابط الفيديو" : "إضافة رابط الفيديو"}
-            </Button>
-          )}
+
           <Button
             size="sm"
             variant={completed ? "secondary" : "outline"}

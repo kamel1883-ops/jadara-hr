@@ -1,14 +1,11 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { base44 } from "@/api/base44Client";
-import { GraduationCap, Video, CheckCircle2, Sparkles, Mic, Loader2 } from "lucide-react";
-import { Button } from "@/components/ui/button";
+import { GraduationCap, Video, CheckCircle2, Sparkles, Loader2 } from "lucide-react";
 import { COURSE_LESSONS } from "@/lib/courseContent";
-import { generateLessonVoice } from "@/lib/courseVoice";
 import CoursePublicHeader from "@/components/course/CoursePublicHeader";
 import LessonNav from "@/components/course/LessonNav";
 import CoursePlayer from "@/components/course/CoursePlayer";
-import VideoLinkDialog from "@/components/course/VideoLinkDialog";
 
 const PROGRESS_KEY = "jadara_course_progress";
 
@@ -17,9 +14,6 @@ export default function TrainingCourse() {
   const [completed, setCompleted] = useState([]);
   const [videos, setVideos] = useState({});
   const [isAdmin, setIsAdmin] = useState(false);
-  const [dialogOpen, setDialogOpen] = useState(false);
-  const [generating, setGenerating] = useState(false);
-  const [bulk, setBulk] = useState({ running: false, done: 0 });
 
   useEffect(() => {
     try {
@@ -51,8 +45,7 @@ export default function TrainingCourse() {
 
   const lesson = useMemo(() => COURSE_LESSONS.find((l) => l.key === activeKey) || COURSE_LESSONS[0], [activeKey]);
   const index = COURSE_LESSONS.findIndex((l) => l.key === lesson.key);
-  const savedVoices = Object.values(videos).filter((v) => v?.audio_url).length;
-  const { data: recordedLessons, refetch: refreshRecordingCount } = useQuery({
+  const { data: recordedLessons } = useQuery({
     queryKey: ["course-recording-count"],
     queryFn: () => base44.entities.CourseLesson.count({
       lesson_key: { $in: COURSE_LESSONS.map((l) => l.key) },
@@ -78,40 +71,7 @@ export default function TrainingCourse() {
     if (next) setActiveKey(next.key);
   };
 
-  const onSaved = (record) => {
-    if (!record?.lesson_key) return;
-    setVideos((prev) => ({ ...prev, [record.lesson_key]: record }));
-    refreshRecordingCount();
-  };
 
-  const generateCurrent = async () => {
-    setGenerating(true);
-    try {
-      const saved = await generateLessonVoice(lesson, videos[lesson.key]);
-      onSaved(saved || { lesson_key: lesson.key, audio_url: "" });
-    } catch {
-      // يبقى النطق من المتصفح كبديل
-    } finally {
-      setGenerating(false);
-    }
-  };
-
-  // توليد أصوات كل الدروس مرة واحدة (يُحفظ كل صوت فوراً فلا يتكرر التوليد)
-  const generateAll = async () => {
-    setBulk({ running: true, done: 0 });
-    let done = 0;
-    for (const l of COURSE_LESSONS) {
-      if (!videos[l.key]?.audio_url) {
-        try {
-          const saved = await generateLessonVoice(l, videos[l.key]);
-          if (saved?.audio_url) setVideos((prev) => ({ ...prev, [l.key]: saved }));
-        } catch {}
-      }
-      done += 1;
-      setBulk({ running: true, done });
-    }
-    setBulk({ running: false, done });
-  };
 
   return (
     <div dir="rtl" className="min-h-screen bg-background px-4 py-5 sm:px-6 sm:py-8">
@@ -125,7 +85,7 @@ export default function TrainingCourse() {
           <div className="min-w-0 flex-1">
             <h1 className="text-xl sm:text-2xl font-bold">الدورة التدريبية</h1>
             <p className="mt-1 text-sm text-muted-foreground leading-relaxed">
-              {COURSE_LESSONS.length} درساً باللهجة السعودية تشرح كل أقسام إدارة الشركة: التوظيف وملفات الموظفين،
+              {COURSE_LESSONS.length} درساً تشرح كل أقسام إدارة الشركة: التوظيف وملفات الموظفين،
               الحضور والبصمات والإجازات، الرواتب والسلف، المركبات والتراخيص، الأداء والمغادرة ونهاية الخدمة.
               متاحة للجميع بدون اشتراك أو حساب أو تسجيل دخول. تظهر حالة كل درس إلى أن يُضاف تسجيله الفعلي.
             </p>
@@ -141,21 +101,7 @@ export default function TrainingCourse() {
           <div className="rounded-xl border bg-card px-3 py-2 flex items-center gap-2">
             <Sparkles size={15} className="text-amber-500" /> ابدأ من المقدمة ثم بالترتيب
           </div>
-          {isAdmin && (
-            <Button
-              size="sm"
-              variant="outline"
-              className="h-9 gap-1.5"
-              onClick={generateAll}
-              disabled={bulk.running}
-            >
-              {bulk.running ? (
-                <><Loader2 size={14} className="animate-spin" /> توليد الأصوات {bulk.done}/{COURSE_LESSONS.length}</>
-              ) : (
-                <><Mic size={14} /> توليد صوت كل الدروس ({savedVoices}/{COURSE_LESSONS.length} جاهز)</>
-              )}
-            </Button>
-          )}
+
         </div>
       </div>
 
@@ -167,9 +113,6 @@ export default function TrainingCourse() {
           lesson={lesson}
           video={videos[lesson.key]}
           isAdmin={isAdmin}
-          generating={generating}
-          onGenerateVoice={generateCurrent}
-          onEditVideo={() => setDialogOpen(true)}
           completed={completed.includes(lesson.key)}
           onToggleComplete={toggleComplete}
           onPrev={() => go(-1)}
@@ -179,13 +122,7 @@ export default function TrainingCourse() {
         />
       </div>
 
-      <VideoLinkDialog
-        open={dialogOpen}
-        onClose={() => setDialogOpen(false)}
-        lesson={lesson}
-        existing={videos[lesson.key]}
-        onSaved={onSaved}
-      />
+
       </div>
     </div>
   );
