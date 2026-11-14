@@ -142,16 +142,17 @@ export default async function(req) {
       const paths = (Array.isArray(lesson.paths) ? lesson.paths : []).filter((p) => typeof p === "string" && p.startsWith("/"));
       if (!paths.length) { results.push({ lesson_key: lesson.key, error: "No paths" }); continue; }
       await canvasPage.evaluate(() => { window.courseCapture.chunks.length = 0; });
+      await send("Page.stopScreencast", {}, targetSession).catch(() => {});
       await send("Page.startScreencast", { format: "jpeg", quality: 82, maxWidth: 1280, maxHeight: 720, everyNthFrame: 1 }, targetSession);
       await pause(600);
       const startedAt = Date.now();
       for (const path of paths) {
         await page.goto(`${APP_URL}${path}`, { waitUntil: "load", timeoutMs: 40000 });
-        await pause(2000);
+        await pause(2800);
         await page.scroll(640, 420, 0, 90);
-        await pause(500);
-        await page.scroll(640, 420, 0, -90);
         await pause(900);
+        await page.scroll(640, 420, 0, -90);
+        await pause(1200);
       }
       await send("Page.stopScreencast", {}, targetSession);
       await queue;
