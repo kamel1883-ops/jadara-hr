@@ -46,6 +46,7 @@ const OrgStructure = lazy(() => import("@/pages/OrgStructure"));
 const WorkforcePlanning = lazy(() => import("@/pages/WorkforcePlanning"));
 const Recruitment = lazy(() => import("@/pages/Recruitment"));
 const Training = lazy(() => import("@/pages/Training"));
+const TrainingCourse = lazy(() => import("@/pages/TrainingCourse"));
 const JobApply = lazy(() => import("@/pages/public/JobApply"));
 const Analytics = lazy(() => import("@/pages/Analytics"));
 const Licenses = lazy(() => import("@/pages/Licenses"));
@@ -223,6 +224,7 @@ const AuthenticatedApp = () => {
         <Route path="/end-of-service" element={<EndOfService />} />
         <Route path="/performance" element={<Performance />} />
         <Route path="/training" element={<Training />} />
+        <Route path="/course" element={<TrainingCourse />} />
         <Route path="/succession" element={<Succession />} />
         <Route path="/org-structure" element={<OrgStructure />} />
         <Route path="/workforce-planning" element={<WorkforcePlanning />} />
