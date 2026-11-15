@@ -36,6 +36,7 @@ import { cn } from "@/lib/utils";
 import { leaveTypeLabel, formatCurrency, attendanceDisplayStatus, attendanceOpDate, attendanceElapsedMs, formatWorkDuration } from "@/lib/hr";
 import OnDutyTimer from "@/components/OnDutyTimer";
 import { badge } from "@/lib/approvals";
+import { isAlMoiedSupervisorSession } from "@/lib/alMoied";
 import { entitledLeaveDays, usedLeaveTotal } from "@/lib/leaveBalance";
 import { computeSettlement } from "@/lib/eos";
 import { parsePermissions } from "@/lib/employeePermissions";
@@ -326,7 +327,10 @@ export default function MyRequests() {
     const remaining = Math.round((entitled - used) * 10) / 10;
     const ticketLabel = employee.ticket_entitlement === "yearly" ? t.ticketYearly : employee.ticket_entitlement === "biennial" ? t.ticketBiennial : t.ticketNone;
 
-    const hasApprovals = Boolean(employee.is_approver_manager || employee.is_approver_finance);
+    // متابعة موظفي الشركة (حضور الجميع + سجل كل الطلبات) — ميزة شركة آل معيض حصراً
+    // بمعرّف المنشأة ورقم الهوية، والتحقق النهائي على الخادم أيضاً.
+    const alMoiedSupervisor = isAlMoiedSupervisorSession(employee, org);
+    const hasApprovals = Boolean(employee.is_approver_manager || employee.is_approver_finance || employee.is_approver_hr || alMoiedSupervisor);
     const isOwner = employee.role_level === "owner";
     // مصفوفة الصلاحيات — تتحكم بإظهار أقسام البوابة للموظف. فارغة = كل الأقسام (افتراضي).
     const perms = parsePermissions(employee.permissions);

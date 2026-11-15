@@ -15,6 +15,8 @@ import { badge } from "@/lib/approvals";
 import { entitledLeaveDays, usedLeaveTotal, getEmployeeAnnualDays } from "@/lib/leaveBalance";
 import { usePortalI18n, usePortalT, portalDir } from "@/lib/portalI18n";
 import ManagerAttendanceSection from "@/components/portal/ManagerAttendanceSection";
+import PresenceProofManager from "@/components/presenceProof/PresenceProofManager";
+import EmployeeHistoryDialog from "@/components/portal/EmployeeHistoryDialog";
 import SettlementSheet from "@/components/SettlementSheet";
 import { StoredDocButton } from "@/components/VaultDocLink";
 
@@ -33,6 +35,8 @@ export default function ApprovalsPortal({ portalSession }) {
   const [histSearch, setHistSearch] = useState("");
   const [finHistSearch, setFinHistSearch] = useState("");
   const [printing, setPrinting] = useState(null);
+  // اسم الموظف المطلوب عرض سجل طلباته (يُفتح بالضغط على الاسم في أي طلب)
+  const [histEmp, setHistEmp] = useState(null);
 
   useEffect(() => {
     const after = () => setPrinting(null);
@@ -141,7 +145,18 @@ export default function ApprovalsPortal({ portalSession }) {
         <div className="min-w-0">
           <div className="flex items-center gap-2 flex-wrap">
             <div>
-              <div className="font-medium text-sm">{r.employee_name || "—"}</div>
+              {r.employee_id ? (
+                <button
+                  type="button"
+                  onClick={() => setHistEmp({ id: r.employee_id, name: r.employee_name, national_id: r.national_id })}
+                  title={isAr ? "عرض سجل طلبات الموظف" : "Open employee request history"}
+                  className="font-medium text-sm text-start underline decoration-dotted decoration-slate-300 underline-offset-4 hover:decoration-slate-600"
+                >
+                  {r.employee_name || "—"}
+                </button>
+              ) : (
+                <div className="font-medium text-sm">{r.employee_name || "—"}</div>
+              )}
               {r.national_id && <div className="text-xs text-muted-foreground tabular-nums" dir="ltr">{r.national_id}</div>}
             </div>
             {kindBadge || (
@@ -183,10 +198,87 @@ export default function ApprovalsPortal({ portalSession }) {
   );
 
   if (loading) return <div className="p-10 text-center text-muted-foreground animate-fade-in">{t.loading}</div>;
-  if (!role || (role !== "manager" && role !== "finance"))
+  if (!role || !["manager", "finance", "supervisor"].includes(role))
     return <div className="p-10 text-center text-muted-foreground">{t.noLink}</div>;
 
-  // ===== المدير المباشر =====
+  const historyDialog = (
+    <EmployeeHistoryDialog
+      open={!!histEmp}
+      onOpenChange={(v) => { if (!v) setHistEmp(null); }}
+      employee={histEmp || {}}
+      portalSession={portalSession}
+      isAr={isAr}
+    />
+  );
+
+  // ===== متابعة موظفي شركة آل معيض (ميزة مخصّصة بالرقم الموحّد + رقم الهوية) =====
+  if (role === "supervisor") {
+    const company = data?.companyEmployees || [];
+    const attRows = data?.attendance || [];
+    return (
+      <div dir={portalDir(lang)} className="animate-fade-in">
+        <PageHeader
+          title={isAr ? "متابعة موظفي الشركة" : "Company monitoring"}
+          subtitle={isAr ? "حضور جميع موظفي شركة آل معيض وسجل طلباتهم" : "Attendance and request history for all company employees"}
+        />
+
+        <PresenceProofManager org={data?.org} />
+
+        <div className="rounded-2xl border border-border bg-white p-4 mb-5">
+          <h3 className="text-sm font-semibold flex items-center gap-1.5">
+            <Users size={15} /> {isAr ? `موظفو الشركة (${company.length})` : `Company employees (${company.length})`}
+          </h3>
+          <p className="text-[11px] text-muted-foreground mt-1 mb-2 leading-relaxed">
+            {isAr
+              ? "اضغط اسم الموظف ليُعرض سجل كل طلباته السابقة (إجازات، سلف، انتدابات، نهاية خدمة، طلبات إدارية) بحالتها الكاملة ومستنداتها."
+              : "Tap an employee name to open their full request history (leaves, loans, trips, end of service, HR requests) with status and documents."}
+          </p>
+          <div className="border rounded-xl overflow-hidden">
+            <div className="grid grid-cols-12 gap-2 px-3 py-2 bg-muted/50 text-xs font-semibold text-muted-foreground">
+              <div className="col-span-4">{isAr ? "الموظف" : "Employee"}</div>
+              <div className="col-span-3">{isAr ? "الهوية" : "National ID"}</div>
+              <div className="col-span-3">{isAr ? "الإدارة" : "Department"}</div>
+              <div className="col-span-2">{isAr ? "السجل" : "History"}</div>
+            </div>
+            {company.length === 0 ? (
+              <div className="p-6 text-center text-xs text-muted-foreground">{isAr ? "لا يوجد موظفون" : "No employees"}</div>
+            ) : company.map((e) => (
+              <div key={e.id} className="grid grid-cols-12 gap-2 px-3 py-2.5 text-xs border-t items-center">
+                <div className="col-span-4 min-w-0">
+                  <button
+                    type="button"
+                    onClick={() => setHistEmp({ id: e.id, name: e.full_name, national_id: e.national_id })}
+                    className="font-medium text-start underline decoration-dotted decoration-slate-300 underline-offset-4 hover:decoration-slate-600 truncate max-w-full"
+                  >
+                    {e.full_name || "—"}
+                  </button>
+                  {e.position && <div className="text-[11px] text-muted-foreground truncate">{e.position}</div>}
+                </div>
+                <div className="col-span-3 text-muted-foreground tabular-nums" dir="ltr">{e.national_id || "—"}</div>
+                <div className="col-span-3 text-muted-foreground truncate">{e.department || "—"}</div>
+                <div className="col-span-2">
+                  <Button size="sm" variant="outline" className="h-7 text-[11px] gap-1" onClick={() => setHistEmp({ id: e.id, name: e.full_name, national_id: e.national_id })}>
+                    {isAr ? "كل الطلبات" : "All requests"}
+                  </Button>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        <div className="rounded-2xl border border-border bg-white p-4">
+          <ManagerAttendanceSection
+            records={attRows}
+            subs={company}
+            title={isAr ? "حضور وانصراف جميع موظفي الشركة" : "Company-wide attendance"}
+          />
+        </div>
+
+        {historyDialog}
+      </div>
+    );
+  }
+
   if (role === "manager") {
     const leaves = data?.leaves || [];
     const loans = data?.loans || [];
@@ -468,6 +560,7 @@ export default function ApprovalsPortal({ portalSession }) {
             })()}
           </DialogContent>
         </Dialog>
+        {historyDialog}
       </div>
     );
   }
@@ -799,6 +892,7 @@ export default function ApprovalsPortal({ portalSession }) {
         </div>,
         document.body
       )}
+      {historyDialog}
     </div>
   );
 }

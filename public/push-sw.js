@@ -18,12 +18,16 @@ self.addEventListener("push", (event) => {
   const title = String(data.title || "تنبيه من جداره");
   const options = {
     body: String(data.body || ""),
-    tag: String(data.tag || "presence-proof"),
+    // tag جديد لكل طلب إثبات حضور حتى لا يُدمج التنبيه الجديد مع القديم ويظل الصوت مسموعاً
+    tag: String(data.tag || "presence-proof-" + Date.now()),
     renotify: true,
     requireInteraction: true,
-    vibrate: [400, 120, 400, 120, 700],
+    // silent:false يجبر صوت إشعار النظام (أندرويد/كروم) — بدونها قد يصل صامتاً
+    silent: false,
+    vibrate: [600, 200, 600, 200, 900, 200, 900],
     dir: String(data.dir || "rtl"),
     lang: String(data.lang || "ar"),
+    timestamp: Date.now(),
     data: { url: String(data.url || "/portal") },
   };
   event.waitUntil(self.registration.showNotification(title, options));

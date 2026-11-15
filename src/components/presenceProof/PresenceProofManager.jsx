@@ -446,6 +446,12 @@ export default function PresenceProofManager({ org }) {
                           <td className="px-3 py-2 font-medium">{p.full_name || "—"}</td>
                           <td className="px-3 py-2 text-xs text-muted-foreground tabular-nums">{p.employee_number || ""}</td>
                           <td className="px-3 py-2 text-xs text-muted-foreground tabular-nums">{fmtDateTime(p.confirmed_at, isAr)}</td>
+                          {/* طريقة التأكيد: بصمة الوجه/الأصبع على جهازه أو ضغط زر فقط */}
+                          <td className="px-3 py-2 text-xs">
+                            {p.method === "biometric"
+                              ? <span className="text-emerald-700">{isAr ? "بصمة/وجه ✅" : "Biometric ✅"}</span>
+                              : <span className="text-amber-700">{isAr ? "زر يدوي" : "Manual"}</span>}
+                          </td>
                         </tr>
                       ))}
                     </tbody>

@@ -15,7 +15,7 @@ const STATUS_CLS = {
   holiday: "bg-slate-100 text-slate-600",
 };
 
-export default function ManagerAttendanceSection({ records = [], subs = [] }) {
+export default function ManagerAttendanceSection({ records = [], subs = [], title = "" }) {
   const { lang } = usePortalI18n();
   const isAr = lang === "ar";
   const [q, setQ] = useState("");
@@ -35,7 +35,7 @@ export default function ManagerAttendanceSection({ records = [], subs = [] }) {
     <div className="mt-6 print-attendance" dir={portalDir(lang)}>
       <div className="flex items-center justify-between mb-2 gap-2 no-print">
         <h3 className="text-sm font-semibold text-muted-foreground flex items-center gap-1.5">
-          <Calendar size={14} /> {isAr ? "الحضور والانصراف لمرؤوسيك" : "Subordinates' attendance"}
+          <Calendar size={14} /> {title || (isAr ? "الحضور والانصراف لمرؤوسيك" : "Subordinates' attendance")}
         </h3>
         <div className="flex items-center gap-2">
           <div className="relative">
@@ -56,7 +56,7 @@ export default function ManagerAttendanceSection({ records = [], subs = [] }) {
 
       {/* ترويسة الطباعة */}
       <div className="hidden print:block mb-4">
-        <h2 className="text-lg font-bold">{isAr ? "سجل الحضور والانصراف — المرؤوسون" : "Attendance record — Subordinates"}</h2>
+        <h2 className="text-lg font-bold">{title || (isAr ? "سجل الحضور والانصراف — المرؤوسون" : "Attendance record — Subordinates")}</h2>
         <p className="text-xs text-muted-foreground">{new Date().toLocaleDateString(isAr ? "ar-SA" : "en-US")}</p>
       </div>
 

@@ -1,8 +1,9 @@
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import { base44 } from "@/api/base44Client";
 import { Button } from "@/components/ui/button";
-import { BellRing, CheckCircle2, Loader2 } from "lucide-react";
+import { BellRing, CheckCircle2, Fingerprint, Loader2 } from "lucide-react";
 import { usePortalI18n, usePortalT, portalDir } from "@/lib/portalI18n";
+import { registerPasskey, toBytes, fromBytes } from "@/lib/passkey";
 
 const fmtRemaining = (ms) => {
   const total = Math.max(0, Math.ceil(Number(ms || 0) / 1000));
@@ -14,11 +15,25 @@ const fmtRemaining = (ms) => {
 export default function PresenceProofPrompt({ session }) {
   const { lang } = usePortalI18n();
   const t = usePortalT("presence");
+  // نصوص تأكيد البصمة (مع بديل عربي/إنجليزي إن لم تكن الترجمة متوفرة للغة الموظف)
+  const isArabic = lang === "ar";
+  const L = {
+    enroll: t.enroll || (isArabic ? "تفعيل بصمة الجهاز" : "Enable device biometrics"),
+    enrolling: t.enrolling || (isArabic ? "جارٍ التفعيل..." : "Enabling..."),
+    enrollHint: t.enrollHint || (isArabic
+      ? "تأكيد الحضور يتطلب بصمة جهازك (وجه/أصبع). فعّلها مرة واحدة على هذا الجوال ثم أكّد بالبصمة — البصمة نفسها دليل وجودك على رأس العمل."
+      : "Presence confirmation requires your device biometrics (face/fingerprint). Enable once on this phone, then confirm with it — the biometric is the proof you are at work."),
+    failedEnroll: t.failedEnroll || (isArabic ? "تعذّر تفعيل بصمة الجهاز — أعد المحاولة." : "Could not enable device biometrics — please retry."),
+    cancelled: t.cancelled || (isArabic ? "لم يتم تأكيد البصمة — أعد المحاولة قبل نهاية المهلة." : "Biometric confirmation was cancelled — retry before the deadline."),
+  };
   const [active, setActive] = useState(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [nowMs, setNowMs] = useState(Date.now());
   const [soundBlocked, setSoundBlocked] = useState(false);
+  const [enrollBusy, setEnrollBusy] = useState(false);
+  const [nationalId, setNationalId] = useState("");
+  const [enrolled, setEnrolled] = useState(false);
   const alarmCtx = useRef(null);
   const alarmTimer = useRef(null);
 
@@ -34,6 +49,7 @@ export default function PresenceProofPrompt({ session }) {
         action: "mine",
       });
       const data = res?.data || res;
+      if (data?.national_id) setNationalId(String(data.national_id));
       const next = data?.ok ? data.active || null : null;
       setActive((prev) => {
         if (next && (!prev || prev.id !== next.id) && typeof navigator !== "undefined" && navigator.vibrate) {
@@ -135,26 +151,88 @@ export default function PresenceProofPrompt({ session }) {
     return () => clearInterval(id);
   }, [active]);
 
+  // تفعيل بصمة الجهاز من داخل تنبيه الحضور (من لم يسجل بصمته بعد).
+  const enrollPasskey = async () => {
+    if (enrollBusy) return;
+    setEnrollBusy(true);
+    setError("");
+    try {
+      const out = await registerPasskey({
+        base44,
+        portalToken: session.token,
+        nationalId: nationalId || "",
+      });
+      if (out?.ok) {
+        setEnrolled(true);
+        setActive((prev) => (prev ? { ...prev, has_passkey: true } : prev));
+      } else {
+        setError(out?.message || L.failedEnroll);
+      }
+    } catch (e) {
+      const name = String(e?.name || "");
+      setError(name === "NotAllowedError" ? L.cancelled : (e?.message || L.failedEnroll));
+    } finally {
+      setEnrollBusy(false);
+    }
+  };
+
+  /** تأكيد الحضور: من سجّل بصمة جهازه لا يمكنه التأكيد إلا بالبصمة نفسها */
   const confirm = async () => {
     if (!active || busy) return;
     setBusy(true);
     setError("");
     try {
+      let passkey = null;
+      const needsPasskey = active.has_passkey !== false;
+      if (needsPasskey) {
+        const chRes = await base44.functions.invoke("presenceProof", {
+          token: session.token,
+          employee_id: session.employee_id,
+          action: "proof_challenge",
+        });
+        const ch = chRes?.data || chRes;
+        if (ch?.ok && ch.has_passkey) {
+          const o = ch.options || {};
+          const assertion = await navigator.credentials.get({
+            publicKey: {
+              challenge: toBytes(o.challenge),
+              timeout: o.timeout || 60000,
+              userVerification: o.userVerification || "required",
+              rpId: ch.rp_id,
+              allowCredentials: (ch.allow_credentials || []).map((c) => ({ type: "public-key", id: toBytes(c.id) })),
+            },
+          });
+          const r = assertion.response;
+          passkey = {
+            challenge_token: ch.challenge_token,
+            client_data_json: fromBytes(new Uint8Array(r.clientDataJSON)),
+            authenticator_data: fromBytes(new Uint8Array(r.authenticatorData)),
+            signature: fromBytes(new Uint8Array(r.signature)),
+          };
+        }
+      }
       const res = await base44.functions.invoke("presenceProof", {
         token: session.token,
         employee_id: session.employee_id,
         action: "confirm",
+        passkey,
       });
       const data = res?.data || res;
       if (data?.ok) {
         setActive(data.active || { ...active, confirmed: true, confirmed_at: Date.now() });
         stopAlarm();
       } else {
-        setError(t.failed);
+        setError(data?.message || t.failed);
         load();
       }
-    } catch {
-      setError(t.failed);
+    } catch (e) {
+      const name = String(e?.name || "");
+      const srv = e?.response?.data || {};
+      setError(
+        name === "NotAllowedError"
+          ? L.cancelled
+          : (srv?.message || (name ? t.failed : "") || t.failed)
+      );
     } finally {
       setBusy(false);
     }
@@ -192,9 +270,19 @@ export default function PresenceProofPrompt({ session }) {
           {soundBlocked && (
             <Button onClick={enableSound} variant="outline" className="w-full mt-2 h-10 font-bold">{t.sound || "Enable sound"}</Button>
           )}
+          {/* من لم يسجل بصمة جهازه بعد: يُعرض له التفعيل ثم يؤكد بالبصمة نفسها للتأكد من وجوده على رأس العمل. */}
+          {active.has_passkey === false && !enrolled && (
+            <div className="mt-2 rounded-xl bg-emerald-50 border border-emerald-200 px-3 py-2">
+              <p className="text-[11px] leading-relaxed text-emerald-900">{L.enrollHint}</p>
+              <Button onClick={enrollPasskey} disabled={enrollBusy} variant="outline" className="w-full mt-2 h-9 font-bold gap-2 border-emerald-300 text-emerald-800 bg-white">
+                {enrollBusy ? <Loader2 size={16} className="animate-spin" /> : <Fingerprint size={16} />}
+                {enrollBusy ? L.enrolling : L.enroll}
+              </Button>
+            </div>
+          )}
           {error && <p className="mt-2 text-xs font-medium text-rose-600">{error}</p>}
-          <Button onClick={confirm} disabled={busy || remaining <= 0} className="w-full mt-3 h-11 text-base font-bold bg-rose-600 hover:bg-rose-700">
-            {busy ? (<><Loader2 size={18} className="animate-spin" /> {t.confirming}</>) : t.confirm}
+          <Button onClick={confirm} disabled={busy || remaining <= 0} className="w-full mt-3 h-11 text-base font-bold bg-rose-600 hover:bg-rose-700 gap-2">
+            {busy ? (<><Loader2 size={18} className="animate-spin" /> {t.confirming}</>) : (<><Fingerprint size={18} /> {t.confirm}</>)}
           </Button>
           <div className="mt-2 text-center text-[11px] text-muted-foreground tabular-nums">
             {t.remaining}: {fmtRemaining(remaining)}

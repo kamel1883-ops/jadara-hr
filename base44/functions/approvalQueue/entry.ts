@@ -1,6 +1,7 @@
 import { createClientFromRequest } from "npm:@base44/sdk@0.8.40";
 import { verifyToken } from "../../shared/portalToken.ts";
 import { organizationForEmployee } from "../../shared/companyScope.ts";
+import { isAlMoiedSupervisor } from "../../shared/alMoied.ts";
 
 // يعيد طابور الموافقات للموظف — يدعم وضعين:
 // 1) بوابة موظف عبر رمز جلسة موقع (portal_token + portal_employee_id).
@@ -75,6 +76,34 @@ export default async function (req) {
       employee_name: idToName.get(r.employee_id) || r.employee_name || "",
     }));
 
+    // ميزات شركة آل معيض حصراً: متابعة حضور جميع موظفي الشركة وسجل طلباتهم.
+    // مقيّدة بالرقم الموحّد 7001838478 وبموظف بعينه (رقم الهوية) — لا تمنح أي شركة أخرى.
+    const alMoiedSupervisor = isAlMoiedSupervisor({ ...myEmp, unified_number: myUn || myEmp.unified_number });
+    const supervisorPayload = async () => {
+      if (!alMoiedSupervisor) return {};
+      const companyEmployees = (allEmployees || []).filter(
+        (e: any) => idToUn.get(e.id) === myUn && String(e?.status || "") !== "terminated"
+      );
+      const empIds = new Set(companyEmployees.map((e: any) => String(e.id)));
+      const allAttendance = asList(
+        await base44.asServiceRole.entities.Attendance.list("-date", 800).catch(() => [])
+      );
+      const attendance = withNat((allAttendance || []).filter((a: any) => empIds.has(String(a?.employee_id || ""))));
+      return {
+        supervisor: true,
+        companyEmployees: companyEmployees.map((e: any) => ({
+          id: e.id,
+          full_name: e.full_name || "",
+          national_id: e.national_id || "",
+          employee_number: e.employee_number || "",
+          department: e.department || "",
+          position: e.position || "",
+          status: e.status || "",
+        })),
+        attendance,
+      };
+    };
+
     if (myEmp.is_approver_manager) {
       const subs = (allEmployees || []).filter((e) => {
         if (e.manager_id !== myEmp.id) return false;
@@ -101,6 +130,7 @@ export default async function (req) {
       const attendance = withNat((allAttendance || []).filter((a) => subIds.has(a.employee_id)));
       return Response.json({
         role: "manager",
+        ...(await supervisorPayload()),
         myEmp, org: myOrg,
         actorId, actorName,
         subordinates: subs.map((s) => ({ id: s.id, full_name: s.full_name, department: s.department, position: s.position, national_id: s.national_id || "", employee_number: s.employee_number || "", hire_date: s.hire_date || "", annual_leave_entitlement: s.annual_leave_entitlement ?? null, prior_used_leave: s.prior_used_leave ?? 0, opening_balance_source: s.opening_balance_source || "", leave_used_manual: s.leave_used_manual ?? null })),
@@ -129,7 +159,7 @@ export default async function (req) {
       const loans = (allLoans || []).filter((l) => l.status === "pending" && sameTenant(l));
       const trips = (allTrips || []).filter((t) => t.status === "pending" && sameTenant(t));
       const hrRequests = (allHrReq || []).filter((r) => r.status === "pending_hr" && sameTenant(r));
-      return Response.json({ role: "hr", myEmp, org: myOrg, actorId, actorName, loans: withNat(loans), trips: withNat(trips), hrRequests: withNat(hrRequests) });
+      return Response.json({ role: "hr", ...(await supervisorPayload()), myEmp, org: myOrg, actorId, actorName, loans: withNat(loans), trips: withNat(trips), hrRequests: withNat(hrRequests) });
     }
 
     if (myEmp.is_approver_finance) {
@@ -149,12 +179,20 @@ export default async function (req) {
         .filter((r) => sameTenant(r) && !finStatuses.includes(r.status) && r.status !== "awaiting_finance")
         .map((r) => ({ ...r, employee_name: r.employee_name || idToName.get(r.employee_id) || "" }));
       return Response.json({
-        role: "finance", myEmp, org: myOrg, actorId, actorName,
+        role: "finance", ...(await supervisorPayload()), myEmp, org: myOrg, actorId, actorName,
         leaves: withNat(leaves), loans: withNat(loans), trips: withNat(trips), settlements: withNat(settlements),
         leaveHistory: withNat(doneFin(allLeaves)),
         loanHistory: withNat(doneFin(allLoans)),
         tripHistory: withNat(doneFin(allTrips)),
         settlementHistory: withNat(doneFin(allSettlements)),
+      });
+    }
+
+    if (alMoiedSupervisor) {
+      return Response.json({
+        role: "supervisor",
+        ...(await supervisorPayload()),
+        myEmp, org: myOrg, actorId, actorName,
       });
     }
 

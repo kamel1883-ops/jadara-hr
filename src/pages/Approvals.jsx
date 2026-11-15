@@ -18,6 +18,7 @@ import { entitledLeaveDays, usedLeaveTotal } from "@/lib/leaveBalance";
 import { useI18n } from "@/lib/i18n";
 import { generateLeaveSettlement, generateLoanStatement, generateBusinessTripApproval, openLoanStatement } from "@/lib/docGenerators";
 import PullToRefresh from "@/components/PullToRefresh";
+import EmployeeHistoryDialog from "@/components/portal/EmployeeHistoryDialog";
 import VaultDocLink from "@/components/VaultDocLink";
 import { uploadFileToVault, vaultFailureMessage } from "@/lib/vaultDocuments";
 import { enrichRecordsWithVault, VAULT_MODULES } from "@/lib/vaultGeneric";
@@ -957,13 +958,27 @@ export default function Approvals() {
 
 function RequestCard({ r, emp, actions, onReject, t, children, genBusy, extra, kindBadge, statusBadgeOverride }) {
   const stBadge = statusBadgeOverride || badge(r.status);
+  // اسم الموظف قابل للضغط: يفتح سجل كل طلباته السابقة بحالتها ومستنداتها.
+  const [histOpen, setHistOpen] = useState(false);
+  const empId = r?.employee_id || emp?.id || "";
   return (
     <div className="bg-white rounded-2xl border border-border p-4">
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
         <div className="min-w-0">
           <div className="flex items-center gap-2 flex-wrap">
             <div>
-              <div className="font-medium text-sm">{emp?.full_name || r.employee_name}</div>
+              {empId ? (
+                <button
+                  type="button"
+                  onClick={() => setHistOpen(true)}
+                  title="عرض سجل طلبات الموظف"
+                  className="font-medium text-sm text-start underline decoration-dotted decoration-slate-300 underline-offset-4 hover:decoration-slate-600"
+                >
+                  {emp?.full_name || r.employee_name || "—"}
+                </button>
+              ) : (
+                <div className="font-medium text-sm">{emp?.full_name || r.employee_name}</div>
+              )}
               <div className="text-xs text-muted-foreground tabular-nums">
                 {[emp?.employee_number, emp?.national_id].filter(Boolean).join(" · ") || r.employee_name}
               </div>
@@ -1010,6 +1025,13 @@ function RequestCard({ r, emp, actions, onReject, t, children, genBusy, extra, k
           })}
         </div>
       </div>
+      {empId && (
+        <EmployeeHistoryDialog
+          open={histOpen}
+          onOpenChange={setHistOpen}
+          employee={{ id: empId, name: emp?.full_name || r.employee_name, national_id: emp?.national_id || r.national_id || "" }}
+        />
+      )}
     </div>
   );
 }

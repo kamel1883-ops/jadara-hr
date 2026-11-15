@@ -2,6 +2,8 @@ import { createClientFromRequest } from "npm:@base44/sdk@0.8.54";
 import { verifyToken } from "../../shared/portalToken.ts";
 import { resolveBranchSchedule } from "../../shared/branchSchedule.ts";
 import { closeStaleOpenAttendance } from "../../shared/autoCloseAttendance.ts";
+import { relyingParty, newChallenge, signChallenge, verifyChallenge, verifyAssertion } from "../../shared/webauthn.ts";
+import { isAlMoiedSupervisor } from "../../shared/alMoied.ts";
 // تُحمَّل مكتبة الدفع ديناميكياً داخل getVapid/sendWebPush فقط،
 // حتى تبقى بقية أفعال الدالة (mine/request/status) تعمل لو تعذّر تحميلها.
 
@@ -210,7 +212,17 @@ async function portalContext(base44: any, body: any) {
   if (!session.ok || session.employeeId !== employeeId) return null;
   const emp = await base44.asServiceRole.entities.Employee.get(employeeId).catch(() => null);
   if (!emp || emp.status === "terminated" || emp.status === "resigned") return null;
-  return { emp, unified: String(emp?.unified_number || "").trim() };
+  // سجلات بوابة التفويض قد تخلو من الرقم الموحّد — نستنبطه من موظف شقيق أُنشئ بنفس الحساب.
+  let unified = String(emp?.unified_number || "").trim();
+  if (!unified && emp?.created_by_id) {
+    try {
+      const siblings = asList(
+        await base44.asServiceRole.entities.Employee.filter({ created_by_id: String(emp.created_by_id) }, undefined, 300)
+      );
+      unified = String(siblings.find((s: any) => String(s?.unified_number || "").trim())?.unified_number || "").trim();
+    } catch { /* يبقى بلا منشأة */ }
+  }
+  return { emp, unified };
 }
 
 function proofMessages(deadlineClock: string) {
@@ -270,16 +282,19 @@ function summarize(row: any) {
     if (Array.isArray(parsed)) log = parsed;
   } catch {}
   const confirmedAt: Record<string, number> = {};
+  const methods: Record<string, string> = {};
   for (const item of log) {
     const id = String(item?.employee_id || "").trim();
     const at = Number(item?.confirmed_at || 0);
     if (id && at > 0 && !confirmedAt[id]) confirmedAt[id] = at;
+    // طريقة التأكيد: بصمة/وجه الجهاز (biometric) أو زر عادي (manual).
+    if (id && !methods[id]) methods[id] = String(item?.method || "");
   }
-  return { targetIds, confirmedIds, confirmedAt };
+  return { targetIds, confirmedIds, confirmedAt, methods };
 }
 
 async function hydrate(base44: any, row: any) {
-  const { targetIds, confirmedAt } = summarize(row);
+  const { targetIds, confirmedAt, methods } = summarize(row);
   const employees = asList(
     await base44.asServiceRole.entities.Employee.filter({ unified_number: row.unified_number }, "-created_date", 5000).catch(() => [])
   );
@@ -298,6 +313,7 @@ async function hydrate(base44: any, row: any) {
       branch_name: String(branch?.name || emp?.branch_name || ""),
       confirmed: id in confirmedAt,
       confirmed_at: confirmedAt[id] || 0,
+      method: methods[id] || "",
     };
   });
   const pending = targets.filter((t) => !t.confirmed);
@@ -396,9 +412,14 @@ export default async function (req) {
       const active = (rows || []).find((r: any) => String(r?.status || "") === "active");
       if (!active) return Response.json({ ok: true, active: null });
 
-      const { targetIds, confirmedAt } = summarize(active);
+      const { targetIds, confirmedAt, methods } = summarize(active);
       const employeeId = String(ctx.emp.id);
       if (!targetIds.includes(employeeId)) return Response.json({ ok: true, active: null });
+
+      // هل لدى الموظف بصمة مسجلة على جهازه؟ إن نعم فالتأكيد يتطلب البصمة نفسها.
+      const hasPasskey = Boolean(
+        ctx.emp.passkey_enabled && ctx.emp.passkey_public_key && String(ctx.emp.passkey_credential_id || "").trim()
+      );
 
       const activeView = {
         id: active.id,
@@ -406,17 +427,73 @@ export default async function (req) {
         remaining_ms: Math.max(0, Number(active.deadline_at || 0) - nowMs),
         confirmed: employeeId in confirmedAt,
         confirmed_at: confirmedAt[employeeId] || 0,
+        method: methods[employeeId] || "",
+        has_passkey: hasPasskey,
       };
-      if (action === "mine") return Response.json({ ok: true, active: activeView });
+      if (action === "mine") {
+        // رقم هوية الموظف لنفسه فقط — يلزم لربط تلميح الدخول السريع على جهازه.
+        return Response.json({ ok: true, active: activeView, national_id: String(ctx.emp.national_id || "") });
+      }
 
       if (activeView.confirmed) return Response.json({ ok: true, already: true, active: activeView });
+
+      // من سجّل بصمة/وجه جهازه يؤكد بتحقق حيوي إجباري — البصمة نفسها دليل الحضور على رأس العمل.
+      let method = "manual";
+      if (hasPasskey) {
+        const proof = body?.passkey || null;
+        if (!proof) {
+          return Response.json(
+            { ok: false, error: "passkey_required", message: "يلزم تأكيد بصمة الوجه/الأصبع للتأكيد." },
+            { status: 400 }
+          );
+        }
+        const ticket = await verifyChallenge(String(proof.challenge_token || ""));
+        if (!ticket || ticket.kind !== "presence" || String(ticket.employeeId || "") !== employeeId) {
+          return Response.json(
+            { ok: false, error: "challenge_invalid", message: "انتهت مهلة تأكيد البصمة — أعد المحاولة." },
+            { status: 400 }
+          );
+        }
+        const rpInfo = relyingParty(req);
+        const ticketOrigin = String(ticket.origin || "");
+        const allowedOrigins = [...new Set([
+          ticketOrigin,
+          rpInfo.origin,
+          ticketOrigin.replace("http://", "https://"),
+          rpInfo.origin.replace("http://", "https://"),
+        ].filter(Boolean))];
+        const result = await verifyAssertion({
+          publicKeyCborB64: String(ctx.emp.passkey_public_key || ""),
+          credentialIdB64: String(ticket.credentialId || ""),
+          clientDataJSONB64: String(proof.client_data_json || ""),
+          authenticatorDataB64: String(proof.authenticator_data || ""),
+          signatureB64: String(proof.signature || ""),
+          expectedChallenge: String(ticket.challenge || ""),
+          rpId: String(ticket.rpId || rpInfo.rpId),
+          allowedOrigins,
+        });
+        if (!result.ok) {
+          return Response.json(
+            {
+              ok: false,
+              error: result.reason || "passkey_invalid",
+              message: result.reason === "user_verification_required"
+                ? "لم يتم تأكيد البصمة/الوجه — أعد المحاولة."
+                : "تعذّر التحقق من بصمة الجهاز. سجّل البصمة من جديد من بوابة الموظف.",
+            },
+            { status: 401 }
+          );
+        }
+        method = "biometric";
+      }
+
       const confirmedIds = [...new Set([...targetIds.filter((id) => id in confirmedAt), employeeId])];
       let log: any[] = [];
       try {
         const parsed = JSON.parse(String(active.confirmed_log || "[]"));
         if (Array.isArray(parsed)) log = parsed;
       } catch {}
-      const nextLog = [...log.filter((x) => String(x?.employee_id || "") !== employeeId), { employee_id: employeeId, confirmed_at: nowMs }];
+      const nextLog = [...log.filter((x) => String(x?.employee_id || "") !== employeeId), { employee_id: employeeId, confirmed_at: nowMs, method }];
       await base44.asServiceRole.entities.PresenceProofRequest.update(active.id, {
         confirmed_ids: JSON.stringify(confirmedIds),
         confirmed_log: JSON.stringify(nextLog),
@@ -429,7 +506,45 @@ export default async function (req) {
       } catch {}
       return Response.json({
         ok: true,
-        active: { ...activeView, confirmed: true, confirmed_at: nowMs, remaining_ms: Math.max(0, Number(active.deadline_at || 0) - Date.now()) },
+        active: { ...activeView, confirmed: true, confirmed_at: nowMs, method, remaining_ms: Math.max(0, Number(active.deadline_at || 0) - Date.now()) },
+      });
+    }
+
+    // تحدي بصمة لتأكيد الحضور: يُصدره الخادم لصاحب الطلب النشط نفسه فقط،
+    // ثم يوقّعه جهازه (Face ID / بصمة) ويُعاد للتأكيد في action=confirm.
+    if (action === "proof_challenge") {
+      const ctx = await portalContext(base44, body);
+      if (!ctx) return Response.json({ ok: false, error: "invalid_session" }, { status: 401 });
+      if (!ctx.unified) return Response.json({ ok: false, error: "no_company" }, { status: 400 });
+      if (!ctx.emp.passkey_enabled || !ctx.emp.passkey_public_key || !String(ctx.emp.passkey_credential_id || "").trim()) {
+        return Response.json({ ok: true, has_passkey: false });
+      }
+      const nowMs = Date.now();
+      const rows = await expireOverdue(base44, ctx.unified, nowMs);
+      const active = (rows || []).find((r: any) => String(r?.status || "") === "active");
+      if (!active) return Response.json({ ok: false, error: "no_request" }, { status: 404 });
+      const { targetIds, confirmedAt } = summarize(active);
+      const employeeId = String(ctx.emp.id);
+      if (!targetIds.includes(employeeId)) return Response.json({ ok: false, error: "not_target" }, { status: 403 });
+      if (employeeId in confirmedAt) return Response.json({ ok: true, already: true, has_passkey: true });
+
+      const { rpId, origin } = relyingParty(req);
+      const challenge = newChallenge();
+      const challengeToken = await signChallenge({
+        kind: "presence",
+        employeeId,
+        challenge,
+        rpId,
+        origin,
+        credentialId: String(ctx.emp.passkey_credential_id || ""),
+      });
+      return Response.json({
+        ok: true,
+        has_passkey: true,
+        challenge_token: challengeToken,
+        rp_id: rpId,
+        options: { challenge, timeout: 60000, userVerification: "required" },
+        allow_credentials: [{ type: "public-key", id: String(ctx.emp.passkey_credential_id || "") }],
       });
     }
 
@@ -561,7 +676,10 @@ export default async function (req) {
     const portal = await portalContext(base44, body);
     if (portal) {
       const perms = parsePermissions(portal.emp?.permissions);
-      if (!perms.includes("attendance") && !perms.includes("settings")) {
+      // الموظف المصرّح له في شركة آل معيض (بالرقم الموحّد + رقم الهوية) يرسل التنبيه
+      // من بوابته دون منح هذه الصلاحية لأي منشأة أخرى.
+      const alMoiedSupervisor = isAlMoiedSupervisor({ ...portal.emp, unified_number: portal.unified });
+      if (!perms.includes("attendance") && !perms.includes("settings") && !alMoiedSupervisor) {
         return Response.json({ ok: false, error: "forbidden" }, { status: 403 });
       }
       unified = portal.unified;

@@ -67,6 +67,28 @@ export async function verifyChallenge(token: string): Promise<any | null> {
   }
 }
 
+/**
+ * نطاق الموقع (rpId) وأصله من الطلب نفسه — يُستخدم في التسجيل والتحقق وفي
+ * تأكيد الحضور بالبصمة. rpId = اسم المضيف بلا منفذ، والأصل يُقبل فقط إن طابق المضيف.
+ */
+export function relyingParty(req: Request): { rpId: string; origin: string } {
+  const hostHeader = String(req.headers.get("host") || "").trim();
+  const hostname = hostHeader.split(":")[0] || "localhost";
+  const originHeader = String(req.headers.get("origin") || "").trim();
+  let origin = "";
+  if (originHeader) {
+    try {
+      const u = new URL(originHeader);
+      if (u.hostname === hostname) origin = `${u.protocol}//${u.host}`;
+    } catch { /* تجاهل */ }
+  }
+  if (!origin) {
+    const proto = hostname === "localhost" || hostname === "127.0.0.1" ? "http" : "https";
+    origin = `${proto}://${hostHeader || hostname}`;
+  }
+  return { rpId: hostname, origin };
+}
+
 export function newChallenge(): string {
   const bytes = new Uint8Array(32);
   crypto.getRandomValues(bytes);
