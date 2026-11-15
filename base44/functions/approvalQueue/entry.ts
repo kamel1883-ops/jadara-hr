@@ -118,15 +118,18 @@ export default async function (req) {
       });
     }
 
-    // معتمد الموارد البشرية للمنشأة — يرى طلبات السلف والانتدابات قبل الصرف المالي.
+    // معتمد الموارد البشرية للمنشأة — يرى طلبات السلف والانتدابات قبل الصرف المالي،
+    // وطلبات الموظف الإدارية (النماذج) التي لا مستحقات فيها: اعتماد أو رفض فقط.
     if (myEmp.is_approver_hr) {
-      const [allLoans, allTrips] = await Promise.all([
+      const [allLoans, allTrips, allHrReq] = await Promise.all([
         base44.asServiceRole.entities.LoanRequest.list("-created_date", 500),
         base44.asServiceRole.entities.BusinessTrip.list("-created_date", 500),
+        base44.asServiceRole.entities.HrRequest.list("-created_date", 500),
       ]);
       const loans = (allLoans || []).filter((l) => l.status === "pending" && sameTenant(l));
       const trips = (allTrips || []).filter((t) => t.status === "pending" && sameTenant(t));
-      return Response.json({ role: "hr", myEmp, org: myOrg, actorId, actorName, loans: withNat(loans), trips: withNat(trips) });
+      const hrRequests = (allHrReq || []).filter((r) => r.status === "pending_hr" && sameTenant(r));
+      return Response.json({ role: "hr", myEmp, org: myOrg, actorId, actorName, loans: withNat(loans), trips: withNat(trips), hrRequests: withNat(hrRequests) });
     }
 
     if (myEmp.is_approver_finance) {

@@ -1,0 +1,133 @@
+{
+  "name": "HrRequest",
+  "type": "object",
+  "properties": {
+    "employee_id": {
+      "type": "string",
+      "title": "معرّف الموظف مقدّم الطلب"
+    },
+    "employee_name": {
+      "type": "string",
+      "title": "اسم الموظف مقدّم الطلب"
+    },
+    "employee_user_id": {
+      "type": "string",
+      "title": "معرّف حساب الموظف (بوابة الموظف)"
+    },
+    "unified_number": {
+      "type": "string",
+      "title": "الرقم الموحد للمنشأة (نطاق عزل البيانات)"
+    },
+    "request_type": {
+      "type": "string",
+      "enum": [
+        "salary_definition",
+        "add_health_insurance",
+        "iqama_renewal",
+        "final_exit",
+        "sponsorship_transfer",
+        "contract_termination",
+        "contract_renewal",
+        "no_renewal_request",
+        "experience_letter",
+        "bank_account_update",
+        "other"
+      ],
+      "default": "other",
+      "title": "نوع الطلب"
+    },
+    "request_title": {
+      "type": "string",
+      "title": "عنوان الطلب (يُكتب يدوياً عند اختيار «أخرى»)"
+    },
+    "description": {
+      "type": "string",
+      "title": "وصف الطلب / الإشكالية"
+    },
+    "reason": {
+      "type": "string",
+      "title": "سبب الطلب"
+    },
+    "attachment_ref": {
+      "type": "string",
+      "title": "مرفق الطلب (رمز مستند في الخزنة)"
+    },
+    "request_date": {
+      "type": "string",
+      "format": "date",
+      "title": "تاريخ تقديم الطلب"
+    },
+    "status": {
+      "type": "string",
+      "enum": [
+        "pending_hr",
+        "approved",
+        "rejected"
+      ],
+      "default": "pending_hr",
+      "title": "الحالة"
+    },
+    "hr_status": {
+      "type": "string",
+      "enum": [
+        "pending",
+        "approved",
+        "rejected"
+      ],
+      "default": "pending",
+      "title": "قرار الموارد البشرية"
+    },
+    "hr_id": {
+      "type": "string",
+      "title": "معرّف معتمد الموارد البشرية"
+    },
+    "hr_name": {
+      "type": "string",
+      "title": "اسم معتمد الموارد البشرية"
+    },
+    "hr_date": {
+      "type": "string",
+      "format": "date",
+      "title": "تاريخ قرار الموارد البشرية"
+    },
+    "hr_note": {
+      "type": "string",
+      "title": "ملاحظة الموارد البشرية / سبب الرفض"
+    },
+    "hr_document_ref": {
+      "type": "string",
+      "title": "مستند الطلب المعتمد (رمز في الخزنة)"
+    },
+    "vault_ref": {
+      "type": "string",
+      "title": "رمز سجل الطلب في الخزنة السعودية"
+    }
+  },
+  "required": [
+    "employee_id",
+    "request_type",
+    "status"
+  ],
+  "rls": {
+    "create": {
+      "user_condition": {
+        "role": "admin"
+      }
+    },
+    "read": {
+      "user_condition": {
+        "role": "admin"
+      }
+    },
+    "update": {
+      "user_condition": {
+        "role": "admin"
+      }
+    },
+    "delete": {
+      "user_condition": {
+        "role": "admin"
+      }
+    }
+  }
+}

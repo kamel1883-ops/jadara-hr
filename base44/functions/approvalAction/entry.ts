@@ -190,6 +190,56 @@ export default async function (req) {
       return Response.json({ ok: true });
     }
 
+    // ===== معتمد الموارد البشرية — طلبات الموظف الإدارية (نماذج) =====
+    // لا مستحقات ولا صرف: اعتماد أو رفض فقط، ثم يُحفظ القرار مع تاريخه وتنبيه الموظف.
+    if (myEmp.is_approver_hr && (type === "hrRequests" || type === "hr_requests") && (action === "approve" || action === "confirm" || action === "reject")) {
+      const r = await base44.asServiceRole.entities.HrRequest.get(id);
+      if (!r) return Response.json({ error: "الطلب غير موجود" }, { status: 404 });
+      if (!sameTenant(r.employee_id))
+        return Response.json({ error: "هذا الطلب خارج نطاق منشأتك" }, { status: 403 });
+      if (r.status !== "pending_hr")
+        return Response.json(
+          { error: "already_actioned", message: "تمت معالجة هذا الطلب مسبقاً." },
+          { status: 409 }
+        );
+      if (action === "reject" && !note.trim())
+        return Response.json({ error: "سبب الرفض مطلوب" }, { status: 400 });
+
+      const approved = action !== "reject";
+      const patch = {
+        status: approved ? "approved" : "rejected",
+        hr_status: approved ? "approved" : "rejected",
+        hr_id: myEmp.id,
+        hr_name: myEmp.full_name || actorName || "",
+        hr_date: today(),
+        hr_note: note,
+      };
+      await su("HrRequest", id, patch);
+
+      // تحديث أرشيف الخزنة بقرار الموارد البشرية
+      try {
+        const { writeHrRequestToVault } = await import("../../shared/hrRequestVault.ts");
+        await writeHrRequestToVault(base44, { ...r, ...patch });
+      } catch { /* يُحفظ القرار في Base44 */ }
+
+      // إشعار الموظف بالنتيجة
+      try {
+        const label = r.request_title || r.request_type || "طلب";
+        await base44.asServiceRole.entities.Notification.create({
+          title: approved ? `تمت الموافقة على طلبك: ${label}` : `تم رفض طلبك: ${label}`,
+          body: approved
+            ? `تمت الموافقة على طلبك بتاريخ ${patch.hr_date}${note ? " — " + note : ""}. المستند محفوظ في ملفك.`
+            : `رُفض طلبك بتاريخ ${patch.hr_date}. السبب: ${note}`,
+          type: "hr_request",
+          employee_id: r.employee_id,
+          unified_number: String(r.unified_number || ""),
+          is_read: false,
+        });
+      } catch {}
+
+      return Response.json({ ok: true, status: patch.status });
+    }
+
     // ===== المدير المباشر =====
     if (myEmp.is_approver_manager && type === "leaves" && (action === "approve" || action === "reject")) {
       const leave = await base44.asServiceRole.entities.LeaveRequest.get(id);

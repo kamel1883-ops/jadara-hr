@@ -7,11 +7,18 @@ export function asRows(page) {
   return [];
 }
 
+// السجل بلا رقم موحّد (بيانات قديمة) يظهر لأي عضو في نفس المنشأة — صاحب الحساب
+// الرئيسي أو مستخدم فرعي — وليس لمن أنشأه فقط. وإلا اختفت طلبات الشركة ومستنداتها
+// من المستخدم الإضافي في بوابة الشركات.
 export function visibleByUnified(rec, ctx) {
   if (!rec || !ctx?.unified) return false;
   const un = String(rec.unified_number || "").trim();
   if (un) return un === ctx.unified;
-  return !!ctx.userId && String(rec.created_by_id || "") === String(ctx.userId);
+  const creator = String(rec.created_by_id || "");
+  if (!creator) return false;
+  if (ctx.userId && creator === String(ctx.userId)) return true;
+  const accounts = Array.isArray(ctx.accountIds) ? ctx.accountIds : [];
+  return accounts.some((a) => String(a || "") === creator);
 }
 
 // معاملة أي منشأة: رقمها الموحّد يكفي لإظهارها. سجل بلا رقم يظهر فقط إذا كان موظفه من هذه المنشأة.

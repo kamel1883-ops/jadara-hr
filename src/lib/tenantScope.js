@@ -95,8 +95,13 @@ async function loadTenantContext() {
 
     const res = await rawClient.functions.invoke("getMyTenant", {});
     const unified = String(res?.data?.tenant?.unified_number || "").trim();
-    if (!unified) return { unified: "", userId, employeeIds: [] };
-    const ctx = { unified, userId };
+    if (!unified) return { unified: "", userId, accountIds: [], employeeIds: [] };
+    // حسابات المنشأة (الرئيسي + المستخدمون الفرعيون): تُتيح للمستخدم الإضافي أن يرى
+    // السجلات القديمة التي أنشأها غيرُه داخل نفس الشركة (كانت تُحجب عنه).
+    const accountIds = (Array.isArray(res?.data?.account_ids) ? res.data.account_ids : [])
+      .map((x) => String(x || "").trim()).filter(Boolean);
+    if (userId && !accountIds.includes(userId)) accountIds.push(userId);
+    const ctx = { unified, userId, accountIds };
     // السجل الكامل لازم: طلب حقل id وحده يُسقط الرقم الموحّد، فيُرفض كل موظف وتختفي إجازاته ورواتبه.
     let people = [];
     try {
@@ -180,9 +185,10 @@ async function readScopedRows(api, ctx, query = {}, sort = "-created_date", limi
   const srt = typeof sort === "string" && sort ? sort : "-created_date";
   const primary = asRows(await api.filter({ ...query, unified_number: ctx.unified }, srt, lim));
   let legacy = [];
-  if (ctx.userId) {
+  const accounts = (Array.isArray(ctx.accountIds) ? ctx.accountIds : []).filter(Boolean);
+  if (accounts.length) {
     try {
-      const mine = asRows(await api.filter({ ...query, created_by_id: ctx.userId }, srt, lim));
+      const mine = asRows(await api.filter({ ...query, created_by_id: { $in: accounts } }, srt, lim));
       legacy = mine.filter((rec) => !String(rec?.unified_number || "").trim());
     } catch { /* يبقى ما طابَق الرقم الموحّد */ }
   }

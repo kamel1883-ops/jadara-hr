@@ -48,7 +48,7 @@ export default async function (req: Request): Promise<Response> {
     if (!body || Array.isArray(body) || typeof body !== 'object') return Response.json({ error: 'invalid' }, { status: 400 });
     const { action, tenantId: _ignoredTenant, ...rest } = body;
     if (!action) return Response.json({ error: "action_required" }, { status: 400 });
-    const modules = new Set(['complaints', 'warnings', 'licenses', 'platform-subs', 'org-structure', 'succession', 'training', 'performance', 'eos', 'equipment', 'expenses', 'business-trips', 'leaves', 'approvals', 'appointees', 'reports', 'gosi']);
+    const modules = new Set(['complaints', 'warnings', 'licenses', 'platform-subs', 'org-structure', 'succession', 'training', 'performance', 'eos', 'equipment', 'expenses', 'business-trips', 'leaves', 'approvals', 'appointees', 'reports', 'gosi', 'hr-requests']);
     if (rest.module !== undefined && !modules.has(rest.module)) return Response.json({ error: 'invalid' }, { status: 400 });
     for (const key of ['empRef', 'payrollRef', 'docRef', 'ref']) {
       if (rest[key] != null && !validVaultRef(rest[key])) return Response.json({ error: 'invalid' }, { status: 400 });

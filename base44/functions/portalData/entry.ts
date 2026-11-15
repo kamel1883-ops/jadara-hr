@@ -113,6 +113,14 @@ export default async function (req) {
         base44.asServiceRole.entities.EquipmentRequest.filter({ employee_id: employeeId }, "-created_date", 200),
         base44.asServiceRole.entities.Complaint.filter({ employee_id: employeeId }, "-created_date", 200),
       ]);
+      // طلبات الموظف الإدارية/النماذج (تعريف راتب، تأمين طبي، تجديد إقامة، …) —
+      // تُحفظ كمستند وتُعرض للموظف بحالتها وقرار الموارد البشرية عليها.
+      let hrRequests: any[] = [];
+      try {
+        hrRequests = await base44.asServiceRole.entities.HrRequest.filter(
+          { employee_id: employeeId }, "-created_date", 200
+        );
+      } catch { hrRequests = []; }
       // القرارات والحوار — تظهر للموظف وفق نطاق الإرسال (الكل / قسمه / سجل فرد خاص به)
       const bagForFetch = isOwnerSession ? null : await companyBag();
       const sameCompanyRecord = (rec: any) => {
@@ -252,6 +260,7 @@ export default async function (req) {
         notifications: notifications || [],
         equipmentRequests: equipmentReqs || [],
         complaints: complaints || [],
+        hrRequests: hrRequests || [],
         investigations,
       });
     }
@@ -1548,6 +1557,56 @@ export default async function (req) {
         });
       } catch {}
       return Response.json({ ok: true, trip: created });
+    }
+
+    // ====== طلبات الموظف الإدارية (نماذج) ======
+    // لا مستحقات مالية ولا صرف: الطلب يُسجَّل كمستند ويمرّ على الموارد البشرية فقط
+    // (اعتماد أو رفض)، ويُحفظ قرارها مع تاريخه ونوع الطلب في السجل والخزنة.
+    if (action === "create_hr_request") {
+      const p = pick(body.payload || {}, [
+        "request_type", "request_title", "description", "reason", "attachment_ref",
+      ]);
+      const type = String(p.request_type || "other").trim();
+      const title = String(p.request_title || "").trim();
+      const desc = String(p.description || "").trim();
+      const reason = String(p.reason || "").trim();
+      // عند «أخرى» يلزم عنوان مخصص؛ وفي كل الأحوال يلزم وصف الطلب
+      if (!desc) return Response.json({ ok: false, error: "description_required" }, { status: 400 });
+      if (type === "other" && !title)
+        return Response.json({ ok: false, error: "title_required" }, { status: 400 });
+
+      const created = await base44.asServiceRole.entities.HrRequest.create({
+        employee_id: employeeId,
+        employee_user_id: emp.user_id || null,
+        employee_name: emp?.full_name || empLabel,
+        unified_number: String(emp?.unified_number || "").trim(),
+        request_type: type,
+        request_title: title,
+        description: desc,
+        reason,
+        attachment_ref: safeDocField(p.attachment_ref),
+        request_date: todayISO(),
+        status: "pending_hr",
+        hr_status: "pending",
+      });
+
+      // أرشفة الطلب في الخزنة السعودية (نفس آلية بقية الطلبات) — الوصف والسبب بيانات حساسة
+      try {
+        const { writeHrRequestToVault } = await import("../../shared/hrRequestVault.ts");
+        await writeHrRequestToVault(base44, created);
+      } catch { /* لا يفشل الطلب إذا تعذر الأرشفة — يُحفظ في Base44 */ }
+
+      // تنبيه معتمدي الموارد البشرية (بريد + إشعار داخلي)
+      try {
+        await notifyApproverForStatus(base44, {
+          type: "hr_request", employeeId, employeeName: emp?.full_name || empLabel, status: "manager_approved",
+          employeeNationalId: emp?.national_id || "", employeeNumber: emp?.employee_number || "",
+          position: emp?.position || "",
+          details: `طلب ${title || type} — ${desc.slice(0, 80)}`,
+        });
+      } catch {}
+
+      return Response.json({ ok: true, hr_request: created });
     }
 
     // ====== تأكيد الاطلاع — بوابة الموظف ======

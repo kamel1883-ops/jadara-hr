@@ -54,7 +54,28 @@ export default async function (req) {
     }
     if (!t) return Response.json({ ok: true, found: false });
 
+    // حسابات المنشأة: الحساب الرئيسي + كل المستخدمين الفرعيين النشطين على نفس الرقم الموحّد.
+    // تُستخدم في الواجهة لعرض السجلات القديمة (بلا رقم موحّد) لأي عضو في المنشأة،
+    // لا لصاحب الحساب الذي أنشأها فقط — كان المستخدم الفرعي لا يرى طلبات ومستندات شركته.
+    const accountIds: string[] = [];
+    const pushAccount = (v: any) => {
+      const s = String(v || "").trim();
+      if (s && !accountIds.includes(s)) accountIds.push(s);
+    };
+    pushAccount(t.admin_user_id);
+    pushAccount(uid);
+    try {
+      const unifiedOfTenant = String(t.unified_number || "").trim();
+      let members: any[] = [];
+      try { members = (await base44.asServiceRole.entities.TenantMember.filter({ unified_number: unifiedOfTenant })) || []; } catch { members = []; }
+      for (const m of members) {
+        if (!m || m.active === false) continue;
+        pushAccount(m.user_id);
+      }
+    } catch { /* يبقى حساب المنشأة */ }
+
     return Response.json({
+      account_ids: accountIds.slice(0, 24),
       ok: true,
       found: true,
       tenant: {

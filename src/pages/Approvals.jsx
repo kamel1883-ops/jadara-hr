@@ -108,6 +108,8 @@ export default function Approvals() {
   const [leaves, setLeaves] = useState([]);
   const [loans, setLoans] = useState([]);
   const [trips, setTrips] = useState([]);
+  // طلبات الموظف الإدارية (نماذج) — اعتماد/رفض موارد بشرية فقط، بلا مستحقات مالية
+  const [hrRequests, setHrRequests] = useState([]);
   const [employees, setEmployees] = useState([]);
   const [org, setOrg] = useState(null);
   const [me, setMe] = useState(null);
@@ -129,14 +131,16 @@ export default function Approvals() {
 
   const load = async () => {
     setLoading(true);
-    const [lv, ln, tr, emps, orgs] = await Promise.all([
+    const [lv, ln, tr, emps, orgs, hrq] = await Promise.all([
       base44.entities.LeaveRequest.list("-created_date", 500),
       base44.entities.LoanRequest.list("-created_date", 500),
       base44.entities.BusinessTrip.list("-created_date", 500),
       base44.entities.Employee.list("-created_date", 500),
       listCurrentOrg(),
+      base44.entities.HrRequest.list("-created_date", 500).catch(() => []),
     ]);
     setLeaves(lv); setLoans(ln); setTrips(tr); setEmployees(emps); setOrg(orgs[0]);
+    setHrRequests(hrq || []);
     try { setMe(await base44.auth.me()); } catch {}
     setLoading(false);
     enrichRecordsWithVault(lv, VAULT_MODULES.leaves, "leave_ref", ["reason", "manager_note", "hr_note", "finance_note"]).then(setLeaves);
@@ -175,6 +179,46 @@ export default function Approvals() {
   const visLeaves = matchedIds ? leaves.filter((l) => matchedIds.has(l.employee_id)) : leaves;
   const visLoans = matchedIds ? loans.filter((l) => matchedIds.has(l.employee_id)) : loans;
   const visTrips = matchedIds ? trips.filter((l) => matchedIds.has(l.employee_id)) : trips;
+
+  // ===== طلبات الموظف الإدارية (نماذج) =====
+  const HR_TYPE_LABEL = isAr
+    ? {
+        salary_definition: "تعريف راتب", add_health_insurance: "إضافة تأمين طبي",
+        iqama_renewal: "تجديد إقامة", final_exit: "خروج نهائي",
+        sponsorship_transfer: "نقل كفالة", contract_termination: "إنهاء العلاقة التعاقدية",
+        contract_renewal: "تجديد العقد", no_renewal_request: "عدم الرغبة بتجديد العقد",
+        experience_letter: "شهادة خبرة", bank_account_update: "تحديث الحساب البنكي",
+        other: "أخرى",
+      }
+    : {
+        salary_definition: "Salary definition", add_health_insurance: "Add health insurance",
+        iqama_renewal: "Iqama renewal", final_exit: "Final exit",
+        sponsorship_transfer: "Sponsorship transfer", contract_termination: "Contract termination",
+        contract_renewal: "Contract renewal", no_renewal_request: "No renewal request",
+        experience_letter: "Experience letter", bank_account_update: "Bank account update",
+        other: "Other",
+      };
+  const hrTypeLabel = (v) => HR_TYPE_LABEL[v] || v || "—";
+  const hrVisible = matchedIds ? hrRequests.filter((r) => matchedIds.has(r.employee_id)) : hrRequests;
+  const hrDecide = async (r, decision, reason = "") => {
+    setBusy(r.id);
+    try {
+      await base44.functions.invoke("approvalAction", {
+        type: "hrRequests", action: decision, id: r.id, note: reason,
+      });
+      await load();
+    } catch (e) {
+      const d = e?.response?.data || e?.data || {};
+      alert(d?.message || d?.error || (isAr ? "تعذّر تنفيذ الإجراء" : "Could not complete the action"));
+      await load();
+    } finally { setBusy(false); }
+  };
+  const openHrReject = async (r) => {
+    const reason = window.prompt(isAr ? "سبب الرفض (مطلوب):" : "Rejection reason (required):", "");
+    if (reason === null) return;
+    if (!String(reason).trim()) return;
+    await hrDecide(r, "reject", String(reason).trim());
+  };
 
   const actionsFor = (type, r) => {
     const s = r.status;
@@ -547,6 +591,9 @@ export default function Approvals() {
               <TabsTrigger value="leaves">{t.tabLeaves(visLeaves.length)}</TabsTrigger>
               <TabsTrigger value="loans">{t.tabLoans(visLoans.length)}</TabsTrigger>
               <TabsTrigger value="trips">{t.tabTrips(visTrips.length)}</TabsTrigger>
+              <TabsTrigger value="hrreq">
+                {isAr ? `طلبات الموظفين (${hrVisible.length})` : `Employee requests (${hrVisible.length})`}
+              </TabsTrigger>
             </TabsList>
 
             <TabsContent value="leaves">
@@ -600,6 +647,30 @@ export default function Approvals() {
                     </RequestCard>
                   );
                 })}
+              </div>
+            </TabsContent>
+
+            {/* طلبات الموظف الإدارية (نماذج): تصل للموارد البشرية فقط — اعتماد أو رفض بلا مستحقات ولا صرف */}
+            <TabsContent value="hrreq">
+              <div className="space-y-3">
+                {hrVisible.length === 0 ? <Empty t={t} /> : hrVisible.map((r) => (
+                  <RequestCard key={r.id} r={r} emp={empOf(r.employee_id)} t={t} genBusy={genBusy}
+                    actions={r.status === "pending_hr" && isHR ? [
+                      { label: isAr ? "موافقة" : "Approve", cls: "bg-emerald-600 hover:bg-emerald-700", onClick: () => hrDecide(r, "approve"), busyKey: r.id },
+                      { label: t.reject, cls: "bg-rose-50 text-rose-600 hover:bg-rose-100", onClick: () => openHrReject(r) },
+                    ] : []}
+                    kindBadge={<span className="text-xs px-2 py-0.5 rounded-full bg-sky-50 text-sky-700">{hrTypeLabel(r.request_type)}</span>}
+                    extra={
+                      <div className="text-xs text-muted-foreground mt-1 space-y-0.5">
+                        <div>{isAr ? "العنوان" : "Title"}: <b className="text-foreground">{r.request_title || hrTypeLabel(r.request_type)}</b> · {isAr ? "التاريخ" : "Date"}: <b className="text-foreground">{r.request_date || (r.created_date || "").slice(0, 10)}</b></div>
+                        {r.description && <div className="whitespace-pre-wrap">{r.description}</div>}
+                        {r.reason && <div>{isAr ? "السبب" : "Reason"}: {r.reason}</div>}
+                        {r.hr_name && <div className="text-emerald-700">{isAr ? "قرار الموارد البشرية" : "HR decision"}: {r.hr_name} · {r.hr_date} {r.hr_note ? `— ${r.hr_note}` : ""}</div>}
+                        {r.attachment_ref && <VaultDocLink value={r.attachment_ref} label={isAr ? "مرفق الطلب" : "Attachment"} className="text-xs h-6 px-2 rounded-full bg-blue-50 text-blue-600 border-0" />}
+                      </div>
+                    }
+                  />
+                ))}
               </div>
             </TabsContent>
           </Tabs>

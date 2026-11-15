@@ -15,6 +15,7 @@ import EmployeeIncentives from "@/components/portal/EmployeeIncentives";
 import EmployeePerformance from "@/components/portal/EmployeePerformance";
 import EmployeeTraining from "@/components/portal/EmployeeTraining";
 import EmployeeDocuments from "@/components/portal/EmployeeDocuments";
+import HrRequestForm from "@/components/portal/HrRequestForm";
 import ApprovalsPortal from "@/pages/ApprovalsPortal";
 import Logo from "@/components/Logo";
 import PortalLanguageSelector from "@/components/portal/PortalLanguageSelector";
@@ -29,7 +30,7 @@ import { Image } from "@/components/ui/image";
 import { usePortalI18n, usePortalT, portalDir } from "@/lib/portalI18n";
 import { Button } from "@/components/ui/button";
 import {
-  CalendarPlus, Wallet, Loader2, BadgeCheck, Clock, Banknote, CalendarCheck, Plane, LogOut, Crown, ArrowRight, Building2, Package, MessageSquareWarning
+  CalendarPlus, Wallet, Loader2, BadgeCheck, Clock, Banknote, CalendarCheck, Plane, LogOut, Crown, ArrowRight, Building2, Package, MessageSquareWarning, FilePlus2
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { leaveTypeLabel, formatCurrency, attendanceDisplayStatus, attendanceOpDate, attendanceElapsedMs, formatWorkDuration } from "@/lib/hr";
@@ -98,11 +99,14 @@ export default function MyRequests() {
   const [loading, setLoading] = useState(false);
   const [leaveOpen, setLeaveOpen] = useState(false);
   const [loanOpen, setLoanOpen] = useState(false);
+  const [hrReqOpen, setHrReqOpen] = useState(false);
   const [tripOpen, setTripOpen] = useState(false);
   const [eqOpen, setEqOpen] = useState(false);
   const [compOpen, setCompOpen] = useState(false);
   const [equipmentReqs, setEquipmentReqs] = useState([]);
   const [complaints, setComplaints] = useState([]);
+  // طلبات الموظف الإدارية (نماذج) — تُحفظ كمستند ويعتمدها الموارد البشرية فقط
+  const [hrRequests, setHrRequests] = useState([]);
   const [investigations, setInvestigations] = useState([]);
   const location = useLocation();
   const navigate = useNavigate();
@@ -138,6 +142,7 @@ export default function MyRequests() {
       setIncentives(data.incentives || []);
       setEquipmentReqs(data.equipmentRequests || []);
       setComplaints(data.complaints || []);
+      setHrRequests(data.hrRequests || []);
       setInvestigations(data.investigations || []);
       setTodayAtt(data.attendance?.find((a) => a.date === localToday()) || null);
     } catch (e) {
@@ -390,6 +395,7 @@ export default function MyRequests() {
                 <div className="flex flex-wrap gap-2">
                    {can("leaves") && <Button onClick={() => setLeaveOpen(true)} variant="outline" className="gap-2"><CalendarPlus size={18} /> {t.leaveBtn}</Button>}
                    <Button onClick={() => setLoanOpen(true)} variant="outline" className="gap-2"><Wallet size={18} /> {t.loanBtn}</Button>
+                   <Button onClick={() => setHrReqOpen(true)} variant="outline" className="gap-2"><FilePlus2 size={18} /> {isAr ? "طلب نموذج" : "New request"}</Button>
                    {can("business-trips") && <Button onClick={() => setTripOpen(true)} className="gap-2"><Plane size={18} /> {t.tripBtn}</Button>}
                    <Button onClick={() => setEqOpen(true)} variant="outline" className="gap-2"><Package size={18} /> {isAr ? "طلب عهدة" : "Equipment"}</Button>
                    <Button onClick={() => setCompOpen(true)} variant="outline" className="gap-2"><MessageSquareWarning size={18} /> {isAr ? "رفع شكوى" : "Complaint"}</Button>
@@ -602,8 +608,34 @@ export default function MyRequests() {
               </Section>
             </div>
 
+            <div className="mt-6">
+              <Section title={isAr ? "طلباتي الإدارية (نماذج)" : "My HR requests"}>
+                {hrRequests.length === 0 ? <Empty text={isAr ? "لا توجد طلبات" : "No requests"} /> : hrRequests.map((r) => {
+                  const map = {
+                    pending_hr: { label: isAr ? "بانتظار الموارد البشرية" : "Awaiting HR", cls: "bg-amber-50 text-amber-600" },
+                    approved: { label: isAr ? "تمت الموافقة ✅" : "Approved ✅", cls: "bg-emerald-100 text-emerald-700" },
+                    rejected: { label: isAr ? "مرفوض" : "Rejected", cls: "bg-rose-50 text-rose-600" },
+                  };
+                  const b = map[r.status] || { label: r.status || "—", cls: "bg-slate-100 text-slate-600" };
+                  return (
+                    <Row key={r.id}>
+                      <div>
+                        <div className="font-medium text-sm">{r.request_title || r.request_type}</div>
+                        {r.description && <div className="text-xs text-muted-foreground mt-1 line-clamp-2">{r.description}</div>}
+                        <RequestDate r={r} isAr={isAr} />
+                        {r.status === "approved" && r.hr_name && <div className="text-[11px] text-emerald-700 mt-1">{isAr ? "اعتُمد بواسطة" : "Approved by"}: {r.hr_name} · {r.hr_date}</div>}
+                        {r.status === "rejected" && <RejectedNote reason={{ who: isAr ? "الموارد البشرية" : "HR", text: r.hr_note || "" }} t={t} />}
+                      </div>
+                      <span className={cn("text-xs px-3 py-1.5 rounded-full font-medium", b.cls)}>{b.label}</span>
+                    </Row>
+                  );
+                })}
+              </Section>
+            </div>
+
             <LeaveRequestForm open={leaveOpen} onClose={() => setLeaveOpen(false)} onSaved={() => load(session, { silent: true })} employees={[employee]} currentUserEmployee={employee} portalCreate={portalCreateLeave} />
             <LoanRequestForm open={loanOpen} onClose={() => setLoanOpen(false)} onSaved={() => load(session, { silent: true })} employee={employee} portalCreate={portalCreateLoan} />
+            <HrRequestForm open={hrReqOpen} onClose={() => setHrReqOpen(false)} onSaved={() => load(session, { silent: true })} session={session} isAr={isAr} />
             <BusinessTripForm open={tripOpen} onClose={() => setTripOpen(false)} onSaved={() => load(session, { silent: true })} employees={[employee]} currentUserEmployee={employee} portalCreate={portalCreateTrip} />
             <EquipmentRequestForm open={eqOpen} onClose={() => setEqOpen(false)} onSaved={() => load(session)} employee={employee} portalCreate={portalCreateEquipment} />
             <ComplaintForm open={compOpen} onClose={() => setCompOpen(false)} onSaved={() => load(session)} employee={employee} portalCreate={portalCreateComplaint} />

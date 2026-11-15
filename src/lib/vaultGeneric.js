@@ -28,6 +28,7 @@ export const VAULT_MODULES = {
   appointees: "appointees",
   reports: "reports",
   gosi: "gosi",
+  hrRequests: "hr-requests",
 };
 
 /**
