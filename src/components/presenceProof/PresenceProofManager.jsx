@@ -79,6 +79,13 @@ export default function PresenceProofManager({ org }) {
     testEmpty: "الدفع التجريبي: لا يوجد موظف في الدوام الآن — الزر يستهدف الحاضرين في هذه اللحظة فقط.",
     storeApp: (names) => `تنبيه تطبيق المتجر (Play/Apple) لن يصل هؤلاء لعدم ربط حساب التطبيق بهوياتهم: ${names.join("، ")} — الحل لكل موظف: يثبّت التطبيق ويسجّل الدخول بحسابه فيه، ثم يفتح بوابة الموظف برقم هويته على نفس الجوال مرة واحدة (يتم الربط تلقائياً)، ويفعّل الإشعارات مع الصوت للتطبيق من إعدادات الجوال ويوقف الكتم وعدم الإزعاج.`,
     phoneCoverage: (withPhone, total) => `وللعلم: ${withPhone} من ${total} من هؤلاء لديهم رقم جوال مسجّل في ملف الموظف.`,
+    resend: "إعادة إرسال التنبيه للمتبقّين",
+    resending: "جارٍ إعادة الإرسال...",
+    resendSent: (sent, total, web) => `أُعيد إرسال التنبيه إلى ${sent} من ${total} لم يؤكدوا بعد${web ? ` — ${web} عبر إشعارات الجوال والتطبيق مغلق` : ""}.`,
+    resendWait: (sec) => `ينتظر إعادة الإرسال ${sec} ثانية لمنع تكرار التنبيهات.`,
+    resendLimit: "تم استنفاد مرات إعادة الإرسال لهذا الطلب — تواصل مع الموظف مباشرةً.",
+    resendNone: "كل المستهدفين أكّدوا وجودهم بالفعل.",
+    resendHint: "إن كان جوال الموظف على وضع سكون/عدم إزعاج فلن يرن الإشعار؛ يعيد المدير الإرسال بعد رفع السكون، ويظل التنبيه ظاهراً على شاشة القفل حتى يُضغط.",
   } : {
     title: "Instant presence proof",
     expand: "Open",
@@ -123,6 +130,13 @@ export default function PresenceProofManager({ org }) {
     testEmpty: "Test push: no employee is on shift right now — this button targets only those present at this moment.",
     storeApp: (names) => `Store-app alerts (Play/Apple) will never reach these employees — no app account linked to their identities: ${names.join(", ")}. Fix for each employee: install the app and sign in with their account, then open the employee portal with their national ID once on the same phone (linking is automatic), and enable notifications with sound for the app in the phone settings with silent/DND off.`,
     phoneCoverage: (withPhone, total) => `Note: ${withPhone} of ${total} of them have a phone number on file.`,
+    resend: "Resend alert to pending",
+    resending: "Resending...",
+    resendSent: (sent, total, web) => `Alert resent to ${sent} of ${total} who have not confirmed yet${web ? ` — ${web} through phone notifications with the app closed` : ""}.`,
+    resendWait: (sec) => `Resend is available in ${sec}s to avoid duplicate alerts.`,
+    resendLimit: "Resend attempts are exhausted for this request — contact the employee directly.",
+    resendNone: "All targeted employees already confirmed.",
+    resendHint: "If the employee's phone is on silent / Do Not Disturb the alert will not ring; the manager can resend once silent mode is lifted, and the alert stays on the lock screen until tapped.",
   };
 
   const portalArgs = useMemo(() => {
@@ -140,6 +154,8 @@ export default function PresenceProofManager({ org }) {
   const [pushInfo, setPushInfo] = useState(null);
   const [testBusy, setTestBusy] = useState(false);
   const [testNote, setTestNote] = useState("");
+  const [resendBusy, setResendBusy] = useState(false);
+  const [resendNote, setResendNote] = useState("");
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
@@ -290,6 +306,37 @@ export default function PresenceProofManager({ org }) {
     }
   };
 
+  const resend = async () => {
+    setResendBusy(true);
+    setResendNote("");
+    try {
+      const res = await base44.functions.invoke("presenceProof", { ...portalArgs, action: "resend" });
+      const data = res?.data || res;
+      if (data?.ok) {
+        const web = Number(data.push?.web_sent || 0);
+        const app = Number(data.push?.sent || 0);
+        setResendNote(t.resendSent(web + app, Number(data.pending_count || 0), web));
+      } else if (data?.error === "too_soon") {
+        setResendNote(t.resendWait(Math.ceil(Number(data.wait_ms || 0) / 1000)));
+      } else if (data?.error === "resend_limit") {
+        setResendNote(t.resendLimit);
+      } else if (data?.error === "all_confirmed") {
+        setResendNote(t.resendNone);
+      } else {
+        setResendNote(t.pushFailed);
+      }
+    } catch (err) {
+      const payload = presenceFailure(err).payload || {};
+      if (payload?.error === "too_soon") setResendNote(t.resendWait(Math.ceil(Number(payload.wait_ms || 0) / 1000)));
+      else if (payload?.error === "resend_limit") setResendNote(t.resendLimit);
+      else if (payload?.error === "all_confirmed") setResendNote(t.resendNone);
+      else setResendNote(t.resendLimit);
+    } finally {
+      setResendBusy(false);
+      load(true);
+    }
+  };
+
   const proofDisabled = org && org.presence_proof_enabled === false;
   const active = request && request.status === "active";
   const remaining = active ? Math.max(0, Number(request.deadline_at || 0) - nowMs) : 0;
@@ -418,7 +465,17 @@ export default function PresenceProofManager({ org }) {
 
             {(request.pending || []).length > 0 && (
               <div className="mt-4">
-                <div className="text-sm font-semibold text-rose-700 mb-2">{t.pendingTitle} ({request.pending.length})</div>
+                <div className="flex items-center justify-between gap-2 mb-2">
+                  <div className="text-sm font-semibold text-rose-700">{t.pendingTitle} ({request.pending.length})</div>
+                  {active && (
+                    <Button size="sm" variant="outline" onClick={resend} disabled={resendBusy} className="gap-1 h-8 text-xs shrink-0">
+                      {resendBusy ? <Loader2 size={13} className="animate-spin" /> : <BellRing size={13} />}
+                      {resendBusy ? t.resending : t.resend}
+                    </Button>
+                  )}
+                </div>
+                {active && <p className="text-[11px] text-muted-foreground mb-2 leading-relaxed">{t.resendHint}</p>}
+                {resendNote && <p className="text-[11px] text-muted-foreground mb-2">{resendNote}</p>}
                 <div className="overflow-x-auto rounded-xl border border-rose-200 bg-white">
                   <table className="w-full text-sm">
                     <tbody className="divide-y divide-border">

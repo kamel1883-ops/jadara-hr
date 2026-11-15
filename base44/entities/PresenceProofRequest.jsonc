@@ -89,6 +89,16 @@
       "type": "number",
       "default": 0,
       "title": "عدد إشعارات دفع الويب المتعذرة"
+    },
+    "resend_count": {
+      "type": "number",
+      "default": 0,
+      "title": "عدد مرات إعادة إرسال التنبيه للمتبقين"
+    },
+    "last_resend_at": {
+      "type": "number",
+      "default": 0,
+      "title": "وقت آخر إعادة إرسال (timestamp ms)"
     }
   },
   "required": [

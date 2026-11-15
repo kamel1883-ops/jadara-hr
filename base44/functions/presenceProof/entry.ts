@@ -185,23 +185,100 @@ async function sendWebPush(base44: any, employeeId: string, payload: any) {
   let sent = 0;
   let failed = 0;
   for (const sub of subs) {
-    try {
-      await webpush.sendNotification(
-        { endpoint: String(sub?.endpoint || ""), keys: { p256dh: String(sub?.p256dh || ""), auth: String(sub?.auth || "") } },
-        JSON.stringify(payload),
-        { TTL: 600, urgency: "high" }
-      );
-      sent += 1;
-    } catch (err) {
-      failed += 1;
-      const code = Number((err as any)?.statusCode || 0);
-      // 404/410 = اشتراك منتهٍ أو أُلغي من الجوال.
-      if (code === 404 || code === 410) {
-        try { await base44.asServiceRole.entities.EmployeePushSubscription.update(String(sub?.id || ""), { active: false }); } catch {}
+    const target = {
+      endpoint: String(sub?.endpoint || ""),
+      keys: { p256dh: String(sub?.p256dh || ""), auth: String(sub?.auth || "") },
+    };
+    let delivered = false;
+    // محاولتان: فشل الشبكة المؤقت (مهلة/502) لا يعني أن الجهاز لم يستلم التنبيه.
+    for (let attempt = 0; attempt < 2 && !delivered; attempt++) {
+      try {
+        await webpush.sendNotification(target, JSON.stringify(payload), { TTL: 600, urgency: "high" });
+        delivered = true;
+      } catch (err) {
+        const code = Number((err as any)?.statusCode || 0);
+        // 404/410 = اشتراك منتهٍ أو أُلغي من الجوال — لا فائدة من المحاولة الثانية.
+        if (code === 404 || code === 410) {
+          try { await base44.asServiceRole.entities.EmployeePushSubscription.update(String(sub?.id || ""), { active: false }); } catch {}
+          break;
+        }
+        if (attempt === 0) await new Promise((r) => setTimeout(r, 250));
+      }
+    }
+    if (delivered) sent += 1;
+    else failed += 1;
+  }
+  return { sent, failed, devices: subs.length };
+}
+
+/**
+ * إرسال تنبيه إثبات الحضور لكل المستهدفين — بالتوازي وبإعادة محاولة،
+ * لا بالتتابع: الإرسال التسلسلي على منشأة فيها عشرات الموظفين كان يستهلك
+ * زمن الدالة وينتهي قبل الوصول لمن هم في آخر القائمة، فيشكو العملاء من
+ * أن التنبيه لا يصل （وهو لم يُرسل أصلاً لهم). هذا الإصلاح يشمل كل الشركات.
+ */
+async function deliverProofPush(base44: any, targets: any[], payload: any) {
+  const push = {
+    attempted: targets.length,
+    sent: 0,
+    failed: 0,
+    skipped: 0,
+    status: "skipped_no_user",
+    first_error: "",
+    web_sent: 0,
+    web_failed: 0,
+    web_devices: 0,
+  };
+  const BATCH = 10;
+  for (let i = 0; i < targets.length; i += BATCH) {
+    const slice = targets.slice(i, i + BATCH);
+    const out = await Promise.all(
+      slice.map(async (emp: any) => {
+        const id = String(emp?.id || "");
+        const userId = String(emp?.user_id || "").trim();
+        // 1) إشعار الجوال عبر اشتراك دفع الويب — يصل والتطبيق مغلق بلا حساب متجر.
+        const web = await sendWebPush(base44, id, payload).catch(() => ({ sent: 0, failed: 0, devices: 0 }));
+        // 2) إشعار حساب التطبيق (Play/Apple) إن كان الحساب مرتبطاً بالهوية.
+        let appSent = false;
+        let appError = "";
+        if (userId) {
+          try {
+            await base44.asServiceRole.integrations.Core.SendPushNotification({
+              user_id: userId,
+              title: payload.title,
+              content: payload.body,
+              action_label: "افتح التطبيق الآن",
+              action_url: "/portal",
+            });
+            appSent = true;
+          } catch (err) {
+            try { appError = String((err as any)?.message || (err as any)?.code || "send_failed").slice(0, 160); } catch { appError = "send_failed"; }
+          }
+        }
+        return { web, userId: !!userId, appSent, appError };
+      })
+    );
+    for (const r of out) {
+      push.web_sent += Number((r.web as any)?.sent || 0);
+      push.web_failed += Number((r.web as any)?.failed || 0);
+      push.web_devices += Number((r.web as any)?.devices || 0);
+      if (!r.userId) {
+        push.skipped += 1;
+        continue;
+      }
+      if (r.appSent) push.sent += 1;
+      else {
+        push.failed += 1;
+        if (!push.first_error) push.first_error = r.appError;
       }
     }
   }
-  return { sent, failed, devices: subs.length };
+  const delivered = push.sent + push.web_sent;
+  const undelivered = push.failed + push.web_failed;
+  if (delivered > 0 && undelivered === 0) push.status = "sent";
+  else if (delivered > 0) push.status = "partial";
+  else if (undelivered > 0) push.status = "failed";
+  return push;
 }
 
 async function portalContext(base44: any, body: any) {
@@ -938,52 +1015,13 @@ export default async function (req) {
       // صورة أو صوت مخصص — الأيقونة والصوت من نسخة المتجر نفسها، والنص هنا عربي مباشر.
       const pushTitle = "\uD83D\uDEA8 إثبات الحضور الآن".slice(0, 100);
       const pushBody = `الإدارة تطلب إثبات وجودك في الدوام الآن — افتح التطبيق واضغط «أنا موجود الآن» قبل ${deadlineClock}. عدم التأكيد يظهر في تقرير المتابعة فقط.`.slice(0, 500);
-      const push = {
-        attempted: targetIds.length,
-        sent: 0,
-        failed: 0,
-        skipped: 0,
-        status: "skipped_no_user",
-        first_error: "",
-        web_sent: 0,
-        web_failed: 0,
-      };
-      for (const emp of targets) {
-        const userId = String(emp?.user_id || "").trim();
-        // إشعار الجوال بلا حساب تطبيق: يصل عبر اشتراك دفع الويب المسجّل باسم الموظف نفسه.
-        const web = await sendWebPush(base44, String(emp?.id || ""), {
-          title: pushTitle,
-          body: pushBody,
-          url: "/portal",
-          tag: `presence-proof-${String(created?.id || "")}`,
-        });
-        push.web_sent += web.sent;
-        push.web_failed += web.failed;
-        if (!userId) {
-          push.skipped += 1;
-          continue;
-        }
-        try {
-          await base44.asServiceRole.integrations.Core.SendPushNotification({
-            user_id: userId,
-            title: pushTitle,
-            content: pushBody,
-            action_label: "افتح التطبيق الآن",
-            action_url: "/portal",
-          });
-          push.sent += 1;
-        } catch (err) {
-          push.failed += 1;
-          if (!push.first_error) {
-            try { push.first_error = String(err?.message || err?.code || "send_failed").slice(0, 160); } catch {}
-          }
-        }
-      }
-      const delivered = push.sent + push.web_sent;
-      const undelivered = push.failed + push.web_failed;
-      if (delivered > 0 && undelivered === 0) push.status = "sent";
-      else if (delivered > 0) push.status = "partial";
-      else if (undelivered > 0) push.status = "failed";
+      // تُرسل لكل المستهدفين بالتوازي — لا تتوقف عند منتصف القائمة في المنشآت الكبيرة.
+      const push = await deliverProofPush(base44, targets, {
+        title: pushTitle,
+        body: pushBody,
+        url: "/portal",
+        tag: `presence-proof-${String(created?.id || "")}`,
+      });
       // تنبيه التطبيق فقط — دون أي اتصال صوتي.
       // يُرسل للحساب المرتبط بهوية الموظف في نفس المنشأة فقط.
       try {
@@ -1002,6 +1040,50 @@ export default async function (req) {
         created.push_web_count = push.web_sent;
       } catch {}
       return Response.json({ ok: true, request: await hydrate(base44, created), push });
+    }
+
+    // إعادة إرسال التنبيه للموظفين الذين لم يؤكدوا بعد — لأن الجوال قد يكون
+    // في وضع سكون/عدم إزعاج وقت الإرسال الأول، أو كان التطبيق مغلقاً والشبكة نائمة.
+    // تُعيد الإرسال لنفس الطلب حتى انتهاء المدة، بلا تغيير للطلب أو للحضور.
+    if (action === "resend") {
+      const nowMs = Date.now();
+      const rows = await expireOverdue(base44, unified, nowMs);
+      const active = (rows || []).find((r: any) => String(r?.status || "") === "active");
+      if (!active) return Response.json({ ok: false, error: "no_active" }, { status: 404 });
+      const count = Number(active.resend_count || 0);
+      const last = Number(active.last_resend_at || 0);
+      if (count >= 5) return Response.json({ ok: false, error: "resend_limit" }, { status: 429 });
+      if (last && nowMs - last < 25000) {
+        return Response.json({ ok: false, error: "too_soon", wait_ms: 25000 - (nowMs - last) }, { status: 429 });
+      }
+      const { targetIds, confirmedAt } = summarize(active);
+      const pendingIds = targetIds.filter((id) => !(id in confirmedAt));
+      if (!pendingIds.length) return Response.json({ ok: false, error: "all_confirmed" }, { status: 400 });
+
+      const employees = asList(
+        await base44.asServiceRole.entities.Employee.filter({ unified_number: unified }, "-created_date", 5000).catch(() => [])
+      );
+      const byId = new Map((employees || []).map((e: any) => [String(e?.id || ""), e]));
+      const targets = pendingIds.map((id) => byId.get(id)).filter(Boolean);
+      const messages = proofMessages(riyadhNow(new Date(Number(active.deadline_at) || nowMs)).clock);
+
+      const push = await deliverProofPush(base44, targets, {
+        title: messages.ar.title,
+        body: messages.ar.body,
+        url: "/portal",
+        tag: `presence-proof-${String(active.id)}-r${count + 1}`,
+      });
+      try {
+        await base44.asServiceRole.entities.PresenceProofRequest.update(active.id, {
+          resend_count: count + 1,
+          last_resend_at: nowMs,
+          push_status: push.status,
+          push_sent_count: Number(active.push_sent_count || 0) + push.sent + push.web_sent,
+          push_failed_count: Number(active.push_failed_count || 0) + push.failed + push.web_failed,
+          push_web_count: Number(active.push_web_count || 0) + push.web_sent,
+        });
+      } catch {}
+      return Response.json({ ok: true, push, pending_count: pendingIds.length, resend_count: count + 1 });
     }
 
     if (action === "status") {
