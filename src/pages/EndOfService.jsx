@@ -319,6 +319,16 @@ export default function EndOfService() {
   const confirmEosFin = async () => {
     if (!acting) return;
     setBusy(true);
+    // أول من يعتمد يُقفل المخالصة: قراءة حديثة من المصدر قبل الصرف
+    try {
+      const freshRec = await base44.entities.Settlement.get(acting.req.id);
+      if (freshRec && (freshRec.finance_status === "paid" || freshRec.finance_status === "rejected")) {
+        const who = freshRec.finance_name ? ` — ${freshRec.finance_name}` : "";
+        alert(isAr ? `سبقك معتمد مالي آخر${who}. لا يمكن الاعتماد مرتين.` : `Another finance approver already handled this settlement${who}.`);
+        setBusy(false); setActing(null); setProofFile(null); load();
+        return;
+      }
+    } catch { /* فشل القراءة لا يمنع العمل — الحماية النهائية في الخادم */ }
     let url = "";
     if (proofFile) { const { file_url } = await base44.integrations.Core.UploadFile({ file: proofFile }); url = file_url; }
     try {

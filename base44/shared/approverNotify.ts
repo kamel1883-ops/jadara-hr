@@ -42,29 +42,36 @@ export async function notifyApproverForStatus(
     };
   };
 
-  // تحديد المعتمد المختص بناءً على المرحلة الحالية للطلب — من نفس المنشأة فقط.
+  // تحديد المعتمدين المختصين بناءً على المرحلة الحالية للطلب — من نفس المنشأة فقط.
   // - pending_manager: المدير المباشر لصاحب الطلب فقط (لا يصل لمدير آخر).
-  // - manager_approved: معتمد الموارد البشرية للمنشأة.
-  // - awaiting_finance: المعتمد المالي للمنشأة (يصرف مستحقات الجميع).
-  let approver: any = null;
+  // - manager_approved: كل معتمدي الموارد البشرية للمنشأة.
+  // - awaiting_finance: كل المعتمدين الماليين للمنشأة (لأن الصلاحية قد تُمنح لأكثر من شخص:
+  //   مدير مالي، محاسب، …) — يُرسل للجميع، وأول من يعتمد يُقفل الطلب على الباقين.
+  let approvers: any[] = [];
   let stageLabel = "";
   let stage = "";
   if (["pending_manager", "pending"].includes(status)) {
     const manager = (employees || []).find((e) => e.id === requester?.manager_id) || null;
-    approver = manager && sameTenant(manager) ? manager : await tenantAdmin();
+    approvers = manager && sameTenant(manager) ? [manager] : [];
     stageLabel = "المدير المباشر";
     stage = "manager";
   } else if (status === "manager_approved") {
-    approver = (employees || []).find((e) => e.is_approver_hr && sameTenant(e)) || await tenantAdmin();
+    approvers = (employees || []).filter((e) => e.is_approver_hr && sameTenant(e));
     stageLabel = "الموارد البشرية";
     stage = "hr";
   } else if (["hr_approved", "hr_settled", "awaiting_finance"].includes(status)) {
-    approver = (employees || []).find((e) => e.is_approver_finance && sameTenant(e)) || await tenantAdmin();
+    approvers = (employees || []).filter((e) => e.is_approver_finance && sameTenant(e));
     stageLabel = "المالية";
     stage = "finance";
   }
 
-  if (!approver || !approver.email) return { ok: true, skipped: true, reason: "no-approver-email" };
+  // لا يوجد أي معتمد مختص في المنشأة → الرجوع لمدير المنشأة (وليس لمعتمد من منشأة أخرى)
+  if (approvers.length === 0) {
+    const admin = await tenantAdmin();
+    if (admin) approvers = [admin];
+  }
+  approvers = approvers.filter((a) => a && a.email);
+  if (approvers.length === 0) return { ok: true, skipped: true, reason: "no-approver-email" };
 
   const label = TYPE_LABEL[type] || "طلب";
   // employeeName قد يصل بصيغة «رقم - مهنة» من مسار البوابة — الاسم الحقيقي من السجل أولاً.
@@ -73,40 +80,56 @@ export async function notifyApproverForStatus(
   const empNid = params.employeeNationalId || requester?.national_id || "—";
   const empPos = params.position || requester?.position || "—";
   const subject = `لديك طلب ${label} بانتظار الموافقة — منصة جداره`;
-  const bodyText =
-    `السلام عليكم ${approver.full_name || ""}،\n\n` +
+
+  const buildBody = (toName: string) =>
+    `السلام عليكم ${toName || ""}،\n\n` +
     `لديك طلب ${label} بانتظار ${stageLabel} على بوابة الموظف في منصة جداره.\n\n` +
     `الموظف: ${empName}\n` +
     `الرقم الوظيفي: ${empNumber}\n` +
     `رقم الهوية / الإقامة: ${empNid}\n` +
     `المسمى الوظيفي: ${empPos}\n` +
     (params.details ? `بيان الطلب: ${params.details}\n` : "") +
+    (stage === "finance"
+      ? `\nملاحظة: هذا الطلب معروض على جميع المعتمدين الماليين في المنشأة، وأول من يعتمده ينهي الاعتماد ويُقفل الطلب على الباقي.\n`
+      : "") +
     `\nيرجى الدخول إلى بوابة الموظف لمراجعة الطلب واتخاذ الإجراء المناسب.\n\n` +
     `مع التحية،\nمنصة جداره للموارد البشرية`;
 
-  // إشعار داخلي موجّه للمعتمد فقط:
-  // - مرحلة المدير: يظهر في بوابة الموظف لدى مديره المباشر فقط (employee_id).
-  // - مرحلة الموارد: يظهر في بوابة الشركات لدى مسؤول الموارد البشرية.
-  // - مرحلة المالية: يظهر في بوابة الموظف لدى المعتمد المالي فقط — لا يظهر لمسؤول الموارد البشرية.
-  // حقل stage يتيح لكل واجهة عرض ما يخص دورها فقط.
-  try {
-    await base44.asServiceRole.entities.Notification.create({
-      title: subject,
-      body: bodyText,
-      type: "approval_pending",
-      stage,
-      employee_id: approver.id || "",
-      user_id: approver.user_id || "",
-      unified_number: requesterUn,
-      is_read: false,
-    });
-  } catch {}
+  const sentTo: string[] = [];
+  const failures: string[] = [];
 
-  try {
-    const { html, text } = wrapEmailContent(bodyText);
-    await base44.asServiceRole.integrations.Core.SendEmail({ to: approver.email, subject, html, text });
-    return { ok: true, sentTo: approver.email };
-  } catch (e: any) {
-    return { ok: true, skipped: true, reason: "send-failed", error: String(e?.message || e) };
+  for (const approver of approvers) {
+    const bodyText = buildBody(approver.full_name || "");
+
+    // إشعار داخلي موجّه لكل معتمد في مرحلته:
+    // - مرحلة المدير: لدى مديره المباشر فقط (employee_id).
+    // - مرحلة الموارد: لدى مسؤولي الموارد البشرية.
+    // - مرحلة المالية: لدى كل المعتمدين الماليين — لا يظهر لمسؤول الموارد البشرية.
+    // حقل stage يتيح لكل واجهة عرض ما يخص دورها فقط.
+    try {
+      await base44.asServiceRole.entities.Notification.create({
+        title: subject,
+        body: bodyText,
+        type: "approval_pending",
+        stage,
+        employee_id: approver.id || "",
+        user_id: approver.user_id || "",
+        unified_number: requesterUn,
+        is_read: false,
+      });
+    } catch {}
+
+    try {
+      const { html, text } = wrapEmailContent(bodyText);
+      await base44.asServiceRole.integrations.Core.SendEmail({ to: approver.email, subject, html, text });
+      sentTo.push(approver.email);
+    } catch (e: any) {
+      failures.push(`${approver.email}: ${String(e?.message || e).slice(0, 120)}`);
+    }
   }
+
+  if (sentTo.length === 0) {
+    return { ok: true, skipped: true, reason: "send-failed", error: failures.join(" | ") };
+  }
+  return { ok: true, sentTo: sentTo.join(", "), count: sentTo.length, failures };
 }

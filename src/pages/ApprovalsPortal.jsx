@@ -71,10 +71,20 @@ export default function ApprovalsPortal({ portalSession }) {
 
   const role = data?.role;
 
+  // رسالة تظهر للمعتمد المالي عند تغيّر الطلب بين لحظة الفتح ولحظة الاعتماد
+  // (مثال: اعتمده معتمد مالي آخر قبله) — أو أي خطأ يعيده الخادم.
+  const [notice, setNotice] = useState("");
   const call = async (payload) => {
-    await base44.functions.invoke("approvalAction", { ...payload, ...portalArgs });
-    setActing(null); setNote(""); setProofFile(null);
-    await load();
+    try {
+      await base44.functions.invoke("approvalAction", { ...payload, ...portalArgs });
+      setNotice("");
+    } catch (e) {
+      const d = e?.response?.data || e?.data || {};
+      setNotice(d?.message || d?.error || e?.message || (isAr ? "تعذّر تنفيذ الإجراء، حاول مرة أخرى." : "Could not complete the action, please try again."));
+    } finally {
+      setActing(null); setNote(""); setProofFile(null);
+      await load();
+    }
   };
 
   const openReject = (type, r) => { setActing({ type, req: r, action: "reject" }); setNote(""); };
@@ -498,6 +508,12 @@ export default function ApprovalsPortal({ portalSession }) {
   return (
     <div dir={portalDir(lang)} className="animate-fade-in">
       <PageHeader title={t.fTitle} subtitle={t.fSub} />
+      {notice && (
+        <div className="mb-4 rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-800 flex items-start gap-2">
+          <span className="flex-1">{notice}</span>
+          <button onClick={() => setNotice("")} className="text-xs opacity-60 hover:opacity-100">✕</button>
+        </div>
+      )}
       <div className="rounded-3xl bg-white/40 backdrop-blur-xl border border-white/60 shadow-xl p-4 sm:p-5">
       <Tabs defaultValue="leaves">
         <TabsList className="mb-4 bg-white/50 backdrop-blur-md border border-white/60 rounded-2xl">

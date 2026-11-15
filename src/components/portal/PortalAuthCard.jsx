@@ -4,7 +4,11 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import TurnstileWidget from "@/components/TurnstileWidget";
-import { ShieldCheck, UserPlus, KeyRound, Loader2, ArrowRight } from "lucide-react";
+import { ShieldCheck, UserPlus, KeyRound, Loader2, ArrowRight, Fingerprint } from "lucide-react";
+import {
+  passkeySupported, platformAuthenticatorAvailable,
+  registerPasskey, loginWithPasskey, passkeyHint,
+} from "@/lib/passkey";
 import { cn } from "@/lib/utils";
 import { usePortalI18n, usePortalT, portalDir } from "@/lib/portalI18n";
 
@@ -50,6 +54,92 @@ export default function PortalAuthCard({ onAuthenticated }) {
   const [otpSent, setOtpSent] = useState(false);
   const [otpUid, setOtpUid] = useState("");
 
+  // ── الدخول السريع (بصمة/وجه/رمز الجهاز) ─────────────────────────────
+  // بعد دخول ناجح بكلمة المرور نعرض تفعيله مرة واحدة؛ ويظهر زر «دخول سريع»
+  // في شاشة الدخول إذا كان الجهاز مسجلاً مسبقاً.
+  const hint = passkeyHint.load();
+  const [canQuick, setCanQuick] = useState(!!hint);
+  const [offerRegister, setOfferRegister] = useState(null); // { token, nationalId }
+  const [quickBusy, setQuickBusy] = useState(false);
+
+  const passkeyLabels = isRtl
+    ? {
+        quick: "دخول سريع بالبصمة أو رمز الجهاز",
+        quickHint: "استخدم البصمة أو الوجه أو رمز شاشة جهازك — بدون كلمة مرور.",
+        enable: "تفعيل الدخول السريع",
+        enableHint: "فعّل البصمة أو الوجه أو رمز شاشة جهازك للدخول مباشرة في المرة القادمة.",
+        later: "لاحقاً",
+        enabled: "تم تفعيل الدخول السريع على هذا الجهاز.",
+        failed: "تعذّر التحقق من الجهاز. يمكنك الدخول بكلمة المرور.",
+        cancelled: "أُلغي التحقق من الجهاز.",
+        unsupported: "جهازك أو متصفحك لا يدعم الدخول السريع.",
+      }
+    : {
+        quick: "Quick sign-in with biometrics or device passcode",
+        quickHint: "Use your fingerprint, face or device passcode — no password needed.",
+        enable: "Enable quick sign-in",
+        enableHint: "Use your fingerprint, face or device passcode to sign in next time.",
+        later: "Later",
+        enabled: "Quick sign-in is now enabled on this device.",
+        failed: "Could not verify this device. You can sign in with your password.",
+        cancelled: "Device verification was cancelled.",
+        unsupported: "Your device or browser does not support quick sign-in.",
+      };
+
+  const doEnablePasskey = async () => {
+    if (!offerRegister) return;
+    setQuickBusy(true); setMsg({ type: "", text: "" }); setInfo("");
+    try {
+      const ok = await platformAuthenticatorAvailable();
+      if (!ok) { setMsg({ type: "err", text: passkeyLabels.unsupported }); return; }
+      const out = await registerPasskey({
+        base44,
+        portalToken: offerRegister.token,
+        nationalId: offerRegister.nationalId,
+      });
+      if (out?.ok) {
+        const pending = offerRegister.pending;
+        setOfferRegister(null);
+        setCanQuick(true);
+        setInfo(passkeyLabels.enabled);
+        if (pending) onAuthenticated(pending);
+      } else {
+        setMsg({ type: "err", text: out?.message || passkeyLabels.failed });
+      }
+    } catch (e) {
+      const name = String(e?.name || "");
+      setMsg({ type: "err", text: name === "NotAllowedError" ? passkeyLabels.cancelled : passkeyLabels.failed });
+    } finally { setQuickBusy(false); }
+  };
+
+  const doQuickLogin = async () => {
+    const h = passkeyHint.load();
+    if (!h) { setCanQuick(false); return; }
+    setQuickBusy(true); setMsg({ type: "", text: "" }); setInfo("");
+    try {
+      const out = await loginWithPasskey({
+        base44,
+        nationalId: h.nationalId,
+        credentialId: h.credentialId,
+      });
+      if (out?.ok) {
+        setQuickBusy(false);
+        onAuthenticated({
+          token: out.token,
+          employee_id: out.employee.id,
+          employee: out.employee,
+          org: out.org,
+          expires_at: out.expires_at,
+        });
+        return;
+      }
+      setMsg({ type: "err", text: passkeyLabels.failed });
+    } catch (e) {
+      const name = String(e?.name || "");
+      setMsg({ type: "err", text: name === "NotAllowedError" ? passkeyLabels.cancelled : (e?.message || passkeyLabels.failed) });
+    } finally { setQuickBusy(false); }
+  };
+
   const switchMode = (m) => {
     setMode(m);
     setMsg({ type: "", text: "" });
@@ -80,13 +170,30 @@ export default function PortalAuthCard({ onAuthenticated }) {
       });
       const data = res?.data || res;
       if (data?.ok) {
-        onAuthenticated({
-          token: data.token,
-          employee_id: data.employee.id,
-          employee: data.employee,
-          org: data.org,
-          expires_at: data.expires_at,
-        });
+        // بعد دخول ناجح: نعرض تفعيل الدخول السريع أولاً إن كان الجهاز يدعمه،
+        // ثم نكمل الدخول عند التفعيل أو عند اختيار «لاحقاً».
+        const supported = passkeySupported() && await platformAuthenticatorAvailable();
+        if (supported) {
+          setOfferRegister({
+            token: data.token,
+            nationalId: id,
+            pending: {
+              token: data.token,
+              employee_id: data.employee.id,
+              employee: data.employee,
+              org: data.org,
+              expires_at: data.expires_at,
+            },
+          });
+        } else {
+          onAuthenticated({
+            token: data.token,
+            employee_id: data.employee.id,
+            employee: data.employee,
+            org: data.org,
+            expires_at: data.expires_at,
+          });
+        }
         setNid(""); setPwd(""); setCaptcha("");
       } else {
         setMsg({ type: "err", text: errText(t, data?.error) });
@@ -198,6 +305,40 @@ export default function PortalAuthCard({ onAuthenticated }) {
       {msg.text && (
         <div className={cn("mb-4 text-sm rounded-lg p-3 leading-relaxed",
           msg.type === "ok" ? "bg-emerald-50 text-emerald-700" : "bg-rose-50 text-rose-700")}>{msg.text}</div>
+      )}
+
+      {mode === "login" && canQuick && (
+        <div className="mb-4 rounded-xl border border-violet-200 bg-violet-50 p-3">
+          <Button type="button" onClick={doQuickLogin} disabled={quickBusy} className="w-full gap-2 bg-violet-600 hover:bg-violet-700">
+            {quickBusy ? <Loader2 size={16} className="animate-spin" /> : <Fingerprint size={16} />}
+            {passkeyLabels.quick}
+          </Button>
+          <p className="mt-2 text-[11px] text-violet-800 leading-relaxed">{passkeyLabels.quickHint}</p>
+        </div>
+      )}
+
+      {offerRegister && (
+        <div className="mb-4 rounded-xl border border-emerald-200 bg-emerald-50 p-3">
+          <p className="text-xs text-emerald-900 leading-relaxed mb-2">{passkeyLabels.enableHint}</p>
+          <div className="flex gap-2">
+            <Button type="button" onClick={doEnablePasskey} disabled={quickBusy} className="gap-2 bg-emerald-600 hover:bg-emerald-700">
+              {quickBusy ? <Loader2 size={16} className="animate-spin" /> : <Fingerprint size={16} />}
+              {passkeyLabels.enable}
+            </Button>
+            <Button
+              type="button"
+              variant="outline"
+              disabled={quickBusy}
+              onClick={() => {
+                const pending = offerRegister?.pending;
+                setOfferRegister(null);
+                if (pending) onAuthenticated(pending);
+              }}
+            >
+              {passkeyLabels.later}
+            </Button>
+          </div>
+        </div>
       )}
 
       {mode === "login" && (

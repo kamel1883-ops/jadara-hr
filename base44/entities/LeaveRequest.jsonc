@@ -172,6 +172,14 @@
     "finance_note": {
       "type": "string"
     },
+    "finance_id": {
+      "type": "string",
+      "title": "معرّف المعتمد المالي المنفّذ"
+    },
+    "finance_name": {
+      "type": "string",
+      "title": "اسم المعتمد المالي المنفّذ"
+    },
     "finance_paid_date": {
       "type": "string",
       "format": "date"

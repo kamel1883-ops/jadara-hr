@@ -389,6 +389,18 @@ export default function Approvals() {
   const confirmFinance = async () => {
     if (!acting) return;
     setBusy(true);
+    // أول من يعتمد يُقفل الطلب: نقرأ السجل من المصدر قبل الكتابة —
+    // إذا كان معتمد مالي آخر قد اعتمده أو رفضه قبل لحظات، نوقف العملية.
+    try {
+      const entityName = acting.type === "leaves" ? "LeaveRequest" : acting.type === "trips" ? "BusinessTrip" : "LoanRequest";
+      const freshRec = await base44.entities[entityName].get(acting.req.id);
+      if (freshRec && (freshRec.finance_status === "paid" || freshRec.finance_status === "rejected")) {
+        const who = freshRec.finance_name ? ` — ${freshRec.finance_name}` : "";
+        alert(isAr ? `سبقك معتمد مالي آخر${who}. لا يمكن الاعتماد مرتين.` : `Another finance approver already handled this request${who}.`);
+        setBusy(false); setActing(null); setProofFile(null); load();
+        return;
+      }
+    } catch { /* فشل القراءة لا يمنع العمل — الحماية النهائية في الخادم */ }
     let url = "";
     if (proofFile) { url = await uploadFileToVault(proofFile, { empRef: empOf(acting.req.employee_id)?.emp_ref || null, docType: "attachment" }) || ""; }
     const isLoan = acting.type === "loans";

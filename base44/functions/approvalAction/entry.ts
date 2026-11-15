@@ -216,15 +216,46 @@ export default async function (req) {
     }
 
     // ===== المعتمد المالي =====
+    // الصلاحية قد تُمنح لأكثر من شخص (مدير مالي، محاسب، …) ويصل الطلب للجميع.
+    // القاعدة: أول من يعتمد يُقفل الطلب على الباقي — الاعتماد الثاني يُرفض برسالة واضحة.
     if (myEmp.is_approver_finance && (action === "confirm" || action === "reject")) {
+      const FINANCE_CFG: Record<string, { entity: string; statuses: string[] }> = {
+        leaves: { entity: "LeaveRequest", statuses: ["awaiting_finance", "hr_approved"] },
+        loans: { entity: "LoanRequest", statuses: ["awaiting_finance", "hr_approved"] },
+        trips: { entity: "BusinessTrip", statuses: ["awaiting_finance"] },
+        settlements: { entity: "Settlement", statuses: ["awaiting_finance"] },
+      };
+      const cfg = FINANCE_CFG[type];
+      if (!cfg) return Response.json({ error: "نوع طلب غير مدعوم" }, { status: 400 });
+
+      // قراءة حديثة من المصدر قبل أي إجراء — لالتقاط اعتماد معتمد آخر حصل قبل لحظات
+      const fresh: any = await (base44.asServiceRole.entities as any)[cfg.entity].get(id);
+      if (!fresh) return Response.json({ error: "الطلب غير موجود" }, { status: 404 });
+      if (!sameTenant(fresh.employee_id))
+        return Response.json({ error: "هذا الطلب خارج نطاق منشأتك" }, { status: 403 });
+
+      const alreadyDone = fresh.finance_status === "paid" || fresh.finance_status === "rejected" || !cfg.statuses.includes(fresh.status);
+      if (alreadyDone) {
+        const by = fresh.finance_name || "";
+        const verb = fresh.finance_status === "rejected" ? "رفضه" : "اعتمده";
+        return Response.json(
+          {
+            error: "already_actioned",
+            message: `سبقك معتمد مالي آخر — ${verb}${by ? " " + by : ""} (${fresh.finance_paid_date || ""}). لا يمكن الاعتماد مرتين.`,
+            finance_name: by,
+          },
+          { status: 409 }
+        );
+      }
+
+      // توثيق المعتمد المنفّذ — يُسجَّل على الطلب وملف الموظف
+      const FIN = { finance_id: myEmp.id, finance_name: myEmp.full_name || actorName || "" };
+
       if (type === "leaves") {
-        const r = await base44.asServiceRole.entities.LeaveRequest.get(id);
-        if (!sameTenant(r.employee_id))
-          return Response.json({ error: "هذا الطلب خارج نطاق منشأتك" }, { status: 403 });
-        if (!["awaiting_finance", "hr_approved"].includes(r.status))
-          return Response.json({ error: "الطلب ليس في مرحلة الصرف" }, { status: 400 });
+        const r = fresh;
         if (action === "confirm") {
           await su("LeaveRequest", id, {
+            ...FIN,
             finance_status: "paid", finance_paid_date: today(), finance_proof_url: proofUrl,
             finance_proof_date: today(), finance_note: note, status: "completed",
           });
@@ -242,6 +273,7 @@ export default async function (req) {
           }
         } else {
           await su("LeaveRequest", id, {
+            ...FIN,
             finance_status: "rejected", finance_note: note, status: "rejected",
           });
         }
@@ -249,18 +281,15 @@ export default async function (req) {
       }
 
       if (type === "loans") {
-        const r = await base44.asServiceRole.entities.LoanRequest.get(id);
-        if (!sameTenant(r.employee_id))
-          return Response.json({ error: "هذا الطلب خارج نطاق منشأتك" }, { status: 403 });
-        if (!["awaiting_finance", "hr_approved"].includes(r.status))
-          return Response.json({ error: "الطلب ليس في مرحلة الصرف" }, { status: 400 });
         if (action === "confirm") {
           await su("LoanRequest", id, {
+            ...FIN,
             finance_status: "paid", finance_paid_date: today(), finance_proof_url: proofUrl,
             finance_proof_date: today(), finance_note: note, paid_amount: 0, status: "paid",
           });
         } else {
           await su("LoanRequest", id, {
+            ...FIN,
             finance_status: "rejected", finance_note: note, status: "rejected",
           });
         }
@@ -268,18 +297,15 @@ export default async function (req) {
       }
 
       if (type === "trips") {
-        const r = await base44.asServiceRole.entities.BusinessTrip.get(id);
-        if (!sameTenant(r.employee_id))
-          return Response.json({ error: "هذا الطلب خارج نطاق منشأتك" }, { status: 403 });
-        if (r.status !== "awaiting_finance")
-          return Response.json({ error: "الطلب ليس في مرحلة الصرف" }, { status: 400 });
         if (action === "confirm") {
           await su("BusinessTrip", id, {
+            ...FIN,
             finance_status: "paid", finance_paid_date: today(), finance_proof_url: proofUrl,
             finance_proof_date: today(), finance_note: note, status: "completed",
           });
         } else {
           await su("BusinessTrip", id, {
+            ...FIN,
             finance_status: "rejected", finance_note: note, status: "rejected",
           });
         }
@@ -287,14 +313,11 @@ export default async function (req) {
       }
 
       if (type === "settlements") {
-        const r = await base44.asServiceRole.entities.Settlement.get(id);
-        if (!sameTenant(r.employee_id))
-          return Response.json({ error: "هذا الطلب خارج نطاق منشأتك" }, { status: 403 });
-        if (r.status !== "awaiting_finance")
-          return Response.json({ error: "الطلب ليس في مرحلة الصرف" }, { status: 400 });
+        const r = fresh;
         if (action === "confirm") {
           await su("Settlement", id, {
-            finance_status: "paid", finance_id: actorId, finance_name: actorName,
+            ...FIN,
+            finance_status: "paid",
             finance_paid_date: today(), finance_proof_url: proofUrl, finance_proof_date: today(),
             finance_note: note, status: "completed",
           });
@@ -306,6 +329,7 @@ export default async function (req) {
           }
         } else {
           await su("Settlement", id, {
+            ...FIN,
             finance_status: "rejected", finance_note: note, status: "rejected",
           });
         }
