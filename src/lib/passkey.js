@@ -61,13 +61,24 @@ export const passkeyHint = {
   },
 };
 
+/** نداء دالة portalPasskey مع إرجاع رسالة الخادم العربية حتى عند ردّ 4xx/5xx */
+async function invokePasskey(base44, payload) {
+  try {
+    const res = await base44.functions.invoke("portalPasskey", payload);
+    return res?.data || res;
+  } catch (e) {
+    const data = e?.response?.data;
+    if (data && typeof data === "object" && (data.error || data.ok === false)) return data;
+    throw e;
+  }
+}
+
 /** تسجيل الجهاز — بعد دخول ناجح بكلمة المرور */
 export async function registerPasskey({ base44, portalToken, nationalId }) {
-  const start = await base44.functions.invoke("portalPasskey", {
+  const data = await invokePasskey(base44, {
     action: "register_options",
     portal_token: portalToken,
   });
-  const data = start?.data || start;
   if (!data?.ok) throw new Error(data?.error || "register_options_failed");
 
   const o = data.options;
@@ -85,7 +96,7 @@ export async function registerPasskey({ base44, portalToken, nationalId }) {
   });
 
   const r = cred.response;
-  const done = await base44.functions.invoke("portalPasskey", {
+  const out = await invokePasskey(base44, {
     action: "register_verify",
     portal_token: portalToken,
     challenge_token: data.challenge_token,
@@ -93,20 +104,18 @@ export async function registerPasskey({ base44, portalToken, nationalId }) {
     attestation_object: fromBytes(new Uint8Array(r.attestationObject)),
   });
 
-  const out = done?.data || done;
   if (out?.ok && nationalId) passkeyHint.save(nationalId, out.credential_id);
   return out;
 }
 
 /** الدخول السريع — بصمة/وجه/رمز الجهاز ثم إصدار جلسة بوابة */
 export async function loginWithPasskey({ base44, nationalId, credentialId }) {
-  const start = await base44.functions.invoke("portalPasskey", {
+  const data = await invokePasskey(base44, {
     action: "login_options",
     national_id: nationalId,
     credential_id: credentialId,
   });
-  const data = start?.data || start;
-  if (!data?.ok) throw new Error(data?.error || "login_options_failed");
+  if (!data?.ok) throw new Error(data?.message || data?.error || "login_options_failed");
 
   const o = data.options;
   const assertion = await navigator.credentials.get({
@@ -123,7 +132,7 @@ export async function loginWithPasskey({ base44, nationalId, credentialId }) {
   });
 
   const r = assertion.response;
-  const done = await base44.functions.invoke("portalPasskey", {
+  const out = await invokePasskey(base44, {
     action: "login_verify",
     national_id: nationalId,
     challenge_token: data.challenge_token,
@@ -132,7 +141,6 @@ export async function loginWithPasskey({ base44, nationalId, credentialId }) {
     signature: fromBytes(new Uint8Array(r.signature)),
   });
 
-  const out = done?.data || done;
   if (!out?.ok) throw new Error(out?.message || out?.error || "login_failed");
   return out;
 }

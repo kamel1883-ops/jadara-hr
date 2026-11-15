@@ -198,6 +198,62 @@ function bytesEqual(a: Uint8Array, b: Uint8Array): boolean {
   return diff === 0;
 }
 
+/**
+ * تحويل توقيع ECDSA من صيغة ASN.1/DER (التي يرسلها الجهاز في WebAuthn)
+ * إلى الصيغة الخام r||s التي يتطلبها crypto.subtle.verify.
+ * بدون هذا التحويل يفشل التحقق دائماً على آيفون/أندرويد (Face ID / بصمة)
+ * فيُرفض الدخول السريع بخطأ 401.
+ */
+function derSignatureToRaw(der: Uint8Array): Uint8Array | null {
+  try {
+    if (der.length < 8 || der[0] !== 0x30) return null;
+    let offset = 2;
+    if (der[1] & 0x80) offset = 2 + (der[1] & 0x7f); // طول طويل الشكل
+    const readInt = (): Uint8Array | null => {
+      if (offset + 2 > der.length || der[offset] !== 0x02) return null;
+      const len = der[offset + 1];
+      const start = offset + 2;
+      if (start + len > der.length) return null;
+      offset = start + len;
+      return der.slice(start, start + len);
+    };
+    const r = readInt();
+    const s = readInt();
+    if (!r || !s) return null;
+    const out = new Uint8Array(64);
+    const put = (v: Uint8Array, at: number): boolean => {
+      let src = v;
+      while (src.length > 32 && src[0] === 0) src = src.slice(1); // إزالة بايت الإشارة
+      if (src.length > 32) return false;
+      out.set(src, at + (32 - src.length));
+      return true;
+    };
+    if (!put(r, 0) || !put(s, 32)) return null;
+    return out;
+  } catch {
+    return null;
+  }
+}
+
+async function verifySignature(
+  key: CryptoKey,
+  algorithm: any,
+  signature: Uint8Array,
+  data: Uint8Array
+): Promise<boolean> {
+  const candidates: Uint8Array[] = [signature];
+  if (algorithm?.name === "ECDSA") {
+    const raw = signature.length === 64 ? signature : derSignatureToRaw(signature);
+    if (raw && !bytesEqual(raw, signature)) candidates.unshift(raw);
+  }
+  for (const sig of candidates) {
+    try {
+      if (await crypto.subtle.verify(algorithm, key, sig, data)) return true;
+    } catch { /* جرّب الصيغة الأخرى */ }
+  }
+  return false;
+}
+
 /** يتحقق من clientDataJSON: النوع، التحدي، والأصل */
 export function checkClientData(
   clientDataJSONB64: string,
@@ -293,12 +349,8 @@ export async function verifyAssertion(params: {
       ? { name: "RSASSA-PKCS1-v1_5" }
       : { name: "ECDSA", hash: "SHA-256" };
 
-    const ok = await crypto.subtle.verify(
-      verifyAlg,
-      key,
-      b64urlToBytes(params.signatureB64),
-      signedData
-    );
+    // توقيع ECDSA يصل بصيغة DER من الجهاز، وcrypto يطلب r||s خاماً — نتقبل الصيغتين
+    const ok = await verifySignature(key, verifyAlg, b64urlToBytes(params.signatureB64), signedData);
     return ok ? { ok: true } : { ok: false, reason: "signature_invalid" };
   } catch (e: any) {
     return { ok: false, reason: `verify_error:${e?.message || e}` };

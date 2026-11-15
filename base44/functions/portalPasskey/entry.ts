@@ -155,7 +155,12 @@ export default async function (req: Request) {
         String(body.client_data_json || ""),
         "webauthn.create",
         String(ticket.challenge || ""),
-        [String(ticket.origin || origin)]
+        [...new Set([
+          String(ticket.origin || ""),
+          origin,
+          String(ticket.origin || origin).replace("http://", "https://"),
+          origin.replace("http://", "https://"),
+        ].filter(Boolean))]
       );
       if (!client.ok) return Response.json({ ok: false, error: client.reason }, { status: 400 });
 
@@ -241,6 +246,13 @@ export default async function (req: Request) {
       if (nid && String(emp.national_id || "") !== nid)
         return Response.json({ ok: false, error: "credential_mismatch" }, { status: 403 });
 
+      // نقبل أصل الطلب الحالي وأصل لحظة إصدار التحدي (ومعه نسخة https لوسطاء الـ proxy)
+      const claimOrigins = [String(ticket.origin || ""), origin].filter(Boolean);
+      const allowedOrigins = [...new Set([
+        ...claimOrigins,
+        ...claimOrigins.map((o) => (o.startsWith("http://") ? o.replace("http://", "https://") : o)),
+      ])];
+
       const result = await verifyAssertion({
         publicKeyCborB64: String(emp.passkey_public_key),
         credentialIdB64: String(ticket.credentialId || ""),
@@ -249,7 +261,7 @@ export default async function (req: Request) {
         signatureB64: String(body.signature || ""),
         expectedChallenge: String(ticket.challenge || ""),
         rpId: String(ticket.rpId || rpId),
-        allowedOrigins: [String(ticket.origin || origin)],
+        allowedOrigins,
       });
 
       if (!result.ok) {
@@ -260,7 +272,9 @@ export default async function (req: Request) {
             message:
               result.reason === "user_verification_required"
                 ? "لم يتم تأكيد البصمة أو الوجه أو رمز الجهاز."
-                : "تعذّر التحقق من الجهاز. استخدم الدخول بكلمة المرور.",
+                : result.reason === "signature_invalid"
+                  ? "تعذّر التحقق من توقيع الجهاز. أعِد تفعيل الدخول السريع من داخل البوابة، أو ادخل بكلمة المرور."
+                  : "تعذّر التحقق من الجهاز. استخدم الدخول بكلمة المرور.",
           },
           { status: 401 }
         );
