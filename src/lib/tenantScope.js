@@ -19,6 +19,8 @@ const EMPLOYEE_KEYED = {
   EquipmentRequest: ["employee_id"],
   ExitInterview: ["employee_id"],
   GosiRecord: ["employee_id"],
+  HrRequest: ["employee_id"],
+  EmployeePushSubscription: ["employee_id"],
   Incentive: ["employee_id"],
   LeaveRequest: ["employee_id"],
   LoanRequest: ["employee_id"],
@@ -37,7 +39,7 @@ const COMPANY_SCOPED = new Set([
   "Branch", "OrgUnit", "Vehicle", "License", "Job", "JobApplication",
   "Survey", "SurveyResponse", "WorkforcePlan", "AdminDecision", "TrialEvaluation",
   "CustomerSurvey", "CustomerSurveyResponse", "PlatformSubscription", "Organization",
-  "Investigation", "AttendanceSheet",
+  "Investigation", "AttendanceSheet", "HrBudget", "TenantMember", "PresenceProofRequest",
 ]);
 
 // قراءة سجل عام بمعرّفه (صفحة الوظيفة المفتوحة للجميع) — مسموحة بلا جلسة منشأة

@@ -112,15 +112,9 @@ export default async function (req: Request) {
     if (!target && targetNid) target = allEmployees.find((e: any) => String(e.national_id || "").trim() === targetNid) || null;
     if (!target) return Response.json({ ok: false, error: "not_found" }, { status: 404 });
 
-    // سجلات بوابة التفويض قد تخلو من رقم المنشأة — نستنبطه من موظف شقيق أنشأه نفس الحساب.
-    const unifiedOf = (emp: any): string => {
-      const un = String(emp?.unified_number || "").trim();
-      if (un) return un;
-      const creator = String(emp?.created_by_id || "");
-      if (!creator) return "";
-      const sibling = allEmployees.find((e: any) => String(e.created_by_id || "") === creator && String(e.unified_number || "").trim());
-      return String(sibling?.unified_number || "").trim();
-    };
+    // الانتماء من الرقم الموحّد على سجل الموظف نفسه فقط — لا يُستنتج من «من أنشأ السجل»،
+    // لأن سجلات كثيرة أُنشئت بحساب الخدمة نفسه لكل المنشآت فكان ذلك يفتح سجل شركة أخرى.
+    const unifiedOf = (emp: any): string => String(emp?.unified_number || "").trim();
     if (unifiedOf(target) !== myUn) {
       return Response.json({ ok: false, error: "forbidden" }, { status: 403 });
     }

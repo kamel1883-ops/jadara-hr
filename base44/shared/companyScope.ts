@@ -15,6 +15,7 @@ export const COMPANY_FIELD = new Set([
   "Branch", "OrgUnit", "Vehicle", "License", "Job", "JobApplication",
   "Survey", "SurveyResponse", "WorkforcePlan", "AdminDecision", "TrialEvaluation",
   "Organization", "Employee", "CustomerSurveyResponse", "Notification", "Investigation",
+  "HrBudget", "TenantMember", "PresenceProofRequest",
 ]);
 
 /** سجلات تشغيلية مربوطة بموظف */
@@ -26,6 +27,8 @@ export const EMPLOYEE_KEYED: Record<string, string[]> = {
   EquipmentRequest: ["employee_id"],
   ExitInterview: ["employee_id"],
   GosiRecord: ["employee_id"],
+  HrRequest: ["employee_id"],
+  EmployeePushSubscription: ["employee_id"],
   Incentive: ["employee_id"],
   LeaveRequest: ["employee_id"],
   LoanRequest: ["employee_id"],

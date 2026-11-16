@@ -289,16 +289,9 @@ async function portalContext(base44: any, body: any) {
   if (!session.ok || session.employeeId !== employeeId) return null;
   const emp = await base44.asServiceRole.entities.Employee.get(employeeId).catch(() => null);
   if (!emp || emp.status === "terminated" || emp.status === "resigned") return null;
-  // سجلات بوابة التفويض قد تخلو من الرقم الموحّد — نستنبطه من موظف شقيق أُنشئ بنفس الحساب.
-  let unified = String(emp?.unified_number || "").trim();
-  if (!unified && emp?.created_by_id) {
-    try {
-      const siblings = asList(
-        await base44.asServiceRole.entities.Employee.filter({ created_by_id: String(emp.created_by_id) }, undefined, 300)
-      );
-      unified = String(siblings.find((s: any) => String(s?.unified_number || "").trim())?.unified_number || "").trim();
-    } catch { /* يبقى بلا منشأة */ }
-  }
+  // الانتماء من الرقم الموحّد على سجل الموظف نفسه فقط — بلا استنتاج من حساب المنشئ
+  // (حساب الخدمة واحد لكل المنشآت، والاستنتاج كان يخلط موظفي شركة بغيرها).
+  const unified = String(emp?.unified_number || "").trim();
   return { emp, unified };
 }
 

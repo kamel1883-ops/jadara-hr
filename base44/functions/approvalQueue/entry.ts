@@ -3,6 +3,9 @@ import { verifyToken } from "../../shared/portalToken.ts";
 import { organizationForEmployee } from "../../shared/companyScope.ts";
 import { isAlMoiedSupervisor } from "../../shared/alMoied.ts";
 
+const asList = (page: any): any[] =>
+  Array.isArray(page) ? page : (Array.isArray(page?.items) ? page.items : []);
+
 // يعيد طابور الموافقات للموظف — يدعم وضعين:
 // 1) بوابة موظف عبر رمز جلسة موقع (portal_token + portal_employee_id).
 // 2) مستخدم Base44 مسجّل (المسار القديم).
@@ -37,26 +40,22 @@ export default async function (req) {
       actorName = user.full_name;
     }
 
-    // خريطة موظف → رقمه الموحد لتحديد نطاق منشأة المعتمد (منع العبور بين المنشآت).
-    // متين: الموظفون المنشؤون عبر بوابة التفويض (service role) قد لا يحملون unified_number
-    // مباشرة، فنُورّطه من موظف شقيق أُنشئ بالمنشئ نفسه (نفس created_by_id) يملك الرقم.
+    // خريطة موظف → رقمه الموحّد لتحديد نطاق منشأة المعتمد (منع العبور بين المنشآت).
+    // الانتماء من الرقم الموحّد على سجل الموظف فقط. لا يُستنتج من «من أنشأ السجل»
+    // لأن سجلات كثيرة أُنشئت بحساب الخدمة نفسه لكل المنشآت، فيخلط موظفي شركة بغيرها.
     const allEmployees = await base44.asServiceRole.entities.Employee.list("-created_date", 2000);
     const idToUn = new Map();
-    const byCreator = new Map();
     for (const e of allEmployees || []) {
       if (e.id) idToUn.set(e.id, String(e.unified_number || "").trim());
-      if (e.created_by_id) {
-        if (!byCreator.has(e.created_by_id)) byCreator.set(e.created_by_id, []);
-        byCreator.get(e.created_by_id).push(e);
-      }
     }
-    for (const [, emps] of byCreator) {
-      const sample = (emps || []).find((e) => String(e.unified_number || "").trim());
-      if (!sample) continue;
-      const un = String(sample.unified_number || "").trim();
-      for (const e of emps) if (!idToUn.get(e.id)) idToUn.set(e.id, un);
+    let myUn = String(myEmp.unified_number || "").trim();
+    if (!myUn && myEmp.user_id) {
+      // معتمد بلا رقم على سجله: نطاقه من المنشأة المسجّلة كمسؤول لها فقط.
+      try {
+        const owned = asList(await base44.asServiceRole.entities.Tenant.filter({ admin_user_id: myEmp.user_id }));
+        myUn = String(owned[0]?.unified_number || "").trim();
+      } catch { myUn = ""; }
     }
-    const myUn = String(myEmp.unified_number || "").trim();
     const sameTenant = (rec) => !!myUn && idToUn.get(rec.employee_id) === myUn;
 
     // منشأة المعتمد نفسه فقط — لا آخر منشأة سُجّلت في المنصة.

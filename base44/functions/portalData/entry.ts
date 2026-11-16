@@ -2268,6 +2268,7 @@ export default async function (req) {
       Job: ["recruitment"], JobApplication: ["recruitment"], TrialEvaluation: ["recruitment"],
       Attendance: ["attendance", "import-attendance", "analytics", "payroll"],
       LeaveRequest: ["leaves", "approvals"], LoanRequest: ["approvals"],
+      HrRequest: ["approvals", "leaves"],
       BusinessTrip: ["business-trips", "approvals"],
       Payroll: ["payroll", "analytics"], GosiRecord: ["gosi"],
       Vehicle: ["fleet"], VehicleDelegation: ["fleet"],
