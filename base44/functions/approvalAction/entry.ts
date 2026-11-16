@@ -29,6 +29,13 @@ export default async function (req) {
     let myEmp = null;
     let actorId = null;
     let actorName = null;
+    // حساب بوابة الشركة (مسؤول المنشأة) ليس بالضرورة مرتبطاً بسجل موظف —
+    // نطاقه يُحدَّد من الرقم الموحد للمنشأة التي يديرها، لا من سجل موظف.
+    let companyUnifiedNumber = "";
+    let isCompanyAccount = false;
+
+    const norm = (v: any) => String(v || "").trim();
+    const asList = (page: any) => (Array.isArray(page) ? page : Array.isArray(page?.items) ? page.items : []);
 
     if (portalToken && portalEmployeeId) {
       const session = await verifyToken(portalToken);
@@ -40,11 +47,31 @@ export default async function (req) {
     } else {
       const user = await base44.auth.me();
       if (!user) return Response.json({ error: "يجب تسجيل الدخول" }, { status: 401 });
-      const allEmployees = await base44.asServiceRole.entities.Employee.list("-created_date", 500);
-      myEmp = (allEmployees || []).find((e) => e.user_id === user.id);
-      if (!myEmp) return Response.json({ error: "لم يتم ربط حسابك بسجل موظف" }, { status: 403 });
+      myEmp = asList(await base44.asServiceRole.entities.Employee.filter({ user_id: user.id }))[0] || null;
       actorId = user.id;
       actorName = user.full_name;
+
+      // مسؤول المنشأة في بوابة الشركات: منشأته المربوط بها حسابه (رقم موحد واحد فقط).
+      if (!myEmp) {
+        companyUnifiedNumber = norm((user as any)?.data?.tenant_unified_number);
+        if (String((user as any)?.role || "") === "admin") {
+          try {
+            const t = asList(await base44.asServiceRole.entities.Tenant.filter({ admin_user_id: user.id }))[0];
+            if (t && norm(t.unified_number)) companyUnifiedNumber = norm(t.unified_number);
+          } catch { /* يُستخدم الرقم المرتبط بالحساب */ }
+          isCompanyAccount = !!companyUnifiedNumber;
+        }
+        if (!isCompanyAccount) {
+          try {
+            const m = asList(await base44.asServiceRole.entities.TenantMember.filter({ user_id: user.id }))
+              .find((x: any) => x && x.active !== false && norm(x.unified_number));
+            if (m) { companyUnifiedNumber = norm(m.unified_number); isCompanyAccount = true; }
+          } catch { /* ليست عضوية منشأة */ }
+        }
+        // حساب بلا سجل موظف ولا منشأة مرتبطة: لا صلاحية اعتماد على أي طلب
+        if (!isCompanyAccount)
+          return Response.json({ error: "هذا الحساب غير مرتبط بمنشأة — لا يمكن اعتماد طلباتها" }, { status: 403 });
+      }
     }
 
     const allEmployees = await base44.asServiceRole.entities.Employee.list("-created_date", 2000);
@@ -54,8 +81,17 @@ export default async function (req) {
       const un = String(e.unified_number || "").trim();
       if (un && e.id) idToUn.set(e.id, un);
     }
-    const myUn = String(myEmp.unified_number || "").trim();
-    const sameTenant = (employeeId) => !!myUn && idToUn.get(employeeId) === myUn;
+    // نطاق المعتمد: منشأة سجل الموظف (أو منشأة حساب بوابة الشركة عند عدم ربطه بموظف)
+    const myUn = String(myEmp?.unified_number || "").trim() || companyUnifiedNumber;
+    // نطاق السجل: رقمه الموحد إن كان مسجّلاً عليه، وإلا رقم منشأة الموظف صاحب الطلب.
+    const sameTenant = (employeeId, recordUnified = "") => {
+      if (!myUn) return false;
+      const recUn = String(recordUnified || "").trim();
+      if (recUn) return recUn === myUn;
+      return idToUn.get(employeeId) === myUn;
+    };
+    // سلطة الموارد البشرية: معتمد موارد بشرية معلَّم في النظام، أو حساب منشأة في بوابة الشركات
+    const isHrAuthority = !!myEmp?.is_approver_hr || isCompanyAccount;
 
     // توثيق «أُعدّ بواسطة»: يُحقن اسم ورقم هوية المعتمد المنفّذ في كل تحديث لطلب/ملف.
     const PREP = {
@@ -66,7 +102,7 @@ export default async function (req) {
       (base44.asServiceRole.entities as any)[entity].update(id, { ...patch, ...PREP });
 
     // ===== المدير المباشر — سلف / انتداب (جميع الطلبات تمرّ بالمدير المباشر أولاً) =====
-    if (myEmp.is_approver_manager && type === "loans" && (action === "approve" || action === "reject")) {
+    if (myEmp?.is_approver_manager && type === "loans" && (action === "approve" || action === "reject")) {
       const r = await base44.asServiceRole.entities.LoanRequest.get(id);
       const emp = (allEmployees || []).find((e) => e.id === r.employee_id);
       if (!emp || emp.manager_id !== myEmp.id)
@@ -89,7 +125,7 @@ export default async function (req) {
       return Response.json({ ok: true });
     }
 
-    if (myEmp.is_approver_manager && type === "trips" && (action === "approve" || action === "reject")) {
+    if (myEmp?.is_approver_manager && type === "trips" && (action === "approve" || action === "reject")) {
       const r = await base44.asServiceRole.entities.BusinessTrip.get(id);
       const emp = (allEmployees || []).find((e) => e.id === r.employee_id);
       if (!emp || emp.manager_id !== myEmp.id)
@@ -113,7 +149,7 @@ export default async function (req) {
     }
 
     // ===== المدير المباشر — العهد والشكاوى: إحالة للموارد البشرية أو رفض (لا تمرّ بالمالية) =====
-    if (myEmp.is_approver_manager && (type === "equipment" || type === "complaints") && (action === "approve" || action === "reject")) {
+    if (myEmp?.is_approver_manager && (type === "equipment" || type === "complaints") && (action === "approve" || action === "reject")) {
       const entity = type === "equipment" ? "EquipmentRequest" : "Complaint";
       const r = await (base44.asServiceRole.entities as any)[entity].get(id);
       const emp = (allEmployees || []).find((e) => e.id === r.employee_id);
@@ -137,7 +173,7 @@ export default async function (req) {
     }
 
     // ===== معتمد الموارد البشرية — سلف =====
-    if (myEmp.is_approver_hr && type === "loans" && (action === "approve" || action === "reject")) {
+    if (isHrAuthority && type === "loans" && (action === "approve" || action === "reject")) {
       const r = await base44.asServiceRole.entities.LoanRequest.get(id);
       if (!sameTenant(r.employee_id))
         return Response.json({ error: "هذا الطلب خارج نطاق منشأتك" }, { status: 403 });
@@ -169,7 +205,7 @@ export default async function (req) {
     }
 
     // ===== معتمد الموارد البشرية — انتداب =====
-    if (myEmp.is_approver_hr && type === "trips" && (action === "approve" || action === "reject")) {
+    if (isHrAuthority && type === "trips" && (action === "approve" || action === "reject")) {
       const r = await base44.asServiceRole.entities.BusinessTrip.get(id);
       if (!sameTenant(r.employee_id))
         return Response.json({ error: "هذا الطلب خارج نطاق منشأتك" }, { status: 403 });
@@ -192,10 +228,10 @@ export default async function (req) {
 
     // ===== معتمد الموارد البشرية — طلبات الموظف الإدارية (نماذج) =====
     // لا مستحقات ولا صرف: اعتماد أو رفض فقط، ثم يُحفظ القرار مع تاريخه وتنبيه الموظف.
-    if (myEmp.is_approver_hr && (type === "hrRequests" || type === "hr_requests") && (action === "approve" || action === "confirm" || action === "reject")) {
+    if (isHrAuthority && (type === "hrRequests" || type === "hr_requests") && (action === "approve" || action === "confirm" || action === "reject")) {
       const r = await base44.asServiceRole.entities.HrRequest.get(id);
       if (!r) return Response.json({ error: "الطلب غير موجود" }, { status: 404 });
-      if (!sameTenant(r.employee_id))
+      if (!sameTenant(r.employee_id, r.unified_number))
         return Response.json({ error: "هذا الطلب خارج نطاق منشأتك" }, { status: 403 });
       if (r.status !== "pending_hr")
         return Response.json(
@@ -209,8 +245,8 @@ export default async function (req) {
       const patch = {
         status: approved ? "approved" : "rejected",
         hr_status: approved ? "approved" : "rejected",
-        hr_id: myEmp.id,
-        hr_name: myEmp.full_name || actorName || "",
+        hr_id: myEmp?.id || actorId,
+        hr_name: myEmp?.full_name || actorName || "",
         hr_date: today(),
         hr_note: note,
       };
@@ -241,7 +277,7 @@ export default async function (req) {
     }
 
     // ===== المدير المباشر =====
-    if (myEmp.is_approver_manager && type === "leaves" && (action === "approve" || action === "reject")) {
+    if (myEmp?.is_approver_manager && type === "leaves" && (action === "approve" || action === "reject")) {
       const leave = await base44.asServiceRole.entities.LeaveRequest.get(id);
       const emp = (allEmployees || []).find((e) => e.id === leave.employee_id);
       if (!emp || emp.manager_id !== myEmp.id)
@@ -268,7 +304,7 @@ export default async function (req) {
     // ===== المعتمد المالي =====
     // الصلاحية قد تُمنح لأكثر من شخص (مدير مالي، محاسب، …) ويصل الطلب للجميع.
     // القاعدة: أول من يعتمد يُقفل الطلب على الباقي — الاعتماد الثاني يُرفض برسالة واضحة.
-    if (myEmp.is_approver_finance && (action === "confirm" || action === "reject")) {
+    if (myEmp?.is_approver_finance && (action === "confirm" || action === "reject")) {
       const FINANCE_CFG: Record<string, { entity: string; statuses: string[] }> = {
         leaves: { entity: "LeaveRequest", statuses: ["awaiting_finance", "hr_approved"] },
         loans: { entity: "LoanRequest", statuses: ["awaiting_finance", "hr_approved"] },
