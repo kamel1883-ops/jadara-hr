@@ -104,19 +104,13 @@
   "rls": {
     "create": null,
     "read": {
-      "user_condition": {
-        "role": "admin"
-      }
+      "data.unified_number": "{{user.data.tenant_unified_number}}"
     },
     "update": {
-      "user_condition": {
-        "role": "admin"
-      }
+      "data.unified_number": "{{user.data.tenant_unified_number}}"
     },
     "delete": {
-      "user_condition": {
-        "role": "admin"
-      }
+      "data.unified_number": "{{user.data.tenant_unified_number}}"
     }
   }
 }

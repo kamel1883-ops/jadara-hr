@@ -48,16 +48,12 @@
   ],
   "rls": {
     "create": {
-      "user_condition": {
-        "role": "admin"
-      }
+      "data.unified_number": "{{user.data.tenant_unified_number}}"
     },
     "read": {
       "$or": [
         {
-          "user_condition": {
-            "role": "admin"
-          }
+          "data.unified_number": "{{user.data.tenant_unified_number}}"
         },
         {
           "data.user_id": "{{user.id}}"
@@ -67,9 +63,7 @@
     "update": {
       "$or": [
         {
-          "user_condition": {
-            "role": "admin"
-          }
+          "data.unified_number": "{{user.data.tenant_unified_number}}"
         },
         {
           "data.user_id": "{{user.id}}"
@@ -77,9 +71,7 @@
       ]
     },
     "delete": {
-      "user_condition": {
-        "role": "admin"
-      }
+      "data.unified_number": "{{user.data.tenant_unified_number}}"
     }
   }
 }

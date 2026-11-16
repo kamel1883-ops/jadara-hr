@@ -103,20 +103,23 @@
   ],
   "rls": {
     "create": {
-      "user_condition": {
-        "role": "admin"
-      }
+      "data.unified_number": "{{user.data.tenant_unified_number}}"
     },
-    "read": null,
+    "read": {
+      "$or": [
+        {
+          "data.unified_number": "{{user.data.tenant_unified_number}}"
+        },
+        {
+          "data.status": "open"
+        }
+      ]
+    },
     "update": {
-      "user_condition": {
-        "role": "admin"
-      }
+      "data.unified_number": "{{user.data.tenant_unified_number}}"
     },
     "delete": {
-      "user_condition": {
-        "role": "admin"
-      }
+      "data.unified_number": "{{user.data.tenant_unified_number}}"
     }
   }
 }

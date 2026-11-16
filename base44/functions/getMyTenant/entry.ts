@@ -54,6 +54,16 @@ export default async function (req) {
     }
     if (!t) return Response.json({ ok: true, found: false });
 
+    // ربط الحساب بمنشأته على مستوى قاعدة البيانات: تُثبَّت بخادم الخدمة مرة واحدة،
+    // والمستخدم (حتى مسؤول المنشأة) لا يستطيع تعديلها بعد ذلك. قواعد العزل في كل
+    // كيان تعتمد عليها، فيصبح منع تسريب بيانات المنشآت مفروضاً من قاعدة البيانات نفسها.
+    const tenantUnified = String((t as any).unified_number || "").trim();
+    try {
+      if (tenantUnified && String((user as any).tenant_unified_number || "") !== tenantUnified) {
+        await base44.asServiceRole.entities.User.update(user.id, { tenant_unified_number: tenantUnified });
+      }
+    } catch { /* الربط لا يمنع فتح مساحة العمل */ }
+
     // حسابات المنشأة: الحساب الرئيسي + كل المستخدمين الفرعيين النشطين على نفس الرقم الموحّد.
     // تُستخدم في الواجهة لعرض السجلات القديمة (بلا رقم موحّد) لأي عضو في المنشأة،
     // لا لصاحب الحساب الذي أنشأها فقط — كان المستخدم الفرعي لا يرى طلبات ومستندات شركته.

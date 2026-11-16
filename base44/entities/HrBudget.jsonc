@@ -4,37 +4,37 @@
   "properties": {
     "unified_number": {
       "type": "string",
-      "title": "الرقم الوطني الموحد للمنشأة"
+      "title": "\u0627\u0644\u0631\u0642\u0645 \u0627\u0644\u0648\u0637\u0646\u064a \u0627\u0644\u0645\u0648\u062d\u062f \u0644\u0644\u0645\u0646\u0634\u0623\u0629"
     },
     "year": {
       "type": "number",
-      "title": "سنة الميزانية"
+      "title": "\u0633\u0646\u0629 \u0627\u0644\u0645\u064a\u0632\u0627\u0646\u064a\u0629"
     },
     "inputs_json": {
       "type": "string",
-      "title": "مدخلات الميزانية (JSON — بنود التكاليف غير المحسوبة آلياً)"
+      "title": "\u0645\u062f\u062e\u0644\u0627\u062a \u0627\u0644\u0645\u064a\u0632\u0627\u0646\u064a\u0629 (JSON \u2014 \u0628\u0646\u0648\u062f \u0627\u0644\u062a\u0643\u0627\u0644\u064a\u0641 \u063a\u064a\u0631 \u0627\u0644\u0645\u062d\u0633\u0648\u0628\u0629 \u0622\u0644\u064a\u0627\u064b)"
     },
     "grand_total": {
       "type": "number",
       "default": 0,
-      "title": "إجمالي الميزانية المحسوب وقت الحفظ (ريال)"
+      "title": "\u0625\u062c\u0645\u0627\u0644\u064a \u0627\u0644\u0645\u064a\u0632\u0627\u0646\u064a\u0629 \u0627\u0644\u0645\u062d\u0633\u0648\u0628 \u0648\u0642\u062a \u0627\u0644\u062d\u0641\u0638 (\u0631\u064a\u0627\u0644)"
     },
     "headcount": {
       "type": "number",
       "default": 0,
-      "title": "عدد الموظفين وقت الحفظ"
+      "title": "\u0639\u062f\u062f \u0627\u0644\u0645\u0648\u0638\u0641\u064a\u0646 \u0648\u0642\u062a \u0627\u0644\u062d\u0641\u0638"
     },
     "notes": {
       "type": "string",
-      "title": "ملاحظات"
+      "title": "\u0645\u0644\u0627\u062d\u0638\u0627\u062a"
     },
     "prepared_by_name": {
       "type": "string",
-      "title": "أُعدّت بواسطة (الاسم) — الموظف المُفوَّض"
+      "title": "\u0623\u064f\u0639\u062f\u0651\u062a \u0628\u0648\u0627\u0633\u0637\u0629 (\u0627\u0644\u0627\u0633\u0645) \u2014 \u0627\u0644\u0645\u0648\u0638\u0641 \u0627\u0644\u0645\u064f\u0641\u0648\u064e\u0651\u0636"
     },
     "prepared_by_id": {
       "type": "string",
-      "title": "أُعدّت بواسطة (الهوية/الإيميل) — الموظف المُفوَّض"
+      "title": "\u0623\u064f\u0639\u062f\u0651\u062a \u0628\u0648\u0627\u0633\u0637\u0629 (\u0627\u0644\u0647\u0648\u064a\u0629/\u0627\u0644\u0625\u064a\u0645\u064a\u0644) \u2014 \u0627\u0644\u0645\u0648\u0638\u0641 \u0627\u0644\u0645\u064f\u0641\u0648\u064e\u0651\u0636"
     }
   },
   "required": [
@@ -42,24 +42,16 @@
   ],
   "rls": {
     "create": {
-      "user_condition": {
-        "role": "admin"
-      }
+      "data.unified_number": "{{user.data.tenant_unified_number}}"
     },
     "read": {
-      "user_condition": {
-        "role": "admin"
-      }
+      "data.unified_number": "{{user.data.tenant_unified_number}}"
     },
     "update": {
-      "user_condition": {
-        "role": "admin"
-      }
+      "data.unified_number": "{{user.data.tenant_unified_number}}"
     },
     "delete": {
-      "user_condition": {
-        "role": "admin"
-      }
+      "data.unified_number": "{{user.data.tenant_unified_number}}"
     }
   }
 }
