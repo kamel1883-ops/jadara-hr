@@ -2,6 +2,11 @@
   "name": "AttendanceSheet",
   "type": "object",
   "properties": {
+    "description": {
+      "type": "string",
+      "title": "\u0627\u0644\u0648\u0635\u0641",
+      "maxLength": 1000
+    },
     "unified_number": {
       "type": "string",
       "title": "\u0627\u0644\u0631\u0642\u0645 \u0627\u0644\u0648\u0637\u0646\u064a \u0627\u0644\u0645\u0648\u062d\u062f \u0644\u0644\u0645\u0646\u0634\u0623\u0629"

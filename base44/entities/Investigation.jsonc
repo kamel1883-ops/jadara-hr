@@ -2,67 +2,95 @@
   "name": "Investigation",
   "type": "object",
   "properties": {
+    "description": {
+      "type": "string",
+      "title": "\u0627\u0644\u0648\u0635\u0641",
+      "maxLength": 1000
+    },
     "ref_no": {
       "type": "string",
-      "title": "الرقم المرجعي لمحضر التحقيق"
+      "title": "\u0627\u0644\u0631\u0642\u0645 \u0627\u0644\u0645\u0631\u062c\u0639\u064a \u0644\u0645\u062d\u0636\u0631 \u0627\u0644\u062a\u062d\u0642\u064a\u0642"
     },
     "violation_type": {
       "type": "string",
-      "title": "نوع المخالفة"
+      "title": "\u0646\u0648\u0639 \u0627\u0644\u0645\u062e\u0627\u0644\u0641\u0629"
     },
     "custom_type": {
       "type": "string",
-      "title": "وصف النوع عند اختيار أخرى"
+      "title": "\u0648\u0635\u0641 \u0627\u0644\u0646\u0648\u0639 \u0639\u0646\u062f \u0627\u062e\u062a\u064a\u0627\u0631 \u0623\u062e\u0631\u0649"
     },
     "allegations": {
       "type": "string",
-      "title": "الادعاءات والإشكالية",
+      "title": "\u0627\u0644\u0627\u062f\u0639\u0627\u0621\u0627\u062a \u0648\u0627\u0644\u0625\u0634\u0643\u0627\u0644\u064a\u0629",
       "maxLength": 4000
     },
     "parties": {
       "type": "string",
-      "title": "أطراف المحضر (JSON): الموظف المعني أو الشاهد، وحالة رده"
+      "title": "\u0623\u0637\u0631\u0627\u0641 \u0627\u0644\u0645\u062d\u0636\u0631 (JSON): \u0627\u0644\u0645\u0648\u0638\u0641 \u0627\u0644\u0645\u0639\u0646\u064a \u0623\u0648 \u0627\u0644\u0634\u0627\u0647\u062f\u060c \u0648\u062d\u0627\u0644\u0629 \u0631\u062f\u0647"
     },
     "status": {
       "type": "string",
-      "enum": ["awaiting_subjects", "awaiting_witnesses", "ready", "closed"],
+      "enum": [
+        "awaiting_subjects",
+        "awaiting_witnesses",
+        "ready",
+        "closed"
+      ],
       "default": "awaiting_subjects",
-      "title": "حالة المحضر"
+      "title": "\u062d\u0627\u0644\u0629 \u0627\u0644\u0645\u062d\u0636\u0631"
     },
     "recommendation": {
       "type": "string",
-      "title": "التوصية عند الإغلاق",
+      "title": "\u0627\u0644\u062a\u0648\u0635\u064a\u0629 \u0639\u0646\u062f \u0627\u0644\u0625\u063a\u0644\u0627\u0642",
       "maxLength": 4000
     },
     "closed_at": {
       "type": "string",
       "format": "date",
-      "title": "تاريخ الإغلاق"
+      "title": "\u062a\u0627\u0631\u064a\u062e \u0627\u0644\u0625\u063a\u0644\u0627\u0642"
     },
     "unified_number": {
       "type": "string",
-      "title": "الرقم الموحد للمنشأة"
+      "title": "\u0627\u0644\u0631\u0642\u0645 \u0627\u0644\u0645\u0648\u062d\u062f \u0644\u0644\u0645\u0646\u0634\u0623\u0629"
     }
   },
-  "required": ["ref_no", "allegations", "status"],
+  "required": [
+    "ref_no",
+    "allegations",
+    "status"
+  ],
   "rls": {
     "create": {
       "created_by_id": "{{user.id}}"
     },
     "read": {
       "$or": [
-        { "created_by_id": "{{user.id}}" },
-        { "user_condition": { "role": "admin" } }
+        {
+          "created_by_id": "{{user.id}}"
+        },
+        {
+          "user_condition": {
+            "role": "admin"
+          }
+        }
       ]
     },
     "update": {
       "$or": [
-        { "created_by_id": "{{user.id}}" },
-        { "user_condition": { "role": "admin" } }
+        {
+          "created_by_id": "{{user.id}}"
+        },
+        {
+          "user_condition": {
+            "role": "admin"
+          }
+        }
       ]
     },
     "delete": {
-      "user_condition": { "role": "admin" }
+      "user_condition": {
+        "role": "admin"
+      }
     }
   }
 }
