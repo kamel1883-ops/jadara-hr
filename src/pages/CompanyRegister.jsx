@@ -150,6 +150,10 @@ export default function CompanyRegister() {
           setError(isAr
             ? "هذا الرقم الموحّد مسجّل مسبقاً لمنشأة أخرى على جداره — لا يمكن لشركتين أن تتشاركا نفس الرقم الموحّد، ولم يُنشأ حساب جديد. إن كان حسابك موجوداً سابقاً فاستخدم استعادة كلمة المرور من بوابة الشركة. لأي مساعدة لتفعيل حسابك، تواصل مع الدعم الفني عبر واتساب +966 59 470 0782 أو البريد info@jadara-hr.com."
             : "This unified number is already registered to another organization on Jadara — two companies cannot share the same unified number, and no new account was created. If your account already exists, use password recovery in the company portal. For help activating your account, contact support via WhatsApp +966 59 470 0782 or email info@jadara-hr.com.");
+        } else if (/tenant_not_registered/i.test(em)) {
+          setError(isAr
+            ? "لا يوجد سجل منشأة بهذا الرقم الموحّد على جداره بعد. أكمل تسجيل المنشأة من صفحة «طلب عرض سعر / تجربة» مع إرفاق صورة السجل التجاري للتحقق من ملكية الرقم، ثم عُد لتفعيل حسابك. لأي مساعدة تواصل مع الدعم الفني عبر واتساب +966 59 470 0782 أو البريد info@jadara-hr.com."
+            : "No organization record exists for this unified number yet. Complete the organization registration (trial / quote request) with a copy of the commercial register so ownership of the number is verified, then activate your account. For help, contact support via WhatsApp +966 59 470 0782 or email info@jadara-hr.com.");
         } else {
           setError(t.promoteErr);
         }

@@ -29,17 +29,15 @@ export default async function (req) {
     if (!unified || !/^7\d{9}$/.test(unified))
       return Response.json({ ok: false, error: 'invalid_unified' }, { status: 400 });
 
-    // ضمان عدم فقدان عميل من بوابة المالك: إن لم يوجد سجل Tenant بهذا البريد
-    // والرقم الموحّد، نُنشئه تلقائياً كتجربة عاجلة. يغطّي مسارات المستخدمين الذين
-    // تجاوزوا createTrial (أو تعثّرت لهم Turnstile/Rate-limit) فلم يُسجَّل لهم Tenant
-    // لكن أُنشئوا User Base44 وأضافوا موظفين. هذا يضمن ظهور كل عميل في بوابة المالك.
+    // لا يُنشأ سجل منشأة من رقم موحّد وحده: كان ذلك يسمح لأي مستخدم باحتكار رقم
+    // منشأة حقيقية قبل تسجيلها فيُمنع مالكها من التسجيل. التسجيل الرسمي يمرّ عبر
+    // createTrial الذي يتحقق من صورة السجل التجاري. هنا نربط الحساب فقط بمنشأة قائمة.
     let tenants = await base44.asServiceRole.entities.Tenant.filter(
       { unified_number: unified }, undefined, 50
     );
     let t = (tenants || []).find(
       (tt) => String(tt.contact_email || '').trim().toLowerCase() === email
     );
-    let autoCreated = false;
     if (!t) {
       // مستخدم إضافي مفوّض مسبقاً من مسؤول المنشأة نفسها (TenantMember):
       // يُربط حسابه مباشرة ويُمنح صلاحية الإدارة دون انتظار المالك — التفويض صادر
@@ -71,28 +69,8 @@ export default async function (req) {
       if (tenants && tenants.length) {
         return Response.json({ ok: false, error: 'unified_taken' }, { status: 409 });
       }
-      const today = new Date();
-      const trialEnd = new Date(today);
-      trialEnd.setDate(trialEnd.getDate() + 30);
-      const fallbackName = (me.full_name && me.full_name.trim())
-        ? me.full_name.trim()
-        : email.split('@')[0];
-      t = await base44.asServiceRole.entities.Tenant.create({
-        name: 'منشأة - ' + fallbackName,
-        unified_number: unified,
-        contact_email: email,
-        contact_name: me.full_name || '',
-        plan: 'trial',
-        status: 'trial',
-        lead_source: 'trial',
-        trial_start: today.toISOString().slice(0, 10),
-        trial_end: trialEnd.toISOString().slice(0, 10),
-        contract_confirmed: false,
-        employee_count: 0,
-        discount_percent: 0,
-        notes: 'أُنشئ تلقائياً عبر registerTenantAccount — لم يُعثر على سجل تجربة سابق.',
-      });
-      autoCreated = true;
+      // لا سجل منشأة بهذا الرقم: لا نُنشئ سجلاً بلا إثبات ملكية للرقم الموحّد.
+      return Response.json({ ok: false, error: 'tenant_not_registered' }, { status: 409 });
     }
     if (!['trial', 'active'].includes(t.status))
       return Response.json({ ok: false, error: 'suspended' }, { status: 403 });

@@ -1,5 +1,6 @@
 import { createClientFromRequest } from "npm:@base44/sdk@0.8.40";
 import { hashPassword } from "../../shared/ownerAuth.ts";
+import { companyOfAppUser } from "../../shared/appUserCompany.ts";
 
 // إعادة تعيين كلمة مرور بوابة الموظف من قبل الإدارة (admin فقط):
 // action=set   — يضبط كلمة مرور جديدة (6 أحرف فأكثر) ويفعّل البوابة.
@@ -16,10 +17,18 @@ export default async function (req) {
     const action = String(body.action || "set");
     if (!empId) return Response.json({ ok: false, error: "missing" }, { status: 400 });
 
-    const emp = await base44.asServiceRole.entities.Employee.get(empId);
+    const emp = await base44.asServiceRole.entities.Employee.get(empId)
+      .catch((e) => (e.status === 404 ? null : Promise.reject(e)));
     if (!emp) return Response.json({ ok: false, error: "not_found" }, { status: 404 });
     if ((emp.role_level || "") === "owner")
       return Response.json({ ok: false, error: "owner_not_allowed" }, { status: 403 });
+
+    // عزل المنشآت: دور admin يخصّ مسؤولي المنشآت جميعاً، فلا يكفي وحده.
+    // لا يعيد ضبط كلمة مرور موظف إلا مسؤول منشأة هذا الموظف نفسها (نفس الرقم الموحّد).
+    const myCompany = await companyOfAppUser(base44, user);
+    const empCompany = String(emp.unified_number || "").trim();
+    if (!myCompany || !empCompany || empCompany !== myCompany)
+      return Response.json({ ok: false, error: "out_of_scope" }, { status: 403 });
 
     if (action === "disable") {
       await base44.asServiceRole.entities.Employee.update(empId, {
