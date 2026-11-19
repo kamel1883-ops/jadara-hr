@@ -1,7 +1,8 @@
 import React from "react";
 import {
-  Sparkles, Gift, Check, Calendar, CreditCard, Users, Zap, Server, ShieldCheck, MessageCircle,
+  Sparkles, Gift, Check, Calendar, CreditCard, Users, Zap, Server, ShieldCheck,
 } from "lucide-react";
+import WhatsAppIcon from "@/components/WhatsAppIcon";
 import { PRICING_TIERS_AR, PRICING_TIERS_EN, FULL_FEATURES_AR, FULL_FEATURES_EN } from "@/lib/pricing";
 import { SALES_WA_LINK, SALES_EMAIL } from "@/components/landing/HostingProvider";
 
@@ -135,8 +136,8 @@ export default function PricingColumns({ isAr = true, onStartTrial, onBuyTier })
                         className="w-full rounded-xl py-3.5 text-base font-bold text-white inline-flex items-center justify-center gap-2 transition hover:brightness-110 shadow-md"
                         style={{ background: "#16a34a", boxShadow: "0 8px 20px -8px #16a34a" }}
                       >
-                        <MessageCircle size={18} />
-                        {isAr ? "واتساب المبيعات" : "Sales WhatsApp"}
+                        <WhatsAppIcon size={20} />
+                        {isAr ? "تواصل معنا على واتساب" : "Contact us on WhatsApp"}
                       </a>
                       <a href={`mailto:${SALES_EMAIL}`} className="text-center text-xs font-semibold" style={{ color: GREY }}>
                         {SALES_EMAIL}

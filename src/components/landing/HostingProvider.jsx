@@ -1,5 +1,6 @@
 import React from "react";
-import { Server, FileLock2, ShieldCheck, MessageCircle, Mail } from "lucide-react";
+import { Server, FileLock2, ShieldCheck, Mail } from "lucide-react";
+import WhatsAppIcon from "@/components/WhatsAppIcon";
 
 // مزوّد الاستضافة والخادم لمنصة جداره — شركة Oracle Systems السعودية.
 // الشعار الرسمي لشركة Oracle Systems يُعرض مباشرة من رابطه الموثوق.
@@ -133,7 +134,7 @@ export function ContactSalesCard({ isAr = true, dark = false }) {
           className="inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-xs font-bold text-white"
           style={{ background: "#16a34a" }}
         >
-          <MessageCircle size={13} /> {isAr ? "واتساب المبيعات" : "Sales WhatsApp"}
+          <WhatsAppIcon size={13} /> {isAr ? "واتساب المبيعات" : "Sales WhatsApp"}
         </a>
         <a
           href={`mailto:${SALES_EMAIL}`}

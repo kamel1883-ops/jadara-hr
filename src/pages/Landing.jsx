@@ -2,6 +2,7 @@ import React from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { motion } from "framer-motion";
 import Logo from "@/components/Logo";
+import WhatsAppIcon from "@/components/WhatsAppIcon";
 import { PROVIDER } from "@/lib/providerIdentity";
 import LanguageToggle from "@/components/LanguageToggle";
 import ShareBar from "@/components/ShareBar";
@@ -555,10 +556,10 @@ export default function Landing() {
       <section id="contact" className="max-w-[1400px] mx-auto px-6 lg:px-14 py-14">
         <SectionHead tag={t.contactTag} title={t.contactTitle} />
         <div className="grid sm:grid-cols-3 gap-5 mt-8">
-          <a href={WHATSAPP} target="_blank" rel="noreferrer" className="bg-emerald-50 hover:bg-emerald-100 border border-emerald-200 rounded-3xl p-6 text-center transition group">
-            <div className="w-12 h-12 rounded-2xl bg-emerald-100 flex items-center justify-center mx-auto mb-3"><MessageCircle size={22} className="text-emerald-600" /></div>
-            <div className="font-semibold text-foreground">{t.wa}</div>
-            <div className="text-muted-foreground text-base mt-1" dir="ltr">+966 594700782</div>
+          <a href={WHATSAPP} target="_blank" rel="noreferrer" className="bg-[#25D366] hover:bg-[#1FBF5B] border border-[#1FBF5B] rounded-3xl p-6 text-center transition shadow-lg shadow-emerald-500/25 flex flex-col items-center justify-center">
+            <div className="w-12 h-12 rounded-2xl bg-white flex items-center justify-center mx-auto mb-3"><WhatsAppIcon size={26} className="text-[#25D366]" /></div>
+            <div className="font-bold text-white text-lg">{t.wa}</div>
+            <div className="text-white/90 text-base mt-1" dir="ltr">+966 594700782</div>
           </a>
           <a href={`mailto:${SALES_EMAIL}`} className="bg-white hover:bg-violet-50 border border-violet-100 rounded-3xl p-6 text-center transition">
             <div className="w-12 h-12 rounded-2xl bg-violet-100 flex items-center justify-center mx-auto mb-3"><Mail size={22} className="text-violet-600" /></div>
@@ -617,7 +618,7 @@ export default function Landing() {
           </div>
           <div className="space-y-1.5">
             <div className="font-semibold text-base text-foreground mb-1">{t.footContact}</div>
-            <a href={WHATSAPP} target="_blank" rel="noreferrer" className="flex items-center gap-2 hover:text-violet-700"><MessageCircle size={14} /> WhatsApp: +966 594700782</a>
+            <a href={WHATSAPP} target="_blank" rel="noreferrer" className="flex items-center gap-2 hover:text-violet-700"><WhatsAppIcon size={14} className="text-[#25D366]" /> WhatsApp: +966 594700782</a>
             <a href={`mailto:${SALES_EMAIL}`} className="flex items-center gap-2 hover:text-violet-700"><Mail size={14} /> {SALES_EMAIL}</a>
           </div>
           <div className="space-y-1.5">

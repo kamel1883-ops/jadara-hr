@@ -1,7 +1,8 @@
 import React, { useEffect } from "react";
 import { Link } from "react-router-dom";
 import { motion } from "framer-motion";
-import { Check, ArrowLeft, Zap, ChevronLeft, Mail, MessageCircle, Linkedin, Twitter } from "lucide-react";
+import { Check, ArrowLeft, Zap, ChevronLeft, Mail, Linkedin, Twitter } from "lucide-react";
+import WhatsAppIcon from "@/components/WhatsAppIcon";
 import Logo from "@/components/Logo";
 import LanguageToggle from "@/components/LanguageToggle";
 import { useI18n } from "@/lib/i18n";
@@ -227,7 +228,7 @@ export default function FeatureLanding({ content }) {
               <Zap size={18} /> {c.ctaPrimary}
             </Link>
             <a href={WHATSAPP} target="_blank" rel="noreferrer" className="bg-white hover:bg-violet-50 border border-violet-200 text-foreground px-6 py-3.5 rounded-2xl font-medium inline-flex items-center gap-2 transition">
-              <MessageCircle size={18} /> {isAr ? "واتساب مباشر" : "WhatsApp"}
+              <WhatsAppIcon size={20} className="text-[#25D366]" /> {isAr ? "واتساب مباشر" : "WhatsApp"}
             </a>
           </div>
         </div>
@@ -246,7 +247,7 @@ export default function FeatureLanding({ content }) {
           </div>
           <div className="space-y-1.5">
             <div className="font-medium text-foreground mb-1">{isAr ? "تواصل معنا" : "Contact"}</div>
-            <a href={WHATSAPP} target="_blank" rel="noreferrer" className="flex items-center gap-2 hover:text-violet-700"><MessageCircle size={14} /> WhatsApp: +966 594700782</a>
+            <a href={WHATSAPP} target="_blank" rel="noreferrer" className="flex items-center gap-2 hover:text-violet-700"><WhatsAppIcon size={14} className="text-[#25D366]" /> WhatsApp: +966 594700782</a>
             <a href={`mailto:${SALES_EMAIL}`} className="flex items-center gap-2 hover:text-violet-700"><Mail size={14} /> {SALES_EMAIL}</a>
           </div>
           <div className="space-y-1.5">
