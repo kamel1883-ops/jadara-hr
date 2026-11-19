@@ -3,7 +3,6 @@ import { base44 } from "@/api/base44Client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import TurnstileWidget from "@/components/TurnstileWidget";
 import { ShieldCheck, UserPlus, KeyRound, Loader2, ArrowRight, Fingerprint } from "lucide-react";
 import {
   passkeySupported, platformAuthenticatorAvailable,
@@ -47,7 +46,6 @@ export default function PortalAuthCard({ onAuthenticated }) {
   const [birth, setBirth] = useState("");
   const [confirm, setConfirm] = useState("");
   const [otp, setOtp] = useState("");
-  const [captcha, setCaptcha] = useState("");
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState({ type: "", text: "" });
   const [info, setInfo] = useState("");
@@ -146,7 +144,6 @@ export default function PortalAuthCard({ onAuthenticated }) {
     setInfo("");
     setOtpSent(false);
     setOtp("");
-    setCaptcha("");
     if (m !== "forgot") { setPwd(""); setConfirm(""); }
     setBirth("");
   };
@@ -162,11 +159,10 @@ export default function PortalAuthCard({ onAuthenticated }) {
     e.preventDefault();
     const id = nid.trim();
     if (!id || !pwd) return;
-    if (!captcha) { setMsg({ type: "err", text: t.captchaReq }); return; }
     setBusy(true); setMsg({ type: "", text: "" }); setInfo("");
     try {
       const res = await base44.functions.invoke("verifyEmployeePortal", {
-        national_id: id, password: pwd, captcha_token: captcha,
+        national_id: id, password: pwd,
       });
       const data = res?.data || res;
       if (data?.ok) {
@@ -194,7 +190,7 @@ export default function PortalAuthCard({ onAuthenticated }) {
             expires_at: data.expires_at,
           });
         }
-        setNid(""); setPwd(""); setCaptcha("");
+        setNid(""); setPwd("");
       } else {
         setMsg({ type: "err", text: errText(t, data?.error) });
       }
@@ -209,15 +205,14 @@ export default function PortalAuthCard({ onAuthenticated }) {
     if (!id || !birth || !pwd) return;
     if (pwd.length < 6) { setMsg({ type: "err", text: t.weak }); return; }
     if (pwd !== confirm) { setMsg({ type: "err", text: t.mismatch }); return; }
-    if (!captcha) { setMsg({ type: "err", text: t.captchaReq }); return; }
     setBusy(true); setMsg({ type: "", text: "" }); setInfo("");
     try {
       const res = await base44.functions.invoke("registerEmployeePortal", {
-        national_id: id, birth_date: birth, new_password: pwd, captcha_token: captcha,
+        national_id: id, birth_date: birth, new_password: pwd,
       });
       const data = res?.data || res;
       if (data?.ok) {
-        setNid(""); setBirth(""); setPwd(""); setConfirm(""); setCaptcha("");
+        setNid(""); setBirth(""); setPwd(""); setConfirm("");
         setMode("login");
         setInfo(t.regSuccess);
       } else {
@@ -232,18 +227,16 @@ export default function PortalAuthCard({ onAuthenticated }) {
     e.preventDefault();
     const id = nid.trim();
     if (!id) return;
-    if (!captcha) { setMsg({ type: "err", text: t.captchaReq }); return; }
     setBusy(true); setMsg({ type: "", text: "" }); setInfo("");
     try {
       const res = await base44.functions.invoke("employeeForgotPassword", {
-        national_id: id, captcha_token: captcha,
+        national_id: id,
       });
       const data = res?.data || res;
       if (data?.ok) {
         setOtpSent(true);
         setOtpUid(id);
         setInfo(t.otpSent(data.email_hint || ""));
-        setCaptcha("");
       } else {
         setMsg({ type: "err", text: errText(t, data?.error) });
       }
@@ -258,15 +251,14 @@ export default function PortalAuthCard({ onAuthenticated }) {
     if (!id || !otp || !pwd) return;
     if (pwd.length < 6) { setMsg({ type: "err", text: t.weak }); return; }
     if (pwd !== confirm) { setMsg({ type: "err", text: t.mismatch }); return; }
-    if (!captcha) { setMsg({ type: "err", text: t.captchaReq }); return; }
     setBusy(true); setMsg({ type: "", text: "" }); setInfo("");
     try {
       const res = await base44.functions.invoke("employeeResetPassword", {
-        national_id: id, otp_code: otp, new_password: pwd, captcha_token: captcha,
+        national_id: id, otp_code: otp, new_password: pwd,
       });
       const data = res?.data || res;
       if (data?.ok) {
-        setNid(""); setOtp(""); setPwd(""); setConfirm(""); setCaptcha(""); setOtpSent(false);
+        setNid(""); setOtp(""); setPwd(""); setConfirm(""); setOtpSent(false);
         setMode("login");
         setInfo(t.resetSuccess);
       } else {
@@ -351,8 +343,7 @@ export default function PortalAuthCard({ onAuthenticated }) {
             <Label>{t.pwdLabel}</Label>
             <Input type="password" value={pwd} onChange={(e) => setPwd(e.target.value)} placeholder={t.pwdPh} required disabled={busy} dir="ltr" />
           </div>
-          <TurnstileWidget onToken={setCaptcha} className="origin-top-right" />
-          <Button type="submit" disabled={busy || !captcha} className="gap-2 w-full">
+          <Button type="submit" disabled={busy} className="gap-2 w-full">
             {busy && <Loader2 size={16} className="animate-spin" />}{t.loginBtn}
           </Button>
         </form>
@@ -376,8 +367,7 @@ export default function PortalAuthCard({ onAuthenticated }) {
             <Label>{t.confirmPwdLabel}</Label>
             <Input type="password" value={confirm} onChange={(e) => setConfirm(e.target.value)} required disabled={busy} dir="ltr" />
           </div>
-          <TurnstileWidget onToken={setCaptcha} className="origin-top-right" />
-          <Button type="submit" disabled={busy || !captcha} className="gap-2 w-full">
+          <Button type="submit" disabled={busy} className="gap-2 w-full">
             {busy && <Loader2 size={16} className="animate-spin" />}{t.regBtn}
           </Button>
         </form>
@@ -389,8 +379,7 @@ export default function PortalAuthCard({ onAuthenticated }) {
             <Label>{t.idLabel}</Label>
             <Input value={nid} onChange={(e) => setNid(e.target.value)} placeholder={t.idPh} required disabled={busy} dir="ltr" />
           </div>
-          <TurnstileWidget onToken={setCaptcha} className="origin-top-right" />
-          <Button type="submit" disabled={busy || !captcha} className="gap-2 w-full">
+          <Button type="submit" disabled={busy} className="gap-2 w-full">
             {busy && <Loader2 size={16} className="animate-spin" />}{t.sendOtpBtn}
           </Button>
         </form>
@@ -410,8 +399,7 @@ export default function PortalAuthCard({ onAuthenticated }) {
             <Label>{t.confirmPwdLabel}</Label>
             <Input type="password" value={confirm} onChange={(e) => setConfirm(e.target.value)} required disabled={busy} dir="ltr" />
           </div>
-          <TurnstileWidget onToken={setCaptcha} className="origin-top-right" />
-          <Button type="submit" disabled={busy || !captcha} className="gap-2 w-full">
+          <Button type="submit" disabled={busy} className="gap-2 w-full">
             {busy && <Loader2 size={16} className="animate-spin" />}{t.resetBtn}
           </Button>
           <button type="button" onClick={() => { setOtpSent(false); setInfo(""); setMsg({ type: "", text: "" }); }}

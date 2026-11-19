@@ -26,8 +26,9 @@ export default async function (req) {
     if (rlId.rateLimited(nid))
       return Response.json({ ok: false, error: "rate_limited", retry: true }, { status: 429 });
 
+    // التحقق البشري اختياري (لا يمنع إعادة التعيين). الحماية: رمز OTP + حدّ المحاولات.
     const captchaToken = String(body.captcha_token || "");
-    if (!(await verifyTurnstile(captchaToken)))
+    if (captchaToken && !(await verifyTurnstile(captchaToken)))
       return Response.json({ ok: false, error: "captcha_failed" }, { status: 403 });
 
     const emp = await resolvePortalEmployee(base44, nid);

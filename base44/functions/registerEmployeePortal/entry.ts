@@ -25,10 +25,10 @@ export default async function (req) {
     if (newPass.length < 6)
       return Response.json({ ok: false, error: "weak_password" }, { status: 400 });
 
+    // التحقق البشري اختياري (لا يمنع التسجيل عند تعذّر تحميل ودجة Cloudflare).
+    // الحماية الفعلية: حدّ المحاولات + مطابقة تاريخ الميلاد من الخزنة.
     const captchaToken = String(body.captcha_token || "");
-    if (!captchaToken)
-      return Response.json({ ok: false, error: "captcha_required" }, { status: 400 });
-    if (!(await verifyTurnstile(captchaToken)))
+    if (captchaToken && !(await verifyTurnstile(captchaToken)))
       return Response.json({ ok: false, error: "captcha_failed" }, { status: 403 });
 
     const emp = await resolvePortalEmployee(base44, nid);
