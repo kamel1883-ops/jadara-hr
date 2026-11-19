@@ -2,14 +2,17 @@ import { createClientFromRequest } from "npm:@base44/sdk@0.8.40";
 import { signToken } from "../../shared/portalToken.ts";
 import { verifyTurnstile, createRateLimiter } from "../../shared/turnstile.ts";
 import { verifyPassword } from "../../shared/ownerAuth.ts";
-import { findEmployeesByNationalId, preferPortalEmployee } from "../../shared/vaultIdentity.ts";
+import { resolvePortalEmployee } from "../../shared/portalIdentity.ts";
 import { organizationForEmployee } from "../../shared/companyScope.ts";
 
 // بوابة الموظف الذاتية — دخول برقم الإقامة + كلمة المرور + كابتشا.
 // تاريخ الميلاد لم يعد يُستخدم للدخول بل للتسجيل الأول لمرة واحدة (registerEmployeePortal).
 // عند المطابقة يُوقّع رمز جلسة (HMAC) يُستخدم للوصول لـ portalData.
 
-const rl = createRateLimiter(10 * 60 * 1000, 12);
+// سقف لكل شبكة/فرع — موظفو الشركة يتشاركون عنوان إنترنت واحداً، فحدّ صغير
+// كان يمنع الشركة كلها صباحاً. الحماية الفعلية: الكابتشا + حدّ المحاولات لكل هوية.
+const rl = createRateLimiter(10 * 60 * 1000, 150);
+const rlId = createRateLimiter(10 * 60 * 1000, 15);
 const APPROVER_TTL_MS = 8 * 3600 * 1000;
 const EMPLOYEE_TTL_MS = 30 * 24 * 3600 * 1000;
 
@@ -25,6 +28,8 @@ export default async function (req) {
     const password = String(body.password || "");
     if (!nid || !password)
       return Response.json({ ok: false, error: "missing" }, { status: 400 });
+    if (rlId.rateLimited(nid))
+      return Response.json({ ok: false, error: "rate_limited", retry: true }, { status: 429 });
 
     const captchaToken = String(body.captcha_token || "");
     if (!captchaToken)
@@ -32,8 +37,7 @@ export default async function (req) {
     if (!(await verifyTurnstile(captchaToken)))
       return Response.json({ ok: false, error: "captcha_failed" }, { status: 403 });
 
-    const all = await findEmployeesByNationalId(base44, nid);
-    const emp = preferPortalEmployee(all);
+    const emp = await resolvePortalEmployee(base44, nid);
     if (!emp) return Response.json({ ok: false, error: "invalid_credentials" });
     if (emp.status && emp.status !== "active" && emp.status !== "on_leave")
       return Response.json({ ok: false, error: "inactive" });

@@ -1,6 +1,6 @@
 import { createClientFromRequest } from "npm:@base44/sdk@0.8.40";
 import { signToken, verifyToken } from "../../shared/portalToken.ts";
-import { findEmployeesByNationalId, preferPortalEmployee } from "../../shared/vaultIdentity.ts";
+import { resolvePortalEmployee } from "../../shared/portalIdentity.ts";
 import { organizationForEmployee } from "../../shared/companyScope.ts";
 import { createRateLimiter } from "../../shared/turnstile.ts";
 import {
@@ -30,7 +30,8 @@ import {
 
 const APPROVER_TTL_MS = 8 * 3600 * 1000;
 const EMPLOYEE_TTL_MS = 30 * 24 * 3600 * 1000;
-const rl = createRateLimiter(10 * 60 * 1000, 40);
+// سقف مرتفع لكل شبكة — الشركة كلها تدخل من عنوان واحد صباحاً
+const rl = createRateLimiter(10 * 60 * 1000, 300);
 
 function hostFromRequest(req: Request): { rpId: string; origin: string } {
   const hostHeader = String(req.headers.get("host") || "").trim();
@@ -203,8 +204,7 @@ export default async function (req: Request) {
       if (!nid || !credentialId)
         return Response.json({ ok: false, error: "missing" }, { status: 400 });
 
-      const all = await findEmployeesByNationalId(base44, nid);
-      const emp = preferPortalEmployee(all);
+      const emp = await resolvePortalEmployee(base44, nid);
       if (!emp || !emp.passkey_enabled || !emp.passkey_public_key)
         return Response.json({ ok: false, error: "no_passkey" }, { status: 404 });
       if (emp.status && emp.status !== "active" && emp.status !== "on_leave")

@@ -1,13 +1,13 @@
 import { createClientFromRequest } from "npm:@base44/sdk@0.8.40";
 import { verifyTurnstile, createRateLimiter } from "../../shared/turnstile.ts";
 import { hashPassword } from "../../shared/ownerAuth.ts";
-import { findEmployeesByNationalId, preferPortalEmployee } from "../../shared/vaultIdentity.ts";
+import { resolvePortalEmployee, birthDateMatches } from "../../shared/portalIdentity.ts";
 
 // التسجيل الأول (مرة واحدة) لبوابة الموظف الذاتية:
 // يتحقق برقم الإقامة + تاريخ الميلاد من سجل الموارد البشرية (تحقق لمرة واحدة)،
 // ثم يخزّن تجزئة كلمة مرور يختارها الموظف ويفعّل الحساب.
 // إن كان الموظف قد أنشأ كلمة مرور مسبقاً يُرفض للمحافظة على الأمان (already_registered).
-const rl = createRateLimiter(10 * 60 * 1000, 10);
+const rl = createRateLimiter(10 * 60 * 1000, 60);
 
 export default async function (req) {
   try {
@@ -31,8 +31,11 @@ export default async function (req) {
     if (!(await verifyTurnstile(captchaToken)))
       return Response.json({ ok: false, error: "captcha_failed" }, { status: 403 });
 
-    const emp = preferPortalEmployee(await findEmployeesByNationalId(base44, nid, birthDate));
+    const emp = await resolvePortalEmployee(base44, nid);
     if (!emp) return Response.json({ ok: false, error: "not_matched" });
+    // تاريخ الميلاد يُطابق من الخزنة لسجل الموظف نفسه — لا يُقبل رقم الهوية وحده
+    if (!(await birthDateMatches(base44, emp, birthDate)))
+      return Response.json({ ok: false, error: "not_matched" });
     if (emp.status && emp.status !== "active" && emp.status !== "on_leave")
       return Response.json({ ok: false, error: "inactive" });
     if ((emp.role_level || "") === "owner")

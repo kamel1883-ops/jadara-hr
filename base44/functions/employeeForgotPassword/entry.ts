@@ -2,13 +2,14 @@ import { createClientFromRequest } from "npm:@base44/sdk@0.8.40";
 import { verifyTurnstile, createRateLimiter } from "../../shared/turnstile.ts";
 import { generateResetCode, RESET_CODE_TTL_MS } from "../../shared/ownerAuth.ts";
 import { wrapEmailContent } from "../../shared/emailFooter.ts";
-import { findEmployeesByNationalId, preferPortalEmployee } from "../../shared/vaultIdentity.ts";
+import { resolvePortalEmployee } from "../../shared/portalIdentity.ts";
 
 // طلب استعادة كلمة مرور بوابة الموظف: يطابق الإقامة، يشترط أن يكون للموظف كلمة مرور
 // مُنشأة مسبقاً (otherwise needs_registration)، ثم يُنشئ رمز 6 أرقام صالح 10 دقائق
 // ويرسله إلى بريد الموظف المسجّل عبر SendEmail. (SendEmail يصل موثوقاً للمستخدمين
 // المُسجّلين في التطبيق فقط؛ لغير المسجّلين قد يفشل — نُرجع email_failed ليُخبر المستخدم).
-const rl = createRateLimiter(10 * 60 * 1000, 6);
+const rl = createRateLimiter(10 * 60 * 1000, 60);
+const rlId = createRateLimiter(10 * 60 * 1000, 5);
 
 export default async function (req) {
   try {
@@ -21,6 +22,8 @@ export default async function (req) {
     const nid = String(body.national_id || "").trim();
     if (!nid)
       return Response.json({ ok: false, error: "missing" }, { status: 400 });
+    if (rlId.rateLimited(nid))
+      return Response.json({ ok: false, error: "rate_limited", retry: true }, { status: 429 });
 
     const captchaToken = String(body.captcha_token || "");
     if (!captchaToken)
@@ -28,7 +31,7 @@ export default async function (req) {
     if (!(await verifyTurnstile(captchaToken)))
       return Response.json({ ok: false, error: "captcha_failed" }, { status: 403 });
 
-    const emp = preferPortalEmployee(await findEmployeesByNationalId(base44, nid));
+    const emp = await resolvePortalEmployee(base44, nid);
     if (!emp) return Response.json({ ok: false, error: "not_found" });
     if ((emp.role_level || "") === "owner")
       return Response.json({ ok: false, error: "not_found" });

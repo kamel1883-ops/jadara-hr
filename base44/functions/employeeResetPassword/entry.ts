@@ -1,12 +1,13 @@
 import { createClientFromRequest } from "npm:@base44/sdk@0.8.40";
 import { hashPassword } from "../../shared/ownerAuth.ts";
 import { verifyTurnstile, createRateLimiter } from "../../shared/turnstile.ts";
-import { findEmployeesByNationalId, preferPortalEmployee } from "../../shared/vaultIdentity.ts";
+import { resolvePortalEmployee } from "../../shared/portalIdentity.ts";
 
 // إعادة تعيين كلمة مرور بوابة الموظف: يتحقق من رمز الاستعادة (غير منتهٍ) مع تقييد المعدّل
 // وقفل بعد عدد محاولات فاشل، ثم يخزّن تجزئة كلمة المرور الجديدة ويمسح الرمز والمحاولات.
 const MAX_ATTEMPTS = 5;
-const rl = createRateLimiter(10 * 60 * 1000, 8);
+const rl = createRateLimiter(10 * 60 * 1000, 60);
+const rlId = createRateLimiter(10 * 60 * 1000, 12);
 
 export default async function (req) {
   try {
@@ -22,12 +23,14 @@ export default async function (req) {
       return Response.json({ ok: false, error: "missing" }, { status: 400 });
     if (newPass.length < 6)
       return Response.json({ ok: false, error: "weak_password" }, { status: 400 });
+    if (rlId.rateLimited(nid))
+      return Response.json({ ok: false, error: "rate_limited", retry: true }, { status: 429 });
 
     const captchaToken = String(body.captcha_token || "");
     if (!(await verifyTurnstile(captchaToken)))
       return Response.json({ ok: false, error: "captcha_failed" }, { status: 403 });
 
-    const emp = preferPortalEmployee(await findEmployeesByNationalId(base44, nid));
+    const emp = await resolvePortalEmployee(base44, nid);
     if (!emp) return Response.json({ ok: false, error: "invalid_code" }, { status: 400 });
     if ((emp.role_level || "") === "owner")
       return Response.json({ ok: false, error: "invalid_code" }, { status: 400 });

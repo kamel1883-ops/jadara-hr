@@ -176,10 +176,10 @@ export async function tenantKeysForEmployee(base44, emp) {
   const unified = String(emp?.unified_number || '').trim();
   if (!unified) scopeDenied();
   // الرقم الموحّد مثبت على موظف الجلسة. سجلات الاشتراكات القديمة لنفس الرقم ليست منشآت أخرى.
-  const tenants = asList(await base44.asServiceRole.entities.Tenant.filter({ unified_number: unified }, { limit: 20 }));
-  const creators = asList(await base44.asServiceRole.entities.Employee.filter({ unified_number: unified }, {
-    distinct: 'created_by_id', limit: 24,
-  }));
+  // بلا خيارات استعلام (sort/limit) — نسخة الـ SDK داخل الدوال لا تدعمها وتُرجع خطأ.
+  const tenants = asList(await base44.asServiceRole.entities.Tenant.filter({ unified_number: unified })).slice(0, 20);
+  const staff = asList(await base44.asServiceRole.entities.Employee.filter({ unified_number: unified }));
+  const creators = [...new Set(staff.map((e: any) => String(e.created_by_id || '').trim()).filter(Boolean))].slice(0, 24);
   if (creators.length >= 24) scopeDenied();
   const legacy = await companyLegacyKeys(base44, unified, [emp.created_by_id, ...tenants.map(t => t.admin_user_id), ...creators]);
   return [...new Set([unified, ...tenants.map(t => t.id), ...legacy].filter(Boolean))].slice(0, 24);
@@ -215,9 +215,11 @@ function sameId(row: any, nidDigits: string, birth: string) {
 /** مفاتيح خزنة منشأة واحدة: من أنشأ موظفيها، ثم سجل تلك المنشأة فقط */
 async function keysForCompany(base44: any, unified: string, creators: string[]) {
   const keys: string[] = [];
+  // الرقم الموحّد أولاً: هو المفتاح الذي تُحفظ تحته سجلات المنشأة فعلياً، فتُقرأ
+  // في الطلب الأول بدل استهلاك عشرات الطلبات على مفاتيح قديمة تُرجع 404.
+  if (unified) pushKey(keys, unified);
   for (const c of creators) pushKey(keys, c);
   if (!unified) return keys.slice(0, 24);
-  pushKey(keys, unified);
   try {
     const tenants = asList(await base44.asServiceRole.entities.Tenant.filter({ unified_number: unified }));
     for (const t of tenants) {
