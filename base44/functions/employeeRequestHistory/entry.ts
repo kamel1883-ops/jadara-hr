@@ -63,8 +63,10 @@ async function rowsFor(base44: any, entity: string, employeeId: string, national
   }
   return [...out.values()].filter((r) => {
     const eid = String(r?.employee_id || "");
+    // سجل مرتبط بموظف آخر لا يُعرض — حتى لو تطابقت الهوية (انتقال الموظف بين منشأتين)
+    if (eid) return eid === employeeId;
     const nid = String(r?.national_id || "");
-    return !eid || eid === employeeId || (nationalId && nid === nationalId);
+    return !!nationalId && nid === nationalId;
   });
 }
 

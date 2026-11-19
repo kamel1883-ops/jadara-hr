@@ -247,21 +247,33 @@ export default async function (req) {
           }
         } catch {}
       }
+      // عزل المنشأة على كل ما يصل لبوابة الموظف: أي سجل مختوم برقم منشأة أخرى
+      // لا يُعرض له حتى لو كُتب بمعرّفه، والسجل القديم بلا ختم يُقبل إن كان موظفه من منشأته.
+      const mine = (rows: any[]) => {
+        const bag = bagForFetch;
+        if (isOwnerSession || !bag?.unified) return rows || [];
+        return (rows || []).filter((r: any) => {
+          const un = String(r?.unified_number || "").trim();
+          if (un) return un === bag.unified;
+          return bag.ids.has(String(r?.employee_id || ""));
+        });
+      };
       return Response.json({
         ok: true,
         employee: publicEmployee,
         org: orgRow || null,
         branch,
         branches,
-        leaves, loans, attendance: attendanceOut, trips, warnings,
-        reviews, trainings,
-        settlements: paidSettlements,
-        decisions, incentives,
-        notifications: notifications || [],
-        equipmentRequests: equipmentReqs || [],
-        complaints: complaints || [],
-        hrRequests: hrRequests || [],
-        investigations,
+        leaves: mine(leaves), loans: mine(loans), attendance: mine(attendanceOut),
+        trips: mine(trips), warnings: mine(warnings),
+        reviews: mine(reviews), trainings: mine(trainings),
+        settlements: mine(paidSettlements),
+        decisions: mine(decisions), incentives: mine(incentives),
+        notifications: mine(notifications),
+        equipmentRequests: mine(equipmentReqs),
+        complaints: mine(complaints),
+        hrRequests: mine(hrRequests),
+        investigations: mine(investigations),
       });
     }
 
@@ -272,7 +284,14 @@ export default async function (req) {
       const notifs = await base44.asServiceRole.entities.Notification.filter(
         { employee_id: employeeId }, "-created_date", limit
       );
-      return Response.json({ ok: true, notifications: notifs || [] });
+      // لا يُعرض إشعار كُتب من منشأة أخرى على معرّف هذا الموظف
+      const bag = await companyBag();
+      const rows = (notifs || []).filter((n: any) => {
+        if (isOwnerSession || !bag?.unified) return true;
+        const un = String(n?.unified_number || "").trim();
+        return !un || un === bag.unified;
+      });
+      return Response.json({ ok: true, notifications: rows });
     }
     // فتح مستند محفوظ في الخزنة من بوابة الموظف. الرمز العشوائي لا يكفي وحده:
     // البحث محصور بمفاتيح منشأة هذا الموظف، والرابط مؤقت.
@@ -1372,6 +1391,7 @@ export default async function (req) {
       const created = await base44.asServiceRole.entities.LeaveRequest.create({
         ...p,
         employee_id: employeeId,
+        unified_number: String(emp?.unified_number || "").trim(),
         employee_user_id: emp.user_id || null,
         employee_name: empLabel,
         status: "pending_manager",
@@ -1400,6 +1420,7 @@ export default async function (req) {
       const loan: any = await base44.asServiceRole.entities.LoanRequest.create({
         ...p,
         employee_id: employeeId,
+        unified_number: String(emp?.unified_number || "").trim(),
         employee_user_id: emp.user_id || null,
         employee_name: empLabel,
         status: "pending_manager", manager_status: "pending", hr_status: "pending", finance_status: "pending",
@@ -1424,6 +1445,7 @@ export default async function (req) {
       const created = await base44.asServiceRole.entities.EquipmentRequest.create({
         ...p,
         employee_id: employeeId,
+        unified_number: String(emp?.unified_number || "").trim(),
         employee_user_id: emp.user_id || null,
         employee_name: empLabel,
         status: "pending_manager", manager_status: "pending", hr_status: "pending",
@@ -1449,6 +1471,7 @@ export default async function (req) {
       const created = await base44.asServiceRole.entities.Complaint.create({
         ...p,
         employee_id: employeeId,
+        unified_number: String(emp?.unified_number || "").trim(),
         employee_user_id: emp.user_id || null,
         employee_name: empLabel,
         department: p.department || emp?.department || "",
@@ -1543,6 +1566,7 @@ export default async function (req) {
       const created = await base44.asServiceRole.entities.BusinessTrip.create({
         ...p,
         employee_id: employeeId,
+        unified_number: String(emp?.unified_number || "").trim(),
         employee_user_id: emp.user_id || null,
         employee_name: empLabel,
         status: "pending_manager",

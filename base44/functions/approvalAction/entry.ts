@@ -83,12 +83,16 @@ export default async function (req) {
     }
     // نطاق المعتمد: منشأة سجل الموظف (أو منشأة حساب بوابة الشركة عند عدم ربطه بموظف)
     const myUn = String(myEmp?.unified_number || "").trim() || companyUnifiedNumber;
-    // نطاق السجل: رقمه الموحد إن كان مسجّلاً عليه، وإلا رقم منشأة الموظف صاحب الطلب.
+    // نطاق السجل: منشأة موظف الطلب هي الحاكم (المصدر الموثّق على سجل الموظف).
+    // لا يُفتح الطلب برقم موحّد مكتوب على السجل نفسه، لأن منشأة يمكنها ختم طلب
+    // بموظف منشأة أخرى برقمها — فلا يُعتمد إلا طلب موظف من منشأة المعتمد.
+    // الرقم المخزّن على السجل يُستخدم فقط لسجل بلا موظف معروف (سجلات قديمة).
     const sameTenant = (employeeId, recordUnified = "") => {
       if (!myUn) return false;
+      const empUn = String(idToUn.get(employeeId) || "").trim();
+      if (empUn) return empUn === myUn;
       const recUn = String(recordUnified || "").trim();
-      if (recUn) return recUn === myUn;
-      return idToUn.get(employeeId) === myUn;
+      return !!recUn && recUn === myUn;
     };
     // سلطة الموارد البشرية: معتمد موارد بشرية معلَّم في النظام، أو حساب منشأة في بوابة الشركات
     const isHrAuthority = !!myEmp?.is_approver_hr || isCompanyAccount;
