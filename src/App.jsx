@@ -12,6 +12,7 @@ import UserNotRegisteredError from '@/components/UserNotRegisteredError';
 import ScrollToTop from './components/ScrollToTop';
 import Layout from "@/components/Layout";
 import AnimatedOutlet from "@/components/AnimatedOutlet";
+import PublicLayout from "@/components/PublicLayout";
 const Dashboard = lazy(() => import("@/pages/Dashboard"));
 const Notifications = lazy(() => import("@/pages/Notifications"));
 const Employees = lazy(() => import("@/pages/Employees"));
@@ -158,7 +159,7 @@ const AuthenticatedApp = () => {
   if (isPublicPage) {
     return (
       <Routes>
-        <Route element={<AnimatedOutlet />}>
+        <Route element={<PublicLayout />}>
           <Route path="/" element={<Landing />} />
           <Route path="/login" element={<Login />} />
           <Route path="/register" element={<Register />} />
