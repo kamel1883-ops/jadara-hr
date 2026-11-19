@@ -2390,9 +2390,9 @@ export default async function (req) {
     }
 
     // ====== حذف حساب الموظف من داخل التطبيق — متطلب App Store 5.1.1(v) ======
-    // «حذف الحساب» = إنهاء وصول الموظف إلى بوابة الموظف فوراً (كلمة المرور والرموز
-    // وفكّ ربط حساب التطبيق) + تسجيل طلب لمحاسبة الموارد البشرية لإتلاف بياناته الشخصية
-    // غير المشمولة بحفظ نظامي (سجل العمل والرواتب يبقى التزاماً نظامياً على المنشأة).
+    // «طلب الحذف» لا يغلق الحساب: يُسجّل طلباً يمرّ على منشأة الموظف (الموارد البشرية)
+    // فتوافق أو ترفض. لا يُلغى وصول الموظف إلا بعد موافقة منشأته، حمايةً له من الحذف
+    // بالخطأ وللتحقق من انتهاء العلاقة التعاقدية. سجل العمل والرواتب يبقى التزاماً نظامياً.
     if (action === "account_delete_status") {
       if (isOwnerSession) return Response.json({ ok: false, error: "forbidden" }, { status: 403 });
       const rows = await base44.asServiceRole.entities.AccountDeletionRequest.filter(
@@ -2411,7 +2411,8 @@ export default async function (req) {
       const pending = await base44.asServiceRole.entities.AccountDeletionRequest.filter(
         { employee_id: employeeId, status: "pending" }, "-created_date", 5
       );
-      const request = pending?.[0] || await base44.asServiceRole.entities.AccountDeletionRequest.create({
+      const existing = pending?.[0];
+      const request = existing || await base44.asServiceRole.entities.AccountDeletionRequest.create({
         employee_id: employeeId,
         employee_name: emp?.full_name || empLabel,
         employee_number: String(emp?.employee_number || ""),
@@ -2421,21 +2422,12 @@ export default async function (req) {
         status: "pending",
         note: String(body.note || "").slice(0, 1000),
       });
-      // إلغاء الوصول فوراً: لا كلمة مرور ولا رمز استعادة ولا ربط بحساب التطبيق.
-      await base44.asServiceRole.entities.Employee.update(employeeId, {
-        portal_password_hash: "",
-        portal_password_salt: "",
-        portal_password_enabled: false,
-        login_otp: "",
-        login_otp_expires_at: 0,
-        login_otp_attempts: 0,
-        user_id: "",
-      });
-      // تنبيه مسؤول المنشأة لإتمام إتلاف البيانات الشخصية من سجلاته.
+      // لا يُغلق الحساب هنا: القرار لمنشأة الموظف (الموارد البشرية) من صفحة الموظفين.
+      // تنبيه مسؤول المنشأة لمراجعة الطلب والموافقة عليه أو رفضه.
       try {
         await base44.asServiceRole.entities.Notification.create({
           title: `طلب حذف حساب موظف — ${emp?.full_name || empLabel}`,
-          body: `${emp?.full_name || empLabel} (${emp?.employee_number || ""}) طلب حذف حسابه من بوابة الموظف. أُوقف وصوله فوراً — راجع الطلب وأتلف بياناته الشخصية غير المشمولة بالحفظ النظامي.`,
+          body: `${emp?.full_name || empLabel} (${emp?.employee_number || ""}) طلب حذف حسابه من بوابة الموظف. لم يُغلق الحساب — راجع الطلب في صفحة الموظفين ووافق أو ارفض.`,
           type: "account_deletion",
           unified_number: String(emp?.unified_number || "").trim(),
           link: "/employees",

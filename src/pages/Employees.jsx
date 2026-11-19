@@ -28,6 +28,7 @@ import { printEmployeeList } from "@/lib/employeePrint";
 import { revertExpiredLeaves } from "@/lib/leaveBalance";
 import { enrichEmployeesBatch, applySensitiveMap } from "@/lib/vaultSensitive";
 import PullToRefresh from "@/components/PullToRefresh";
+import AccountDeletionRequests from "@/components/employees/AccountDeletionRequests";
 
 const isInactive = (e) => e.status === "terminated" || e.status === "resigned";
 
@@ -185,6 +186,8 @@ export default function Employees() {
           </div>
         )}
       />
+
+      <AccountDeletionRequests />
 
       <div className="bg-white rounded-2xl border border-border">
         <div className="p-4 flex flex-col sm:flex-row gap-3 border-b border-border">

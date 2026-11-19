@@ -5,48 +5,49 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Trash2, Loader2, AlertTriangle, ShieldAlert, Clock, CheckCircle2 } from "lucide-react";
-import { portalSession } from "@/lib/portalSession";
 
 // حذف حساب الموظف من داخل التطبيق — متطلب App Store 5.1.1(v).
-// الحذف يُلغي الوصول إلى بوابة الموظف فوراً (كلمة المرور والرموز وربط حساب التطبيق)
-// ويسجّل طلباً لمسؤول المنشأة لإتلاف البيانات الشخصية غير المشمولة بحفظ نظامي.
-export default function PortalAccountDeletion({ session, isAr, onDeleted }) {
+// الطلب يمرّ على منشأة الموظف (الموارد البشرية) ولا يُغلق الحساب إلا بموافقتها،
+// فلا تُحذف حسابات الموظفين على رأس العمل بالخطأ، ويُتحقق من انتهاء العلاقة التعاقدية.
+export default function PortalAccountDeletion({ session, isAr }) {
   const t = isAr
     ? {
         title: "حذف حسابي",
-        note: "يمكنك حذف حسابك في بوابة الموظف من هنا في أي وقت. يُلغى وصولك فوراً، ويُبلَّغ مسؤول منشأتك لإتلاف بياناتك الشخصية. سجل العمل والرواتب يبقى محفوظاً لدى المنشأة التزاماً بنظام العمل السعودي.",
-        btn: "حذف حسابي نهائياً",
-        dialogTitle: "تأكيد حذف الحساب",
-        warn1: "سيُلغى دخولك إلى بوابة الموظف فوراً ولن تستطيع تسجيل الدخول مرة أخرى.",
-        warn2: "ستُحذف كلمة المرور ورموز الاستعادة وربط حساب التطبيق.",
-        warn3: "سجل التوظيف والرواتب والالتزامات النظامية يبقى لدى المنشأة، وتُتلف بياناتك الشخصية الأخرى.",
+        note: "حذف الحساب لا يُنفَّذ فوراً: يُرسَل طلبك إلى الموارد البشرية في منشأتك للمراجعة، ولا يُغلق حسابك إلا بعد موافقتها. إن ضغطت بالخطأ يمكن للمنشأة رفض الطلب ويبقى حسابك كما هو. سجل العمل والرواتب يبقى لدى المنشأة التزاماً بنظام العمل السعودي.",
+        btn: "طلب حذف حسابي",
+        dialogTitle: "تأكيد طلب حذف الحساب",
+        warn1: "لن يُحذف حسابك فوراً: يُرسَل الطلب إلى الموارد البشرية في منشأتك للمراجعة.",
+        warn2: "يبقى وصولك إلى بوابة الموظف فعّالاً حتى يتم البت في طلبك.",
+        warn3: "عند الموافقة يُلغى وصولك نهائياً، ويبقى سجل التوظيف والرواتب لدى المنشأة التزاماً نظامياً.",
         confirmL: "اكتب كلمة «حذف» للتأكيد",
         confirmPh: "حذف",
         word: "حذف",
         cancel: "إلغاء",
-        send: "حذف حسابي",
-        sending: "جارٍ الحذف…",
-        done: "تم حذف حسابك وإلغاء وصولك. سيتم تسجيل خروجك الآن.",
-        pending: "طلب حذف حسابك مسجّل — وصولك إلى البوابة موقوف.",
-        fail: "تعذّر إتمام الطلب، حاول مرة أخرى.",
+        send: "إرسال الطلب",
+        sending: "جارٍ الإرسال…",
+        done: "تم إرسال طلبك إلى منشأتك — سيُغلق حسابك بعد موافقتها، وحسابك يعمل حتى ذلك الحين.",
+        pending: "طلب حذف حسابك مسجّل وبانتظار موافقة منشأتك — حسابك ما زال يعمل.",
+        foot: "يُراجع الطلب من الموارد البشرية في منشأتك.",
+        fail: "تعذّر إرسال الطلب، حاول مرة أخرى.",
       }
     : {
         title: "Delete my account",
-        note: "You can delete your employee portal account here at any time. Access is revoked immediately and your organisation's admin is notified to erase your personal data. Employment and payroll records stay with the organisation as required by Saudi labour law.",
-        btn: "Delete my account",
-        dialogTitle: "Confirm account deletion",
-        warn1: "Your portal access is revoked immediately and you will not be able to sign in again.",
-        warn2: "Your password, recovery codes and app account link are removed.",
-        warn3: "Employment, payroll and statutory records stay with the organisation; your other personal data is erased.",
+        note: "Deletion is not immediate: your request goes to your organisation's HR for review, and your account is only closed once they approve. If you pressed by mistake, they can reject the request and your account stays as it is. Employment and payroll records stay with the organisation as required by Saudi labour law.",
+        btn: "Request account deletion",
+        dialogTitle: "Confirm deletion request",
+        warn1: "Your account is not deleted now: the request is sent to your organisation's HR for review.",
+        warn2: "Your employee portal access stays active until your request is decided.",
+        warn3: "If approved, your access is removed permanently; employment and payroll records stay with the organisation as required by law.",
         confirmL: "Type “delete” to confirm",
         confirmPh: "delete",
         word: "delete",
         cancel: "Cancel",
-        send: "Delete my account",
-        sending: "Deleting…",
-        done: "Your account is deleted and access revoked. Signing you out now.",
-        pending: "Your account deletion request is recorded — portal access is disabled.",
-        fail: "Couldn't complete the request, please try again.",
+        send: "Send request",
+        sending: "Sending…",
+        done: "Your request was sent to your organisation — your account is closed once they approve, and keeps working until then.",
+        pending: "Your deletion request is recorded and awaiting your organisation's approval — your account still works.",
+        foot: "The request is reviewed by HR in your organisation.",
+        fail: "Couldn't send the request, please try again.",
       };
 
   const [state, setState] = useState(null);
@@ -79,15 +80,13 @@ export default function PortalAccountDeletion({ session, isAr, onDeleted }) {
       if (!data?.ok) throw new Error(data?.error || "fail");
       setOpen(false);
       setDone(true);
-      // تُنهى الجلسة محلياً بعد عرض التأكيد — الحساب نفسه أُغلق على الخادم.
-      setTimeout(() => { portalSession.clear(); onDeleted?.(); }, 2400);
     } catch (e) {
       setErr(e?.message || t.fail);
     } finally { setBusy(false); }
   };
 
   if (!session) return null;
-  const already = done || state?.request?.status === "pending" || state?.portal_enabled === false;
+  const already = done || state?.request?.status === "pending";
 
   return (
     <div className="mt-6 bg-white rounded-2xl border border-rose-100 p-5 space-y-3">
@@ -100,7 +99,7 @@ export default function PortalAccountDeletion({ session, isAr, onDeleted }) {
       {err && <div className="text-sm rounded-lg p-3 bg-rose-50 text-rose-700 border border-rose-100">{err}</div>}
 
       {already ? (
-        <div className="rounded-xl border border-emerald-200 bg-emerald-50/70 p-3.5 flex items-start gap-2 text-emerald-800 text-sm">
+        <div className="rounded-xl border border-amber-200 bg-amber-50/70 p-3.5 flex items-start gap-2 text-amber-800 text-sm">
           <CheckCircle2 size={16} className="shrink-0 mt-0.5" /> {done ? t.done : t.pending}
         </div>
       ) : (
@@ -131,7 +130,7 @@ export default function PortalAccountDeletion({ session, isAr, onDeleted }) {
               <Input value={confirmText} onChange={(e) => setConfirmText(e.target.value)} placeholder={t.confirmPh} disabled={busy} />
             </div>
             <div className="flex items-center gap-2 text-[11px] text-muted-foreground">
-              <Clock size={13} /> {isAr ? "الحذف فوري ولا يمكن التراجع عنه من البوابة." : "Deletion is immediate and cannot be undone from the portal."}
+              <Clock size={13} /> {t.foot}
             </div>
           </div>
           <DialogFooter>
