@@ -1,6 +1,6 @@
 import { createClientFromRequest } from "npm:@base44/sdk@0.8.56";
 import { Stagehand } from "npm:@browserbasehq/stagehand@3.7.3";
-import "npm:zod@4.4.0";
+import "npm:zod@4.6.7";
 import { secrets } from "base44:runtime";
 import { prepareRecording, paintRecording, finishRecording } from "./media.ts";
 import { lessonScenes, showScene } from "./scenes.ts";
