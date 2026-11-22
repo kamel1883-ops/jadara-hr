@@ -51,7 +51,7 @@
     "end_date": {
       "type": "string",
       "format": "date",
-      "title": "\u062a\u0627\u0631\u064a\u062e \u0627\u0644\u0646\u0647\u0627\u064a\u064a\u0629"
+      "title": "\u062a\u0627\u0631\u064a\u062e \u0627\u0644\u0646\u0647\u0627\u064a\u0629"
     },
     "days_count": {
       "type": "number",
@@ -65,7 +65,7 @@
     "reason": {
       "type": "string",
       "title": "\u0627\u0644\u0633\u0628\u0628",
-      "description": "\u0644\u0642\u0637\u0629 \u0648\u0642\u062a \u0627\u0644\u0625\u0646\u0634\u0627\u0621. \u0639\u0646\u062f \u062a\u0641\u0639\u064a\u0644 \u0627\u0644\u062e\u0632\u0646\u0629: \u064a\u064f\u062e\u0632\u0646 \u0641\u064a \u0627\u0644\u062e\u0632\u0646\u0629 \u0627\u0644\u0633\u0639\u0648\u062f\u064a\u0629 \u0641\u0642\u0637\u060c \u0648\u062a\u064f\u0639\u064e\u0645\u0651\u0649 \u0641\u064a Base44 (\u0641\u0627\u0631\u063a\u0629)."
+      "description": "\u0644\u0642\u0637\u0629 \u0648\u0642\u062a \u0627\u0644\u0625\u0646\u0634\u0627\u0621. \u0639\u0646\u062f \u062a\u0641\u0639\u064a\u0644 \u0627\u0644\u062e\u0632\u0646\u0629: \u064a\u064f\u062e\u0632\u0646 \u0641\u064a \u0627\u0644\u062e\u0632\u0646\u0629 \u0627\u0644\u0633\u0639\u0648\u062f\u064a\u0629 \u0641\u0642\u0637\u060c \u0648\u062a\u064f\u0639\u0645\u0651\u0649 \u0641\u064a Base44 (\u0641\u0627\u0631\u063a\u0629)."
     },
     "medical_report_url": {
       "type": "string",
@@ -108,7 +108,7 @@
         "rejected"
       ],
       "default": "pending",
-      "title": "\u0645\u0648\u0627\u0641\u0642\u0629 \u0627\u0644\u0645\u0648\u0627\u0631\u062f \u0627\u0644\u0628\u0634\u0631\u064a\u064a\u0629"
+      "title": "\u0645\u0648\u0627\u0641\u0642\u0629 \u0627\u0644\u0645\u0648\u0627\u0631\u062f \u0627\u0644\u0628\u0634\u0631\u064a\u0629"
     },
     "hr_id": {
       "type": "string"
@@ -219,11 +219,11 @@
     },
     "prepared_by_name": {
       "type": "string",
-      "title": "\u0623\u064f\u0639\u062f\u0651\u062a \u0628\u0648\u0627\u0633\u0637\u0629 (\u0627\u0644\u0627\u0633\u0645) \u2014 \u0627\u0644\u0645\u0648\u0638\u0641 \u0627\u0644\u0645\u064f\u0641\u0648\u0651\u0636"
+      "title": "\u0623\u064f\u0639\u062f\u0651\u062a \u0628\u0648\u0627\u0633\u0637\u0629 (\u0627\u0644\u0627\u0633\u0645) \u2014 \u0627\u0644\u0645\u0648\u0638\u0641 \u0627\u0644\u0645\u0641\u0648\u0651\u0636"
     },
     "prepared_by_id": {
       "type": "string",
-      "title": "\u0623\u064f\u0639\u062f\u0651\u062a \u0628\u0648\u0627\u0633\u0637\u0629 (\u0627\u0644\u0647\u0648\u062a\u064a\u0629/\u0627\u0644\u0625\u0642\u0627\u0645\u0629)"
+      "title": "\u0623\u064f\u0639\u062f\u0651\u062a \u0628\u0648\u0627\u0633\u0637\u0629 (\u0627\u0644\u0647\u0648\u064a\u0629/\u0627\u0644\u0625\u0642\u0627\u0645\u0629)"
     }
   },
   "required": [
@@ -235,47 +235,116 @@
   ],
   "rls": {
     "create": {
-      "created_by_id": "{{user.id}}"
+      "$and": [
+        {
+          "data.unified_number": {
+            "$ne": ""
+          }
+        },
+        {
+          "data.unified_number": {
+            "$ne": null
+          }
+        },
+        {
+          "data.unified_number": "{{user.data.tenant_unified_number}}"
+        },
+        {
+          "$or": [
+            {
+              "user_condition": {
+                "role": "admin"
+              }
+            },
+            {
+              "data.employee_user_id": "{{user.id}}"
+            }
+          ]
+        }
+      ]
     },
     "read": {
-      "$or": [
+      "$and": [
         {
-          "created_by_id": "{{user.id}}"
-        },
-        {
-          "data.employee_user_id": "{{user.id}}"
-        },
-        {
-          "user_condition": {
-            "role": "admin"
+          "data.unified_number": {
+            "$nin": [
+              "",
+              null
+            ]
           }
+        },
+        {
+          "data.unified_number": "{{user.data.tenant_unified_number}}"
+        },
+        {
+          "$or": [
+            {
+              "user_condition": {
+                "role": "admin"
+              }
+            },
+            {
+              "data.employee_user_id": "{{user.id}}"
+            }
+          ]
         }
       ]
     },
     "update": {
-      "$or": [
+      "$and": [
         {
-          "created_by_id": "{{user.id}}"
-        },
-        {
-          "data.employee_user_id": "{{user.id}}"
-        },
-        {
-          "user_condition": {
-            "role": "admin"
+          "data.unified_number": {
+            "$ne": ""
           }
+        },
+        {
+          "data.unified_number": {
+            "$ne": null
+          }
+        },
+        {
+          "data.unified_number": "{{user.data.tenant_unified_number}}"
+        },
+        {
+          "$or": [
+            {
+              "user_condition": {
+                "role": "admin"
+              }
+            },
+            {
+              "data.employee_user_id": "{{user.id}}"
+            }
+          ]
         }
       ]
     },
     "delete": {
-      "$or": [
+      "$and": [
         {
-          "created_by_id": "{{user.id}}"
+          "data.unified_number": {
+            "$ne": ""
+          }
         },
         {
-          "user_condition": {
-            "role": "admin"
+          "data.unified_number": {
+            "$ne": null
           }
+        },
+        {
+          "data.unified_number": "{{user.data.tenant_unified_number}}"
+        },
+        {
+          "$or": [
+            {
+              "user_condition": {
+                "role": "admin"
+              }
+            },
+            {
+              "created_by_id": "{{user.id}}"
+            }
+          ]
         }
       ]
     }

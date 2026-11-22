@@ -44,6 +44,33 @@ router.post('/', requireApiKey, requireTenant, upload.single('file'), async (req
   }
 });
 
+// Recover orphaned medical uploads by their recorded employee reference, never by name/date.
+router.post('/medical-reports/lookup', requireApiKey, requireTenant, async (req, res, next) => {
+  try {
+    const tenant = String(req.headers['x-tenant-id'] || '').trim();
+    const keys = [...new Set([tenant, ...(req.body.tenant_ids || [])])];
+    const refs = req.body.emp_refs;
+    const valid = value => typeof value === 'string' && /^[A-Za-z0-9][A-Za-z0-9_-]{0,127}$/.test(value);
+    if (keys.length > 24 || !keys.every(valid) || !Array.isArray(refs) || !refs.length || refs.length > 100 || !refs.every(valid)) return res.status(400).json({ error: 'invalid_scope' });
+    const after = req.body.cursor || null;
+    if (after && (!valid(after.doc_ref) || !Number.isFinite(Date.parse(after.created_at)))) return res.status(400).json({ error: 'invalid_cursor' });
+    const selected = req.body.doc_ref || null;
+    if (selected && !valid(selected)) return res.status(400).json({ error: 'invalid_reference' });
+    const { rows } = await query(
+      `SELECT doc_ref, tenant_id, emp_ref, file_name, mime_type, file_path, created_at
+       FROM vault_documents WHERE tenant_id=ANY($1::text[]) AND emp_ref=ANY($2::text[]) AND doc_type='medical_report'
+       AND ($3::text IS NULL OR doc_ref=$3)
+       AND ($4::timestamptz IS NULL OR (created_at,doc_ref)<($4::timestamptz,$5::text))
+       ORDER BY created_at DESC, doc_ref DESC LIMIT 51`,
+      [keys, refs, selected, after?.created_at || null, after?.doc_ref || null]
+    );
+    const items = rows.slice(0, 50).map(({ file_path, ...row }) => ({ ...row, available: !!file_path && fs.existsSync(file_path) }));
+    const last = items[items.length - 1];
+    res.set('Cache-Control', 'private, no-store');
+    res.json({ items, has_more: rows.length > 50, next_cursor: rows.length > 50 ? { created_at: last.created_at, doc_ref: last.doc_ref } : null });
+  } catch (error) { next(error); }
+});
+
 async function issueDocLink(req, res) {
   const tenantId = String(req.headers['x-tenant-id'] || '').trim();
   if (!tenantId) return res.status(400).json({ error: 'tenant_required' });

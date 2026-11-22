@@ -13,6 +13,7 @@ import { cn } from "@/lib/utils";
 import { useI18n } from "@/lib/i18n";
 import { generateLeaveSettlement } from "@/lib/docGenerators";
 import { StoredDocButton } from "@/components/VaultDocLink";
+import MedicalReportsDialog from "@/components/medical/MedicalReportsDialog";
 import { enrichEmployeesBatch, applySensitiveMap } from "@/lib/vaultSensitive";
 import { getOrgOnce } from "@/lib/leaveBalance";
 import PullToRefresh from "@/components/PullToRefresh";
@@ -173,6 +174,7 @@ export default function Leaves() {
                 <TableHead>{t.thDays}</TableHead>
                 <TableHead>{t.thReason}</TableHead>
                 <TableHead>{t.thStatus}</TableHead>
+                <TableHead>{isAr ? 'التقرير الطبي' : 'Medical report'}</TableHead>
                 <TableHead></TableHead>
               </TableRow>
             </TableHeader>
@@ -201,6 +203,12 @@ export default function Leaves() {
                     </TableCell>
                     <TableCell className="text-sm text-muted-foreground max-w-[220px] truncate">{r.reason || "—"}</TableCell>
                     <TableCell><span className={cn("text-xs px-2 py-1 rounded-full font-medium", st.cls)}>{st.label}</span></TableCell>
+                    <TableCell>
+                      {r.leave_type === 'sick' ? <div className="flex flex-wrap gap-2">
+                        {r.medical_report_url && <StoredDocButton value={r.medical_report_url} isAr={isAr} className="text-xs text-primary underline">{isAr ? 'تقرير الطلب' : 'Request report'}</StoredDocButton>}
+                        <MedicalReportsDialog employee={employees.find(e => e.id === r.employee_id) || { id: r.employee_id, full_name: r.employee_name, unified_number: r.unified_number }} isAr={isAr} />
+                      </div> : '—'}
+                    </TableCell>
                     <TableCell>
                       {r.status === "completed" ? (
                         r.settlement_pdf_url ? (

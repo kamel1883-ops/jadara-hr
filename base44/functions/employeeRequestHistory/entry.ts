@@ -1,6 +1,7 @@
 import { createClientFromRequest } from "npm:@base44/sdk@0.8.54";
 import { verifyToken } from "../../shared/portalToken.ts";
 import { isAlMoiedSupervisor } from "../../shared/alMoied.ts";
+import { companyVaultAccess } from "../../shared/vaultIdentity.ts";
 
 // سجل طلبات الموظف الكامل — لعرضه عند مراجعة أي طلب (اسم الموظف قابل للضغط).
 // يجمع: الإجازات، السلف، الانتدابات، نهاية الخدمة، الطلبات الإدارية (نماذج)، العهد.
@@ -25,26 +26,9 @@ function parsePerms(raw: any): string[] {
   }
 }
 
-/** شركة حساب التطبيق (المسار الإداري القديم): من سجل المنشأة أو عضوية أو سجل الموظف. */
-async function companyOfAppUser(base44: any, user: any): Promise<string> {
-  const uid = String(user?.id || "");
-  const email = String(user?.email || "").trim().toLowerCase();
-  try {
-    const tenants = asList(await base44.asServiceRole.entities.Tenant.filter({}, undefined, 2000));
-    const mine = uid ? tenants.find((t: any) => String(t?.admin_user_id || "") === uid) : null;
-    if (mine) return String(mine.unified_number || "").trim();
-    if (email) {
-      const hits = tenants.filter((t: any) => String(t?.contact_email || "").trim().toLowerCase() === email);
-      if (hits.length === 1) return String(hits[0].unified_number || "").trim();
-    }
-    const members = uid ? asList(await base44.asServiceRole.entities.TenantMember.filter({ user_id: uid })) : [];
-    const un = [...new Set(members.filter((m: any) => m?.active !== false).map((m: any) => String(m.unified_number || "").trim()).filter(Boolean))];
-    if (un.length === 1) return un[0];
-  } catch { /* تجاهل */ }
-  return "";
-}
 
-async function rowsFor(base44: any, entity: string, employeeId: string, nationalId: string): Promise<any[]> {
+
+async function rowsFor(base44: any, entity: string, employeeId: string, nationalId: string, unified: string): Promise<any[]> {
   const out = new Map<string, any>();
   const push = (rows: any[]) => {
     for (const r of rows || []) {
@@ -64,9 +48,11 @@ async function rowsFor(base44: any, entity: string, employeeId: string, national
   return [...out.values()].filter((r) => {
     const eid = String(r?.employee_id || "");
     // سجل مرتبط بموظف آخر لا يُعرض — حتى لو تطابقت الهوية (انتقال الموظف بين منشأتين)
+    const recordUn = String(r?.unified_number || '').trim();
+    if (recordUn && recordUn !== unified) return false;
     if (eid) return eid === employeeId;
     const nid = String(r?.national_id || "");
-    return !!nationalId && nid === nationalId;
+    return recordUn === unified && !!nationalId && nid === nationalId;
   });
 }
 
@@ -100,15 +86,16 @@ export default async function (req: Request) {
       const user = await base44.auth.me().catch(() => null);
       if (!user) return Response.json({ ok: false, error: "unauthorized" }, { status: 401 });
       if (String(user.role || "") !== "admin") return Response.json({ ok: false, error: "forbidden" }, { status: 403 });
-      myUn = await companyOfAppUser(base44, user);
-      allowed = true;
+      const context = await companyVaultAccess(base44, user);
+      myUn = String(context.unified || '').trim();
+      allowed = context.owner || context.member;
     }
 
     if (!allowed) return Response.json({ ok: false, error: "forbidden" }, { status: 403 });
     if (!myUn) return Response.json({ ok: false, error: "no_company" }, { status: 400 });
 
     // الموظف المستهدف: يجب أن يكون داخل منشأة الطالب (وإلا فحص بيانات شركة أخرى).
-    const allEmployees = asList(await base44.asServiceRole.entities.Employee.list("-created_date", 3000));
+    const allEmployees = asList(await base44.asServiceRole.entities.Employee.filter({ unified_number: myUn, ...(targetId ? { id: targetId } : { national_id: targetNid }) }, { limit: 2 }));
     const byId = new Map(allEmployees.map((e: any) => [String(e.id || ""), e]));
     let target: any = targetId ? byId.get(targetId) || null : null;
     if (!target && targetNid) target = allEmployees.find((e: any) => String(e.national_id || "").trim() === targetNid) || null;
@@ -124,12 +111,12 @@ export default async function (req: Request) {
     const tid = String(target.id);
     const nid = String(target.national_id || "").trim();
     const [leaves, loans, trips, eos, hrRequests, equipment] = await Promise.all([
-      rowsFor(base44, "LeaveRequest", tid, nid),
-      rowsFor(base44, "LoanRequest", tid, nid),
-      rowsFor(base44, "BusinessTrip", tid, nid),
-      rowsFor(base44, "Settlement", tid, nid),
-      rowsFor(base44, "HrRequest", tid, nid),
-      rowsFor(base44, "EquipmentRequest", tid, nid),
+      rowsFor(base44, "LeaveRequest", tid, nid, myUn),
+      rowsFor(base44, "LoanRequest", tid, nid, myUn),
+      rowsFor(base44, "BusinessTrip", tid, nid, myUn),
+      rowsFor(base44, "Settlement", tid, nid, myUn),
+      rowsFor(base44, "HrRequest", tid, nid, myUn),
+      rowsFor(base44, "EquipmentRequest", tid, nid, myUn),
     ]);
 
     return Response.json({

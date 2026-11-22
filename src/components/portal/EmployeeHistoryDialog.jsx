@@ -8,6 +8,7 @@ import { leaveTypeLabel, formatCurrency } from "@/lib/hr";
 import { StoredDocButton } from "@/components/VaultDocLink";
 import { warmRecords } from "@/lib/vaultGeneric";
 import { VAULT_MODULES } from "@/lib/vaultGeneric";
+import MedicalReportsDialog from "@/components/medical/MedicalReportsDialog";
 
 /**
  * سجل طلبات الموظف الكامل — يُفتح عند الضغط على اسم الموظف في أي طلب.
@@ -251,6 +252,8 @@ export default function EmployeeHistoryDialog({ open, onOpenChange, employee, po
             {emp.position && <span>{emp.position}</span>}
           </div>
         </div>
+
+        {!loading && !error && data?.employee && <MedicalReportsDialog employee={data.employee} session={portalSession} isAr={isAr} />}
 
         {!loading && !error && rows.length > 0 && (
           <div className="flex flex-wrap items-center gap-1.5">

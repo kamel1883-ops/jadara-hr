@@ -56,7 +56,7 @@ export default async function (req) {
         myUn = String(owned[0]?.unified_number || "").trim();
       } catch { myUn = ""; }
     }
-    const sameTenant = (rec) => !!myUn && idToUn.get(rec.employee_id) === myUn;
+    const sameTenant = (rec) => !!myUn && idToUn.get(rec.employee_id) === myUn && (!String(rec.unified_number || '').trim() || String(rec.unified_number).trim() === myUn);
 
     // منشأة المعتمد نفسه فقط — لا آخر منشأة سُجّلت في المنصة.
     let myOrg = null;
@@ -118,11 +118,11 @@ export default async function (req) {
         base44.asServiceRole.entities.EquipmentRequest.list("-created_date", 500),
         base44.asServiceRole.entities.Complaint.list("-created_date", 500),
       ]);
-      const bySub = (arr) => (arr || []).filter((r) => subIds.has(r.employee_id) && mgrPending.includes(r.status));
+      const bySub = (arr) => (arr || []).filter((r) => subIds.has(r.employee_id) && sameTenant(r) && mgrPending.includes(r.status));
       // سجلّ معاملات المرؤوسين — كل ما تجاوز مرحلة المدير (إجازات + سلف + انتدابات) لتكون تواريخها وحالاتها ومستنداتها مرئية للمدير المباشر.
       const subName = (id) => subs.find((s) => s.id === id)?.full_name || "";
       const done = (arr) => (arr || [])
-        .filter((r) => subIds.has(r.employee_id) && !mgrPending.includes(r.status))
+        .filter((r) => subIds.has(r.employee_id) && sameTenant(r) && !mgrPending.includes(r.status))
         .map((r) => ({ ...r, national_id: r.national_id || idToNat.get(r.employee_id) || "", employee_name: subName(r.employee_id) || idToName.get(r.employee_id) || r.employee_name || "" }));
       // سجلّات الحضور والانصراف لمرؤوسي المدير — أحدث 300 سجل
       const allAttendance = await base44.asServiceRole.entities.Attendance.list("-date", 300);

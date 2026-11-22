@@ -1,5 +1,6 @@
 import { createClientFromRequest } from "npm:@base44/sdk@0.8.54";
 import { wrapEmailContent } from "../../shared/emailFooter.ts";
+import { createPortalLeave } from "../../shared/createPortalLeave.ts";
 import { verifyToken } from "../../shared/portalToken.ts";
 import {
   PAID_STATUSES, computeWorkDaysSet, computeWorkDaysInMonth,
@@ -1391,34 +1392,7 @@ export default async function (req) {
     };
 
     if (action === "create_leave") {
-      const p = pick(body.payload || {}, [
-        "leave_type", "start_date", "end_date", "days_count", "reason",
-        "medical_report_url", "is_full_clearance", "description", "permission_minutes",
-      ]);
-      p.medical_report_url = safeDocField(p.medical_report_url);
-      const { manager_id, manager_name } = await resolveManager();
-      // كل الطلبات تذهب للمدير المباشر أولاً (pending_manager). لكن معتمد الموارد البشرية
-      // يملك صلاحية التصرف على الطلب وإعتماده من صفحة الموافقات حتى لو لم يوافق المدير
-      // المباشر بعد — لا حاجة لتجاوز المدير هنا، فقط نُبقي المسار الطبيعي.
-      const created = await base44.asServiceRole.entities.LeaveRequest.create({
-        ...p,
-        employee_id: employeeId,
-        unified_number: String(emp?.unified_number || "").trim(),
-        employee_user_id: emp.user_id || null,
-        employee_name: empLabel,
-        status: "pending_manager",
-        manager_status: "pending", hr_status: "pending", finance_status: "pending",
-        manager_id, manager_name,
-      });
-      // تنبيه المدير المباشر ببريد + إشعار داخلي بوجود طلب إجازة ينتظر موافقته
-      try {
-        await notifyApproverForStatus(base44, {
-          type: "leave", employeeId, employeeName: emp?.full_name || empLabel, status: "pending_manager",
-          employeeNationalId: emp?.national_id || "", employeeNumber: emp?.employee_number || "", position: emp?.position || "",
-          details: `إجازة ${p.leave_type || ""} من ${p.start_date || ""} إلى ${p.end_date || ""} (${p.days_count || 0} يوم)`,
-        });
-      } catch {}
-      return Response.json({ ok: true, leave: created });
+      return createPortalLeave(base44, emp, body.payload || {}, resolveManager);
     }
 
     if (action === "create_loan") {
