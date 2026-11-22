@@ -12,10 +12,19 @@ export default function InvestigationDoc({ record, org, isAr = true, typeLabel, 
   const parties = parseParties(record.parties || "[]");
   const subjects = parties.filter((p) => p.role !== "witness");
   const witnesses = parties.filter((p) => p.role === "witness");
-  const nameOf = (p) => (labelOf ? labelOf(p.employee_id, p.employee_name) : p.employee_name || "—");
+  const nameOf = (p) => {
+    const name = labelOf ? labelOf(p.employee_id, p.employee_name) : (p.employee_name || "—");
+    const nid = String(p?.national_id || "").trim();
+    return nid && !String(name).includes(nid) ? `${name} — ${isAr ? "هوية" : "ID"} ${nid}` : name;
+  };
+  // شهود ذُكروا في ردود المعنيين — تُدرج أسماؤهم في المحضر ولو لم يُضافوا كأطراف.
+  const mentionedWitnesses = subjects.map((p) => String(p?.witness_names || "").trim()).filter(Boolean);
 
   const L = isAr ? {
     title: "محضر التحقيق",
+    about: "المحضر بشأن الموظف",
+    statement: "الشهادة",
+    mentioned: "شهود ذُكروا في الرد",
     ref: "رقم المحضر",
     type: "نوع المخالفة",
     allegations: "الادعاء / سبب المحضر",
@@ -28,6 +37,9 @@ export default function InvestigationDoc({ record, org, isAr = true, typeLabel, 
     printed: "تاريخ الطباعة",
   } : {
     title: "Investigation report",
+    about: "This report concerns",
+    statement: "Statement",
+    mentioned: "Witnesses named in the reply",
     ref: "Report no.",
     type: "Violation type",
     allegations: "Allegation / reason",
@@ -43,7 +55,7 @@ export default function InvestigationDoc({ record, org, isAr = true, typeLabel, 
   const Party = ({ p }) => (
     <div className="inv-party rounded-lg border border-slate-200 bg-slate-50 p-3 mb-2">
       <div className="font-bold text-sm mb-1">{nameOf(p)}</div>
-      <div className="text-sm whitespace-pre-wrap leading-relaxed"><b>{L.reply}:</b> {p.reply || "—"}</div>
+      <div className="text-sm whitespace-pre-wrap leading-relaxed"><b>{p.role === "witness" ? L.statement : L.reply}:</b> {p.reply || "—"}</div>
       {p.witness_names ? <div className="text-xs text-slate-600 mt-1"><b>{L.named}:</b> {p.witness_names}</div> : null}
       {p.evidence_ref ? <div className="text-xs text-slate-600 mt-1"><b>{L.evidence}:</b> {p.evidence_ref}</div> : null}
     </div>
@@ -71,6 +83,17 @@ export default function InvestigationDoc({ record, org, isAr = true, typeLabel, 
       </div>
       <hr className="border-slate-200 my-3" />
 
+      {subjects.length > 0 && (
+        <div className="mb-3 rounded-lg border border-slate-300 bg-slate-50 p-3 text-sm">
+          <b>{L.about}:</b>{" "}
+          {subjects.map((p, i) => (
+            <span key={p.employee_id || i} className="font-semibold">
+              {nameOf(p)}{i < subjects.length - 1 ? " · " : ""}
+            </span>
+          ))}
+        </div>
+      )}
+
       <Section title={L.allegations}>
         <p className="whitespace-pre-wrap leading-relaxed">{record.allegations || "—"}</p>
       </Section>
@@ -82,6 +105,12 @@ export default function InvestigationDoc({ record, org, isAr = true, typeLabel, 
       <Section title={L.witnesses}>
         {witnesses.length === 0 ? "—" : witnesses.map((p, i) => <Party key={p.employee_id || i} p={p} />)}
       </Section>
+
+      {mentionedWitnesses.length > 0 && (
+        <Section title={L.mentioned}>
+          <p className="whitespace-pre-wrap leading-relaxed">{mentionedWitnesses.join(" · ")}</p>
+        </Section>
+      )}
 
       <Section title={L.recommendation}>
         <p className="whitespace-pre-wrap leading-relaxed">{record.recommendation || "—"}</p>

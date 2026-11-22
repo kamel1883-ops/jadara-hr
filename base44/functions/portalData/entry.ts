@@ -177,6 +177,17 @@ export default async function (req) {
           try { const p = JSON.parse(r?.parties || "[]"); if (Array.isArray(p)) parties = p; } catch { parties = []; }
           const mine = parties.find((p) => String(p?.employee_id || "") === sidInv);
           if (!mine) return [];
+          // من يُطلب شهادته يجب أن يعرف المحضر ***عن أي موظف*** ورقم هويته،
+          // بدل دعوته للشهادة بلا اسم ولا رقم في محضر مجهول.
+          const accused = parties
+            .filter((p) => p && p.role !== "witness")
+            .map((p) => {
+              const name = String(p?.employee_name || "").trim();
+              const nid = String(p?.national_id || "").trim();
+              return name || nid ? `${name}${nid ? ` (${nid})` : ""}` : "";
+            })
+            .filter(Boolean)
+            .join("، ");
           return [{
             id: r.id,
             ref_no: r.ref_no,
@@ -185,6 +196,7 @@ export default async function (req) {
             allegations: r.allegations || "",
             status: r.status,
             role: mine.role === "witness" ? "witness" : "subject",
+            subject_label: accused,
             reply_status: mine.status || "pending",
             reply: mine.reply || "",
             evidence_ref: mine.evidence_ref || "",
@@ -1487,6 +1499,35 @@ export default async function (req) {
         });
       } catch {}
       return Response.json({ ok: true, complaint: created });
+    }
+
+    // رفع مرفق من بوابة الموظف إلى الخزنة: جلسة البوابة لا تملك جلسة Base44،
+    // فكان الرفع المباشر عبر vaultProxy يفشل بصمت (401) ويُحفظ الطلب بلا مرفق —
+    // فيقول الموظف «أرفقت» ولا يجد مسؤول الموارد البشرية أي مستند ليفتحه.
+    if (action === "store_document") {
+      const fileB64 = String(body.file_base64 || "");
+      if (!fileB64) return Response.json({ ok: false, error: "missing_file" }, { status: 400 });
+      if (fileB64.length > 35000000) return Response.json({ ok: false, error: "file_too_large" }, { status: 400 });
+      const docType = String(body.doc_type || "attachment").slice(0, 40);
+      try {
+        const clean = fileB64.replace(/^data:[^;]+;base64,/, "");
+        const bytes = Uint8Array.from(atob(clean), (c) => c.charCodeAt(0));
+        const keys = await tenantKeysForEmployee(base44, emp);
+        const tenantId = String(emp?.unified_number || "").trim() || keys[0];
+        const stored: any = await storeDocument(
+          tenantId,
+          bytes,
+          String(body.file_name || "document").slice(0, 120),
+          String(body.mime_type || "application/octet-stream"),
+          emp?.emp_ref || null,
+          docType
+        );
+        const ref = String(stored?.doc_ref || stored?.docRef || "");
+        if (!ref) return Response.json({ ok: false, error: "store_failed" }, { status: 500 });
+        return Response.json({ ok: true, doc_ref: ref });
+      } catch (e: any) {
+        return Response.json({ ok: false, error: e?.message || "store_failed" }, { status: 500 });
+      }
     }
 
     if (action === "reply_investigation") {

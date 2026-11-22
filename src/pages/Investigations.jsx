@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState, useRef } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import { base44 } from "@/api/base44Client";
 import { listCurrentOrg } from "@/lib/currentOrg";
 import PageHeader from "@/components/PageHeader";
@@ -179,10 +179,23 @@ export default function Investigations() {
     setList(list.includes(id) ? list.filter((x) => x !== id) : [...list, id]);
   };
 
-  const notifyEmployee = async (employeeId, refNo, role) => {
+  // اسم المعني بالمحضر ورقم هويته — يُذكران في الدعوة للشهادة وفي المحضر،
+  // لأن الشاهد يُدعى لشهادة في قضية ولا يعرف من الموظف المقصود.
+  const accusedLabel = (list) => (list || [])
+    .filter((p) => p && p.role !== "witness")
+    .map((p) => {
+      const e = empOf(p.employee_id);
+      const name = e?.full_name || p.employee_name || "";
+      const nid = e?.national_id || p.national_id || "";
+      return name ? `${name}${nid ? ` (هوية ${nid})` : ""}` : "";
+    })
+    .filter(Boolean)
+    .join("، ");
+
+  const notifyEmployee = async (employeeId, refNo, role, accused = "") => {
     const title = role === "witness" ? `طلب إفادة — محضر ${refNo}` : `محضر تحقيق ${refNo}`;
     const body = role === "witness"
-      ? `طُلبت إفادتك شاهداً في محضر التحقيق رقم ${refNo}. افتح بوابة الموظف واكتب ما شاهدته.`
+      ? `طُلبت إفادتك شاهداً في محضر التحقيق رقم ${refNo}${accused ? ` بشأن الموظف: ${accused}` : ""}. افتح بوابة الموظف واكتب ما شاهدته — وسيظهر لك اسم الموظف ورقم هويته.`
       : `وصلك محضر تحقيق رقم ${refNo}. المطلوب الرد على الادعاءات، ويمكنك إرفاق إثبات وذكر أسماء الشهود.`;
     await base44.entities.Notification.create({
       title, body, type: "investigation", employee_id: employeeId, link: "/portal", is_read: false,
@@ -198,6 +211,7 @@ export default function Investigations() {
       const parties = form.ids.map((id) => ({
         employee_id: id,
         employee_name: empOf(id)?.full_name || "",
+        national_id: empOf(id)?.national_id || "",
         role: "subject",
         status: "pending",
         reply: "",
@@ -214,7 +228,8 @@ export default function Investigations() {
         status: "awaiting_subjects",
         unified_number: orgInfo?.unified_number || "",
       });
-      await Promise.all(form.ids.map((id) => notifyEmployee(id, refNo, "subject").catch(() => {})));
+      const accused = accusedLabel(parties);
+      await Promise.all(form.ids.map((id) => notifyEmployee(id, refNo, "subject", accused).catch(() => {})));
       setOpen(false);
       setForm({ type: "", custom: "", allegations: "", ids: [] });
       if (created?.id) setSelected(created);
@@ -235,6 +250,7 @@ export default function Investigations() {
         parties.push({
           employee_id: id,
           employee_name: empOf(id)?.full_name || "",
+          national_id: empOf(id)?.national_id || "",
           role: "witness",
           status: "pending",
           reply: "",
@@ -247,7 +263,8 @@ export default function Investigations() {
         parties: JSON.stringify(parties),
         status: nextInvestigationStatus(parties),
       });
-      await Promise.all(witnessIds.map((id) => notifyEmployee(id, selected.ref_no, "witness").catch(() => {})));
+      const accused = accusedLabel(parties);
+      await Promise.all(witnessIds.map((id) => notifyEmployee(id, selected.ref_no, "witness", accused).catch(() => {})));
       setWitnessOpen(false);
       setWitnessIds([]);
       await load();

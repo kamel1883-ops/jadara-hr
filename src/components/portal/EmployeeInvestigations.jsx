@@ -27,6 +27,7 @@ export default function EmployeeInvestigations({ items = [], isAr = true, portal
     empty: "لا يوجد محضر تحقيق مطلوب منك",
     subject: "أنت من الموظفين المعنيين",
     witness: "طُلبت إفادتك شاهداً",
+    about: "المحضر بشأن الموظف",
     allegations: "الادعاءات",
     reply: "ردك على مطالب التحقيق",
     witnesses: "إن كان لديك شهود، اكتب أسماءهم",
@@ -43,6 +44,7 @@ export default function EmployeeInvestigations({ items = [], isAr = true, portal
     empty: "No investigation report is waiting for you",
     subject: "You are named in this report",
     witness: "Your witness statement was requested",
+    about: "Report concerns employee",
     allegations: "Allegations",
     reply: "Your reply",
     witnesses: "If you have witnesses, write their names",
@@ -110,6 +112,11 @@ export default function EmployeeInvestigations({ items = [], isAr = true, portal
                   <span className="text-[11px] px-2 py-0.5 rounded-full bg-slate-100">{pending ? t.pending : t.done}</span>
                 </div>
                 <div className="text-xs text-muted-foreground">{item.role === "witness" ? t.witness : t.subject}</div>
+                {item.role === "witness" && item.subject_label && (
+                  <div className="text-xs text-rose-800 bg-rose-50 border border-rose-100 rounded-lg px-2 py-1">
+                    {t.about}: <b>{item.subject_label}</b>
+                  </div>
+                )}
                 <div className="text-sm whitespace-pre-wrap"><b>{t.allegations}: </b>{item.allegations}</div>
                 {item.reply ? <div className="text-sm whitespace-pre-wrap"><b>{t.yourReply}: </b>{item.reply}</div> : null}
                 {item.evidence_ref ? <StoredDocButton value={item.evidence_ref} className="text-xs text-violet-700 underline">{t.evidence}</StoredDocButton> : null}

@@ -37,6 +37,7 @@ import { leaveTypeLabel, formatCurrency, attendanceDisplayStatus, attendanceOpDa
 import OnDutyTimer from "@/components/OnDutyTimer";
 import { badge } from "@/lib/approvals";
 import { isAlMoiedSupervisorSession } from "@/lib/alMoied";
+import { StoredDocButton } from "@/components/VaultDocLink";
 import { entitledLeaveDays, usedLeaveTotal } from "@/lib/leaveBalance";
 import { computeSettlement } from "@/lib/eos";
 import { parsePermissions } from "@/lib/employeePermissions";
@@ -499,7 +500,7 @@ export default function MyRequests() {
                         <span className="font-medium text-sm">{leaveTypeLabel(r.leave_type)}</span>
                         {r.is_full_clearance && <span className="text-xs px-2 py-0.5 rounded-full bg-violet-50 text-violet-600">{t.fullClear}</span>}
                         {r.medical_report_url && (
-                          <a href={r.medical_report_url} target="_blank" rel="noreferrer" className="text-xs px-2 py-0.5 rounded-full bg-blue-50 text-blue-600">{t.medReport}</a>
+                          <StoredDocButton value={r.medical_report_url} className="text-xs px-2 py-0.5 rounded-full bg-blue-50 text-blue-600">{t.medReport}</StoredDocButton>
                         )}
                       </div>
                       <div className="text-xs text-muted-foreground mt-1">{r.start_date} ← {r.end_date} · {t.days(Number(r.balance_deducted) > 0 ? Number(r.balance_deducted) : r.days_count)}</div>

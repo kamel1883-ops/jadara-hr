@@ -13,10 +13,45 @@ import { differenceInDays, parseISO } from "date-fns";
 import { usePortalI18n, usePortalT } from "@/lib/portalI18n";
 import { leaveFullTypeLabel } from "@/lib/hr";
 import { uploadFileToVault } from "@/lib/vaultDocuments";
+import { portalSession } from "@/lib/portalSession";
+
+// مرفق التقرير الطبي من بوابة الموظف يُرفع عبر جلسة البوابة نفسها:
+// جلسة البوابة لا تملك حساب Base44، فرفعه مباشرةً عبر vaultProxy كان يفشل
+// ويُحفظ الطلب بلا مرفق فيرى مسؤول الموارد البشرية لا شيء ليفتحه.
+function fileToBase64(file) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(String(reader.result || "").split(",")[1] || "");
+    reader.onerror = reject;
+    reader.readAsDataURL(file);
+  });
+}
+
+async function uploadMedicalViaPortal(file) {
+  const session = portalSession.load();
+  if (!session?.token || !session?.employee_id) return null;
+  try {
+    const res = await base44.functions.invoke("portalData", {
+      token: session.token,
+      employee_id: session.employee_id,
+      action: "store_document",
+      file_base64: await fileToBase64(file),
+      file_name: file.name || "medical_report",
+      mime_type: file.type || "application/octet-stream",
+      doc_type: "medical_report",
+    });
+    const data = res?.data || res;
+    const ref = data?.ok ? String(data.doc_ref || "") : "";
+    return ref || null;
+  } catch {
+    return null;
+  }
+}
 import { writeRecordToVault, VAULT_MODULES } from "@/lib/vaultGeneric";
 
 export default function LeaveRequestForm({ open, onClose, onSaved, employees, currentUserEmployee, portalCreate }) {
-  usePortalI18n();
+  const { lang } = usePortalI18n();
+  const isAr = lang === "ar";
   const t = usePortalT("leaveForm");
 
   const empty = {
@@ -58,7 +93,19 @@ export default function LeaveRequestForm({ open, onClose, onSaved, employees, cu
       const emp = employees?.find((x) => x.id === form.employee_id);
       let medical_url = "";
       if (isSick && medicalFile) {
-        medical_url = await uploadFileToVault(medicalFile, { empRef: emp?.emp_ref || null, docType: "medical_report" }) || "";
+        const asPortal = typeof portalCreate === "function";
+        if (asPortal) medical_url = (await uploadMedicalViaPortal(medicalFile)) || "";
+        if (!medical_url) {
+          medical_url = await uploadFileToVault(medicalFile, { empRef: emp?.emp_ref || null, docType: "medical_report" }) || "";
+        }
+        // لا يُحفظ طلب إجازة مرضية بلا التقرير الطبي: كان يُحفظ بلا مرفق
+        // فيظن الموظف أنه أرفقه ولا يجد الموارد البشرية ما يفتحه.
+        if (!medical_url) {
+          setErr(t.medUploadFail || (isAr
+            ? "تعذّر رفع التقرير الطبي — أعد المحاولة، وتأكد أن الملف صورة أو PDF أقل من ٢٫٥ ميجابايت."
+            : "Could not upload the medical report — retry with an image or PDF under 2.5 MB."));
+          return;
+        }
       }
       // نص السبب حسّاس → يُخزّن في الخزنة السعودية، Base44 يحتفظ بالبيانات الوصفية للفلترة
       const leaveRef = await writeRecordToVault(VAULT_MODULES.leaves, null, {
