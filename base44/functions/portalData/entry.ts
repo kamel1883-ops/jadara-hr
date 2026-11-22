@@ -190,7 +190,7 @@ export default async function (req) {
             .filter(Boolean)
             .join("، ");
           return [{
-            id: r.id,
+            id: r.id, unified_number: String(r.unified_number || "").trim(), employee_id: sidInv,
             ref_no: r.ref_no,
             violation_type: r.violation_type,
             custom_type: r.custom_type || "",
