@@ -24,18 +24,20 @@ import StoreButtons from "@/components/StoreButtons";
 import { useNativeGate } from "@/components/NativeAppNotice";
 import {
   Sparkles, Check, ArrowLeft, ShieldCheck, Users, CalendarCheck, Wallet,
-  Calculator, Target, Car, BarChart3, Zap, Phone, Mail, Building2,
-  BadgeCheck, Star, Clock, TrendingUp, Bell, CreditCard,
-  Briefcase, GraduationCap, Award, GitBranch, Landmark, FileSpreadsheet, Plug,
-  Gavel, HeartPulse, Stethoscope, LineChart, MessageCircle, MapPin, Crown,
+  Calculator, Target, Car, BarChart3, Zap, Mail, Building2,
+  BadgeCheck, Star, Bell, CreditCard,
+  Briefcase, GraduationCap, Award, GitBranch, Landmark, Plug,
+  Gavel, HeartPulse, Stethoscope, MapPin, Crown,
   Network, ClipboardList, Plane, CalendarPlus, Server, Linkedin, Facebook, Twitter,
-  Send, Music2, Languages, Share2, Headphones,
-  FileSearch, MessageSquareWarning, PackageCheck, Percent,
+  Languages, Share2, Headphones,
+  FileSearch, MessageSquareWarning, PackageCheck, Percent, ArrowUpRight,
 } from "lucide-react";
 import { TiktokIcon, SnapchatIcon } from "@/components/SocialIcons";
 
 const WHATSAPP = "https://wa.me/966594700782";
 const SALES_EMAIL = "info@jadara-hr.com";
+// نظام جداره للمحاسبة المالية
+const FINANCE_SITE = "https://www.jadara-finance.com";
 // روابط حسابات التواصل الرسمية
 const SOCIAL_LINKS = {
   linkedin: "https://www.linkedin.com/company/%D8%AC%D8%AF%D8%A7%D8%B1%D8%A9-%D9%84%D8%A5%D8%AF%D8%A7%D8%B1%D8%A9-%D8%A7%D9%84%D9%85%D9%88%D8%A7%D8%B1%D8%AF-%D8%A7%D9%84%D8%A8%D8%B4%D8%B1%D9%8A%D8%A9",
@@ -198,6 +200,10 @@ export default function Landing() {
     aboutText1: "يقف خلف «جداره» قائد في إدارة رأس المال البشري جمع بين العمق الأكاديمي والخبرة التطبيقية في تصميم حلول رقمية ترفع كفاءة المنشآت وتلتزم بالأنظمة السعودية. حاصل على درجة ", aboutTextBold1: "الماجستير في إدارة الموارد البشرية", aboutTextUniv: " من ", aboutTextUnivBold: "جامعة بورتسموث — المملكة المتحدة", aboutTextGrade: " بتقدير ", aboutTextGradeBold: "جيد جداً",
     aboutText2: "، إضافةً إلى شهادة ", certs: ["MA — University of Portsmouth", "SHRM-SCP", "OTHM", "CMI"],
     certAr: ["ماجستير — جامعة بورتسموث", "SHRM-SCP", "OTHM", "CMI"],
+    financeTag: "منظومة مالية مكمّلة", financeTitle: "جداره للمحاسبة المالية",
+    financeDesc: "«جداره Finance» نظام محاسبي سعودي سحابي متكامل يعمل جنباً إلى جنب مع منصة الموارد البشرية: فواتير ضريبية إلكترونية متوافقة مع هيئة الزكاة والضريبة والجمارك برمز QR وضريبة 15٪، وإدارة مبيعات ومشتريات ومخزون ونقطة بيع وفروع متعددة، ودليل حسابات ثنائي اللغة وقيود يومية وأستاذ عام وميزان مراجعة، وقوائم مالية أربع مع الإقرار الضريبي الربعي واحتساب الوعاء الزكوي — من الفاتورة إلى القوائم المالية في نظام واحد، بالعربية والإنجليزية.",
+    financeLi: ["فوترة إلكترونية ورمز QR", "قيود وأستاذ وميزان مراجعة", "القوائم المالية والإقرار الضريبي", "مخزون ونقطة بيع وفروع", "مراكز تكلفة ودليل حسابات"],
+    financeCta: "زيارة جداره للمحاسبة المالية", financeSite: "www.jadara-finance.com",
     pricingTag: "ابدأ الآن", pricingTitle: "باقات بسيطة وشريفة",
     planTrialLabel: "تجربة مجانية", planTrialDur: "30 يوماً", planTrialSub: "بدون بطاقة ائتمان",
     planTrialLi: ["تجربة كاملة لكل المميزات", "مدة 30 يوماً بدون بطاقة ائتمان", "استيراد بيانات الموظفين", "دعم فني خلال فترة التجربة", "بدون التزام"],
@@ -252,6 +258,10 @@ export default function Landing() {
     aboutText1: "Behind “Jadara” stands a leader in human capital management combining academic depth with applied experience in designing digital solutions that raise organizational efficiency and comply with Saudi regulations. Holds a ", aboutTextBold1: "Master’s in HR Management", aboutTextUniv: " from ", aboutTextUnivBold: "University of Portsmouth — UK", aboutTextGrade: " with merit ", aboutTextGradeBold: "Very Good",
     aboutText2: ", in addition to the ", certs: ["MA — University of Portsmouth", "SHRM-SCP", "OTHM", "CMI"],
     certAr: ["MA — University of Portsmouth", "SHRM-SCP", "OTHM", "CMI"],
+    financeTag: "A complementary finance suite", financeTitle: "Jadara Finance",
+    financeDesc: "Jadara Finance is an integrated Saudi cloud accounting system that works alongside the HR platform: ZATCA-compliant e-invoices with a QR code and 15% VAT, sales, purchases, inventory, point of sale and multiple branches, a bilingual chart of accounts with journal entries, general ledger and trial balance, and four financial statements with the quarterly VAT return and zakat base — from invoice to financial statements in one system, in Arabic and English.",
+    financeLi: ["E-invoicing with QR code", "Journal entries, ledger & trial balance", "Financial statements & VAT return", "Inventory, POS & branches", "Cost centers & chart of accounts"],
+    financeCta: "Visit Jadara Finance", financeSite: "www.jadara-finance.com",
     pricingTag: "Start now", pricingTitle: "Simple, fair plans",
     planTrialLabel: "Free Trial", planTrialDur: "30 days", planTrialSub: "No credit card",
     planTrialLi: ["Full access to all features", "30 days, no credit card", "Import employee data", "Technical support during the trial", "No commitment"],
@@ -535,6 +545,43 @@ export default function Landing() {
               })}
             </div>
           </div>
+        </motion.div>
+      </section>
+
+      {/* جداره للمحاسبة المالية */}
+      <section id="finance" className="max-w-[1400px] mx-auto px-6 lg:px-14 pb-14">
+        <motion.div initial="hidden" whileInView="show" viewport={{ once: true }} variants={fadeUp}
+          className="relative overflow-hidden bg-white border border-violet-100 rounded-3xl p-8 grid lg:grid-cols-[1.5fr,1fr] gap-8 items-center">
+          <div className="absolute -top-16 -left-16 w-56 h-56 rounded-full bg-violet-200/40 blur-3xl" />
+          <div className="relative">
+            <div className="inline-flex items-center gap-2 bg-violet-100 text-violet-700 border border-violet-200 rounded-full px-3 py-1 text-sm mb-3">
+              <Landmark size={13} /> {t.financeTag}
+            </div>
+            <h3 className="text-2xl font-bold text-foreground" style={{ fontFamily: "var(--font-display)" }}>{t.financeTitle}</h3>
+            <p className="text-muted-foreground text-base mt-3 leading-loose">{t.financeDesc}</p>
+            <div className="flex flex-wrap gap-2 mt-5">
+              {t.financeLi.map((li) => (
+                <span key={li} className="inline-flex items-center gap-1.5 text-sm bg-violet-50 border border-violet-200 rounded-full px-3 py-1.5 text-foreground">
+                  <Check size={13} className="text-violet-600" /> {li}
+                </span>
+              ))}
+            </div>
+            <a href={FINANCE_SITE} target="_blank" rel="noreferrer"
+              className="inline-flex items-center gap-2 mt-6 bg-violet-600 hover:bg-violet-700 text-white px-5 py-3 rounded-2xl font-semibold shadow-lg shadow-violet-600/30 transition">
+              {t.financeCta} <ArrowUpRight size={17} />
+            </a>
+          </div>
+          <a href={FINANCE_SITE} target="_blank" rel="noreferrer"
+            className="relative bg-violet-50/60 hover:bg-violet-50 border border-violet-100 rounded-3xl p-8 text-center transition">
+            <div className="w-16 h-16 rounded-2xl bg-white border border-violet-100 flex items-center justify-center mx-auto mb-4 shadow-sm">
+              <Landmark size={30} className="text-violet-600" />
+            </div>
+            <div className="font-bold text-lg text-foreground" style={{ fontFamily: "var(--font-display)" }}>{t.financeTitle}</div>
+            <div className="text-violet-700 font-semibold mt-2" dir="ltr">{t.financeSite}</div>
+            <div className="text-muted-foreground text-sm mt-3 inline-flex items-center gap-1.5">
+              {t.financeCta} <ArrowUpRight size={14} />
+            </div>
+          </a>
         </motion.div>
       </section>
 
