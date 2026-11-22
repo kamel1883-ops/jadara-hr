@@ -8,7 +8,7 @@ import {
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue
 } from "@/components/ui/select";
-import { CalendarDays, Clock, CheckCircle2, XCircle, Download, Loader2, RefreshCw } from "lucide-react";
+import { CalendarDays, Clock, CheckCircle2, XCircle, Download, Loader2, RefreshCw, Paperclip } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useI18n } from "@/lib/i18n";
 import { generateLeaveSettlement } from "@/lib/docGenerators";
@@ -82,6 +82,9 @@ export default function Leaves() {
   const [statusFilter, setStatusFilter] = useState("all");
   const [org, setOrg] = useState(null);
   const [busy, setBusy] = useState(null);
+  // إرفاق التقرير الطبي لطلب إجازة مرضية قائم من بوابة الشركة
+  const [medBusy, setMedBusy] = useState("");
+  const [medErr, setMedErr] = useState("");
 
   const load = async () => {
     setLoading(true);
@@ -108,6 +111,36 @@ export default function Leaves() {
       await load();
     } catch (error) { alert(leaveDocumentErrorText(error, isAr)); }
     finally { setBusy(null); }
+  };
+
+  const fileToBase64 = (file) => new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(String(reader.result || "").split(",")[1] || "");
+    reader.onerror = reject;
+    reader.readAsDataURL(file);
+  });
+
+  const attachMedical = async (leave, file) => {
+    if (!file) return;
+    setMedErr(""); setMedBusy(leave.id);
+    try {
+      const res = await base44.functions.invoke("vaultProxy", {
+        action: "attachMedicalDocument",
+        leaveId: leave.id,
+        fileBase64: await fileToBase64(file),
+        fileName: file.name || "medical_report",
+        mimeType: file.type || "application/octet-stream",
+      });
+      const body = res?.data || {};
+      if (body.error || !body.data?.doc_ref) throw new Error(body.error || "store_failed");
+      setRequests((prev) => prev.map((x) => (x.id === leave.id ? { ...x, medical_report_url: body.data.doc_ref } : x)));
+    } catch {
+      setMedErr(isAr
+        ? "تعذّر حفظ التقرير الطبي — أعد المحاولة بصورة أو ملف PDF أقل من ٢٠ ميجابايت."
+        : "Could not save the medical report — retry with an image or PDF under 20 MB.");
+    } finally {
+      setMedBusy("");
+    }
   };
 
   const filtered = requests.filter((r) => {
@@ -153,6 +186,8 @@ export default function Leaves() {
           </SelectContent>
         </Select>
       </div>
+
+      {medErr && <div className="text-sm text-rose-600 bg-rose-50 rounded-lg px-3 py-2 mb-3">{medErr}</div>}
 
       {loading ? (
         <div className="p-10 text-center text-muted-foreground">{t.loading}</div>
@@ -205,7 +240,28 @@ export default function Leaves() {
                     <TableCell><span className={cn("text-xs px-2 py-1 rounded-full font-medium", st.cls)}>{st.label}</span></TableCell>
                     <TableCell>
                       {r.leave_type === 'sick' ? <div className="flex flex-wrap gap-2">
-                        {r.medical_report_url && <StoredDocButton value={r.medical_report_url} isAr={isAr} className="text-xs text-primary underline">{isAr ? 'تقرير الطلب' : 'Request report'}</StoredDocButton>}
+                        {r.medical_report_url ? (
+                          <StoredDocButton value={r.medical_report_url} isAr={isAr} className="text-xs text-primary underline">{isAr ? 'تقرير الطلب' : 'Request report'}</StoredDocButton>
+                        ) : (
+                          <label className={cn(
+                            "inline-flex items-center gap-1 text-xs px-2 py-1 rounded-full cursor-pointer",
+                            medBusy === r.id ? "bg-rose-50 text-rose-400" : "bg-rose-50 text-rose-600 hover:bg-rose-100"
+                          )}>
+                            {medBusy === r.id ? <Loader2 size={12} className="animate-spin" /> : <Paperclip size={12} />}
+                            {isAr ? "التقرير الطبي غير مرفق — أرفقه" : "Medical report missing — attach"}
+                            <input
+                              type="file"
+                              accept="image/*,application/pdf"
+                              className="hidden"
+                              disabled={medBusy === r.id}
+                              onChange={(e) => {
+                                const f = e.target.files?.[0];
+                                e.target.value = "";
+                                if (f) attachMedical(r, f);
+                              }}
+                            />
+                          </label>
+                        )}
                         <MedicalReportsDialog employee={employees.find(e => e.id === r.employee_id) || { id: r.employee_id, full_name: r.employee_name, unified_number: r.unified_number }} isAr={isAr} />
                       </div> : '—'}
                     </TableCell>

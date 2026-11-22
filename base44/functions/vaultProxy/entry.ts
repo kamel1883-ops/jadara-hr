@@ -147,6 +147,35 @@ export default async function (req: Request): Promise<Response> {
           );
         }
         break;
+      // إرفاق تقرير طبي من بوابة الشركة لطلب إجازة مرضية قائم: يُحفظ في الخزنة تحت
+      // رقم المنشأة الموحّد ويُربط بالطلب نفسه، فلا يُرى إلا من منشأة الموظف وصاحب الطلب.
+      case "attachMedicalDocument": {
+        if (!rest.fileBase64) return Response.json({ error: "fileBase64_required" }, { status: 400 });
+        const leaveId = String(rest.leaveId || "").trim();
+        if (!/^[a-zA-Z0-9_-]{1,80}$/.test(leaveId)) return Response.json({ error: "invalid" }, { status: 400 });
+        const mime = String(rest.mimeType || "application/pdf");
+        if (mime !== "application/pdf" && !mime.startsWith("image/")) return Response.json({ error: "invalid" }, { status: 400 });
+        const company = String(context.unified || "").trim();
+        if (!company) return Response.json({ error: "unauthorized" }, { status: 403 });
+        const leave = await base44.asServiceRole.entities.LeaveRequest.get(leaveId).catch(e => e.status === 404 ? null : Promise.reject(e));
+        if (!leave || String(leave.leave_type || "") !== "sick") return Response.json({ error: "not_found" }, { status: 404 });
+        const leaveUnified = String(leave.unified_number || "").trim();
+        if (leaveUnified && leaveUnified !== company) return Response.json({ error: "not_found" }, { status: 404 });
+        const owner = leave.employee_id
+          ? await base44.asServiceRole.entities.Employee.get(leave.employee_id).catch(e => e.status === 404 ? null : Promise.reject(e))
+          : null;
+        if (!owner || String(owner.unified_number || "").trim() !== company) return Response.json({ error: "not_found" }, { status: 404 });
+        let bytes: Uint8Array;
+        try { bytes = Uint8Array.from(atob(rest.fileBase64), c => c.charCodeAt(0)); }
+        catch { return Response.json({ error: "invalid" }, { status: 400 }); }
+        if (!bytes.length) return Response.json({ error: "invalid" }, { status: 400 });
+        const stored = await storeDocument(company, bytes, String(rest.fileName || "medical_report").slice(0, 120), mime, owner.emp_ref || null, "medical_report");
+        const ref = String(stored?.doc_ref || stored?.docRef || "");
+        if (!validVaultRef(ref)) return Response.json({ error: "store_failed" }, { status: 502 });
+        await base44.asServiceRole.entities.LeaveRequest.update(leave.id, { medical_report_url: ref });
+        result = { doc_ref: ref };
+        break;
+      }
       case "getDocumentLink":
         if (!rest.docRef) return Response.json({ error: "docRef_required" }, { status: 400 });
         {
