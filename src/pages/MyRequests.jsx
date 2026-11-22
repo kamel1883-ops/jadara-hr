@@ -30,7 +30,7 @@ import { Image } from "@/components/ui/image";
 import { usePortalI18n, usePortalT, portalDir } from "@/lib/portalI18n";
 import { Button } from "@/components/ui/button";
 import {
-  CalendarPlus, Wallet, Loader2, BadgeCheck, Clock, Banknote, CalendarCheck, Plane, LogOut, Crown, ArrowRight, Building2, Package, MessageSquareWarning, FilePlus2
+  CalendarPlus, Wallet, Loader2, BadgeCheck, Clock, Banknote, CalendarCheck, Plane, LogOut, Crown, ArrowRight, Building2, Package, MessageSquareWarning, FilePlus2, Paperclip
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { leaveTypeLabel, formatCurrency, attendanceDisplayStatus, attendanceOpDate, attendanceElapsedMs, formatWorkDuration } from "@/lib/hr";
@@ -54,6 +54,15 @@ const localToday = () => {
   const d = new Date();
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
 };
+function fileToBase64(file) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(String(reader.result || "").split(",")[1] || "");
+    reader.onerror = reject;
+    reader.readAsDataURL(file);
+  });
+}
+
 const nowHM = () => {
   const d = new Date();
   return `${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`;
@@ -107,6 +116,9 @@ export default function MyRequests() {
   const [compOpen, setCompOpen] = useState(false);
   const [equipmentReqs, setEquipmentReqs] = useState([]);
   const [complaints, setComplaints] = useState([]);
+  // إرفاق تقرير طبي لطلب إجازة قائم (الطلبات القديمة المحفوظة بلا مرفق)
+  const [medicalUploadingId, setMedicalUploadingId] = useState("");
+  const [medicalErr, setMedicalErr] = useState("");
   // طلبات الموظف الإدارية (نماذج) — تُحفظ كمستند ويعتمدها الموارد البشرية فقط
   const [hrRequests, setHrRequests] = useState([]);
   const [investigations, setInvestigations] = useState([]);
@@ -194,6 +206,29 @@ export default function MyRequests() {
     // يظهر الطلب فوراً في سجل الموظف قبل انتهاء إعادة التحميل
     if (data.leave) setLeaves((prev) => [data.leave, ...prev]);
     return data.leave;
+  };
+  // رفع التقرير الطبي لطلب إجازة مرضية محفوظ مسبقاً بلا مرفق — يعيد المستند
+  // لطلب الموظف نفسه فوراً بعد حفظه في الخزنة، فيتمكن الموارد البشرية من فتحه.
+  const attachMedicalDocument = async (leave, file) => {
+    if (!file || !session) return;
+    setMedicalErr(""); setMedicalUploadingId(leave.id);
+    try {
+      const res = await base44.functions.invoke("portalData", {
+        ...portalArgs, action: "attach_medical_document", id: leave.id,
+        file_base64: await fileToBase64(file),
+        file_name: file.name || "medical_report",
+        mime_type: file.type || "application/octet-stream",
+      });
+      const data = res?.data || res;
+      if (!data?.ok) throw new Error(data?.error || "fail");
+      setLeaves((prev) => prev.map((x) => (x.id === leave.id ? { ...x, medical_report_url: data.doc_ref } : x)));
+    } catch {
+      setMedicalErr(isAr
+        ? "تعذّر رفع التقرير الطبي — أعد المحاولة بصورة أو ملف PDF أقل من ٢٠ ميجابايت."
+        : "Could not upload the medical report — retry with an image or PDF under 20 MB.");
+    } finally {
+      setMedicalUploadingId("");
+    }
   };
   const portalCreateLoan = async (payload) => {
     const res = await base44.functions.invoke("portalData", {
@@ -493,15 +528,37 @@ export default function MyRequests() {
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
               {can("leaves") && (
               <Section title={t.leavesTitle}>
+                {medicalErr && <div className="text-xs text-rose-600 bg-rose-50 rounded-lg px-3 py-2 mb-2">{medicalErr}</div>}
                 {leaves.length === 0 ? <Empty text={t.noLeaves} /> : leaves.map((r) => (
                   <Row key={r.id}>
                     <div>
                       <div className="flex items-center gap-2 flex-wrap">
                         <span className="font-medium text-sm">{leaveTypeLabel(r.leave_type)}</span>
                         {r.is_full_clearance && <span className="text-xs px-2 py-0.5 rounded-full bg-violet-50 text-violet-600">{t.fullClear}</span>}
-                        {r.medical_report_url && (
+                        {r.medical_report_url ? (
                           <StoredDocButton value={r.medical_report_url} className="text-xs px-2 py-0.5 rounded-full bg-blue-50 text-blue-600">{t.medReport}</StoredDocButton>
-                        )}
+                        ) : r.leave_type === "sick" ? (
+                          // الطلبات المرضية القديمة حُفظت بلا مستند (كان الرفع يفشل بصمت)
+                          // فتحتاج إرفاقاً الآن بدل إنشاء طلب جديد.
+                          <label className={cn(
+                            "inline-flex items-center gap-1 text-xs px-2 py-1 rounded-full cursor-pointer",
+                            medicalUploadingId === r.id ? "bg-rose-50 text-rose-400" : "bg-rose-50 text-rose-600 hover:bg-rose-100"
+                          )}>
+                            {medicalUploadingId === r.id ? <Loader2 size={12} className="animate-spin" /> : <Paperclip size={12} />}
+                            {isAr ? "التقرير الطبي غير مرفق — أرفقه" : "Medical report missing — attach"}
+                            <input
+                              type="file"
+                              accept="image/*,application/pdf"
+                              className="hidden"
+                              disabled={medicalUploadingId === r.id}
+                              onChange={(e) => {
+                                const f = e.target.files?.[0];
+                                e.target.value = "";
+                                if (f) attachMedicalDocument(r, f);
+                              }}
+                            />
+                          </label>
+                        ) : null}
                       </div>
                       <div className="text-xs text-muted-foreground mt-1">{r.start_date} ← {r.end_date} · {t.days(Number(r.balance_deducted) > 0 ? Number(r.balance_deducted) : r.days_count)}</div>
                       {Number(r.balance_deducted) > 0 && Number(r.balance_deducted) < Number(r.days_count) && (

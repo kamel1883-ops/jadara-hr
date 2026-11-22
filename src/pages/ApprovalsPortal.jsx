@@ -338,6 +338,11 @@ export default function ApprovalsPortal({ portalSession }) {
                   <Download size={12} /> {isAr ? "التقرير الطبي" : "Medical report"}
                 </StoredDocButton>
               )}
+              {r.leave_type === "sick" && !r.medical_report_url && (
+                <span className="inline-flex items-center gap-1 text-xs h-6 px-2 rounded-full bg-amber-50 text-amber-700 border border-amber-200">
+                  {isAr ? "لا يوجد تقرير طبي مرفق — اطلبه من الموظف" : "No medical report attached — request it"}
+                </span>
+              )}
               {(() => {
                 const info = mgrConfirmInfo(r);
                 if (!info) return null;

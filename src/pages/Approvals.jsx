@@ -606,6 +606,11 @@ export default function Approvals() {
                     {r.ticket_amount > 0 && <span className="text-xs text-muted-foreground">{t.ticket(r.ticket_amount)}</span>}
                     {r.balance_deducted > 0 && <span className="text-xs text-muted-foreground">{t.deduct(r.balance_deducted)}</span>}
                     {r.medical_report_url && <VaultDocLink value={r.medical_report_url} label={t.medicalDoc} className="text-xs h-6 px-2 rounded-full bg-rose-50 text-rose-600 border-0" />}
+                    {r.leave_type === "sick" && !r.medical_report_url && (
+                      <span className="text-xs h-6 px-2 inline-flex items-center rounded-full bg-amber-50 text-amber-700 border border-amber-200">
+                        {isAr ? "لا يوجد تقرير طبي مرفق — اطلبه من الموظف" : "No medical report attached — request it"}
+                      </span>
+                    )}
                     {r.hr_document_url && <VaultDocLink value={r.hr_document_url} label="تذاكر الموارد البشرية" className="text-xs h-6 px-2 rounded-full bg-violet-50 text-violet-600 border-0" />}
                     {r.finance_proof_url && <VaultDocLink value={r.finance_proof_url} label="إثبات المالية" className="text-xs h-6 px-2 rounded-full bg-blue-50 text-blue-600 border-0" />}
                   </RequestCard>

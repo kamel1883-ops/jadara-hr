@@ -1530,6 +1530,46 @@ export default async function (req) {
       }
     }
 
+    // إكمال مرفق طلب إجازة مرضية قائم: الطلبات المحفوظة قبل إصلاح الرفع
+    // (أو التي فشل رفعها بصمت) بلا مستند — يستطيع الموظف إرفاقه الآن بدل طلب جديد.
+    if (action === "attach_medical_document") {
+      if (isOwnerSession) return Response.json({ ok: false, error: "forbidden" }, { status: 403 });
+      const id = String(body.id || "").trim();
+      const fileB64 = String(body.file_base64 || "");
+      if (!id) return Response.json({ ok: false, error: "missing" }, { status: 400 });
+      if (!fileB64) return Response.json({ ok: false, error: "missing_file" }, { status: 400 });
+      if (fileB64.length > 35000000) return Response.json({ ok: false, error: "file_too_large" }, { status: 400 });
+      let rec: any = null;
+      try { rec = await base44.asServiceRole.entities.LeaveRequest.get(id); } catch { rec = null; }
+      if (!rec) return Response.json({ ok: false, error: "not_found" }, { status: 404 });
+      const bag = await companyBag();
+      const recUn = String(rec.unified_number || "").trim();
+      const ownRecord = String(rec.employee_id || "") === String(employeeId);
+      const sameCompany = !bag.unified || !recUn || recUn === bag.unified;
+      if (!ownRecord || !sameCompany) return Response.json({ ok: false, error: "forbidden" }, { status: 403 });
+      if (String(rec.leave_type || "") !== "sick") return Response.json({ ok: false, error: "not_sick" }, { status: 400 });
+      try {
+        const clean = fileB64.replace(/^data:[^;]+;base64,/, "");
+        const bytes = Uint8Array.from(atob(clean), (c) => c.charCodeAt(0));
+        const keys = await tenantKeysForEmployee(base44, emp);
+        const tenantId = String(emp?.unified_number || "").trim() || keys[0];
+        const stored: any = await storeDocument(
+          tenantId,
+          bytes,
+          String(body.file_name || "medical_report").slice(0, 120),
+          String(body.mime_type || "application/octet-stream"),
+          emp?.emp_ref || null,
+          "medical_report"
+        );
+        const ref = String(stored?.doc_ref || stored?.docRef || "");
+        if (!ref) return Response.json({ ok: false, error: "store_failed" }, { status: 500 });
+        const updated = await base44.asServiceRole.entities.LeaveRequest.update(id, { medical_report_url: ref });
+        return Response.json({ ok: true, doc_ref: ref, leave: updated });
+      } catch (e: any) {
+        return Response.json({ ok: false, error: e?.message || "store_failed" }, { status: 500 });
+      }
+    }
+
     if (action === "reply_investigation") {
       if (isOwnerSession) return Response.json({ ok: false, error: "forbidden" }, { status: 403 });
       const id = String(body.id || "");
