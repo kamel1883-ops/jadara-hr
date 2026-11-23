@@ -10,7 +10,17 @@ function parseDate(s) {
   let m = s.match(/^(\d{4})-(\d{1,2})-(\d{1,2})/);
   if (m) return `${m[1]}-${pad(m[2])}-${pad(m[3])}`;
   m = s.match(/^(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{4})/);
-  if (m) return `${m[3]}-${pad(m[2])}-${pad(m[1])}`; // dd/mm/yyyy
+  if (m) {
+    // الترتيب يُستنتج من القيمة نفسها: ما يتجاوز ١٢ يومٌ حتماً.
+    // كان dd/mm مفروضاً دائماً فينقلب 06/19/1994 إلى شهر 19 (تاريخ مقلوب يُخزَّن ولا يُطابق أبداً).
+    const a = Number(m[1]);
+    const b = Number(m[2]);
+    const monthFirst = a <= 12 && b > 12;
+    const day = monthFirst ? b : a;
+    const month = monthFirst ? a : b;
+    if (month >= 1 && month <= 12 && day >= 1 && day <= 31) return `${m[3]}-${pad(month)}-${pad(day)}`;
+    return '';
+  }
   m = s.match(/^(\d{4})\/(\d{1,2})\/(\d{1,2})/);
   if (m) return `${m[1]}-${pad(m[2])}-${pad(m[3])}`;
   return '';

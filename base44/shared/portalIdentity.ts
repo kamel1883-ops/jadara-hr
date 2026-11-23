@@ -66,18 +66,63 @@ export async function resolvePortalEmployee(base44: any, nationalId: string) {
   return emp;
 }
 
+const pad2 = (n: any) => String(n).padStart(2, "0");
+
+/**
+ * كل الصيغ الممكنة لتاريخ واحد بصيغة ISO.
+ * يتحمّل ما خزّنته الاستيرادات السابقة (d/m/y أو m/d/y أو أرقام عربية أو شهر مقلوب)،
+ * فلا يُرفض تاريخ صحيح لأن ترتيب كتابته مختلف.
+ */
+function dateCandidates(value: any): string[] {
+  const raw = String(value ?? "").trim().slice(0, 10);
+  if (!raw) return [];
+  const s = raw.replace(/[٠-٩]/g, (d) => String("٠١٢٣٤٥٦٧٨٩".indexOf(d)));
+  const iso = s.match(/^(\d{4})-(\d{1,2})-(\d{1,2})/);
+  if (iso) {
+    const y = iso[1];
+    const mo = Number(iso[2]);
+    const d = Number(iso[3]);
+    const list: string[] = [];
+    if (mo >= 1 && mo <= 12 && d >= 1 && d <= 31) list.push(`${y}-${pad2(mo)}-${pad2(d)}`);
+    // سجلات قديمة حُفظت مقلوبة (شهر 13+) تُقرأ صحيحة هنا
+    if (mo >= 1 && mo <= 31 && d >= 1 && d <= 12) {
+      const alt = `${y}-${pad2(d)}-${pad2(mo)}`;
+      if (!list.includes(alt)) list.push(alt);
+    }
+    return list;
+  }
+  const m = s.match(/^(\d{1,2})[\/\-.](\d{1,2})[\/\-.](\d{2,4})$/);
+  if (!m) return [];
+  let y = Number(m[3]);
+  if (y < 100) y = y > 40 ? 1900 + y : 2000 + y;
+  const a = Number(m[1]);
+  const b = Number(m[2]);
+  const list: string[] = [];
+  if (a >= 1 && a <= 31 && b >= 1 && b <= 12) list.push(`${y}-${pad2(b)}-${pad2(a)}`);
+  if (a >= 1 && a <= 12 && b >= 1 && b <= 31) {
+    const alt = `${y}-${pad2(a)}-${pad2(b)}`;
+    if (!list.includes(alt)) list.push(alt);
+  }
+  return list;
+}
+
+/** هل التاريخان نفس اليوم بأي ترتيب كتابة؟ */
+function dateMatches(stored: any, wanted: any) {
+  const want = dateCandidates(wanted);
+  if (!want.length) return false;
+  return dateCandidates(stored).some((c) => want.includes(c));
+}
+
 /** مطابقة تاريخ الميلاد للتسجيل الأول — تُقرأ من الخزنة لسجل الموظف نفسه فقط */
 export async function birthDateMatches(base44: any, emp: any, birthDate: string) {
-  const want = String(birthDate || "").trim().slice(0, 10);
-  if (!want) return false;
-  if (!emp?.emp_ref) return String(emp?.birth_date || "").slice(0, 10) === want;
+  if (!dateCandidates(birthDate).length) return false;
+  if (!emp?.emp_ref) return dateMatches(emp?.birth_date, birthDate);
   let keys: string[] = [];
   try { keys = await tenantKeysForEmployee(base44, emp); } catch { keys = []; }
   for (const key of keys) {
     try {
       const row: any = await getEmployee(key, emp.emp_ref);
-      const got = String(row?.birth_date || "").slice(0, 10);
-      if (got) return got === want;
+      if (row?.birth_date && dateMatches(row.birth_date, birthDate)) return true;
     } catch { /* مفتاح آخر */ }
   }
   return false;

@@ -239,8 +239,14 @@ export function dateCellToISO(cell) {
     const y = m[3].length <= 2 ? (Number(m[3]) > 40 ? 1900 + Number(m[3]) : 2000 + Number(m[3])) : Number(m[3]);
     const a = Number(m[1]);
     const b = Number(m[2]);
-    const day = monthFirstFormat(cell?.numFmt) ? b : a;
-    const month = monthFirstFormat(cell?.numFmt) ? a : b;
+    const monthFirst = monthFirstFormat(cell?.numFmt);
+    let day = monthFirst ? b : a;
+    let month = monthFirst ? a : b;
+    // تنسيق الخلية قد يخالف ما كتبه المستخدم (19/06 داخل خلية m/d) — نُقلب بدل إسقاط التاريخ
+    if (!(month >= 1 && month <= 12 && day >= 1 && day <= 31)) {
+      day = monthFirst ? a : b;
+      month = monthFirst ? b : a;
+    }
     if (month >= 1 && month <= 12 && day >= 1 && day <= 31) return `${y}-${pad2(month)}-${pad2(day)}`;
     return "";
   }
