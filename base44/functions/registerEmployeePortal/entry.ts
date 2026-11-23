@@ -1,7 +1,7 @@
 import { createClientFromRequest } from "npm:@base44/sdk@0.8.40";
 import { verifyTurnstile, createRateLimiter } from "../../shared/turnstile.ts";
 import { hashPassword } from "../../shared/ownerAuth.ts";
-import { resolvePortalEmployee, birthDateMatches } from "../../shared/portalIdentity.ts";
+import { resolvePortalEmployee, birthDateCheck } from "../../shared/portalIdentity.ts";
 
 // التسجيل الأول (مرة واحدة) لبوابة الموظف الذاتية:
 // يتحقق برقم الإقامة + تاريخ الميلاد من سجل الموارد البشرية (تحقق لمرة واحدة)،
@@ -34,8 +34,9 @@ export default async function (req) {
     const emp = await resolvePortalEmployee(base44, nid);
     if (!emp) return Response.json({ ok: false, error: "not_matched" });
     // تاريخ الميلاد يُطابق من الخزنة لسجل الموظف نفسه — لا يُقبل رقم الهوية وحده
-    if (!(await birthDateMatches(base44, emp, birthDate)))
-      return Response.json({ ok: false, error: "not_matched" });
+    const birth = await birthDateCheck(base44, emp, birthDate);
+    if (!birth.ok)
+      return Response.json({ ok: false, error: birth.reason === "missing_on_file" ? "no_birth_date" : "not_matched" });
     if (emp.status && emp.status !== "active" && emp.status !== "on_leave")
       return Response.json({ ok: false, error: "inactive" });
     if ((emp.role_level || "") === "owner")

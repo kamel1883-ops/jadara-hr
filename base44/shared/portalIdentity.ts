@@ -113,17 +113,33 @@ function dateMatches(stored: any, wanted: any) {
   return dateCandidates(stored).some((c) => want.includes(c));
 }
 
-/** مطابقة تاريخ الميلاد للتسجيل الأول — تُقرأ من الخزنة لسجل الموظف نفسه فقط */
-export async function birthDateMatches(base44: any, emp: any, birthDate: string) {
-  if (!dateCandidates(birthDate).length) return false;
-  if (!emp?.emp_ref) return dateMatches(emp?.birth_date, birthDate);
+/**
+ * مطابقة تاريخ الميلاد للتسجيل الأول — تُقرأ من الخزنة لسجل الموظف نفسه فقط.
+ * تُرجع سبب الفشل صراحةً: سجل بلا تاريخ ميلاد ≠ تاريخ غير مطابق،
+ * فلا يُقال للموظف «التاريخ خطأ» وهو أصلاً غير مسجّل.
+ */
+export async function birthDateCheck(base44: any, emp: any, birthDate: string): Promise<{ ok: boolean; reason: "ok" | "missing_on_file" | "mismatch" }> {
+  if (!dateCandidates(birthDate).length) return { ok: false, reason: "mismatch" };
+  if (!emp?.emp_ref) {
+    const stored = String(emp?.birth_date || "").trim();
+    if (!stored) return { ok: false, reason: "missing_on_file" };
+    return dateMatches(stored, birthDate) ? { ok: true, reason: "ok" } : { ok: false, reason: "mismatch" };
+  }
   let keys: string[] = [];
   try { keys = await tenantKeysForEmployee(base44, emp); } catch { keys = []; }
+  let sawValue = false;
   for (const key of keys) {
     try {
       const row: any = await getEmployee(key, emp.emp_ref);
-      if (row?.birth_date && dateMatches(row.birth_date, birthDate)) return true;
+      const stored = String(row?.birth_date || "").trim();
+      if (!stored) continue;
+      sawValue = true;
+      if (dateMatches(stored, birthDate)) return { ok: true, reason: "ok" };
     } catch { /* مفتاح آخر */ }
   }
-  return false;
+  return { ok: false, reason: sawValue ? "mismatch" : "missing_on_file" };
+}
+
+export async function birthDateMatches(base44: any, emp: any, birthDate: string) {
+  return (await birthDateCheck(base44, emp, birthDate)).ok;
 }
