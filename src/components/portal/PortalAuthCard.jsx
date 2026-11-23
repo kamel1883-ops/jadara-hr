@@ -23,7 +23,6 @@ function errText(t, err) {
   if (e.includes("inactive")) return t.inactive;
   if (e.includes("owner_use_owner_portal")) return t.ownerPortal;
   if (e.includes("already_registered")) return t.alreadyReg;
-  if (e.includes("no_birth_date")) return t.noBirthDate;
   if (e.includes("not_matched")) return t.notMatched;
   if (e.includes("weak_password")) return t.weak;
   if (e.includes("no_email")) return t.noEmail;

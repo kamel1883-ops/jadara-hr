@@ -182,7 +182,9 @@ export async function tenantKeysForEmployee(base44, emp) {
   const creators = [...new Set(staff.map((e: any) => String(e.created_by_id || '').trim()).filter(Boolean))].slice(0, 24);
   if (creators.length >= 24) scopeDenied();
   const legacy = await companyLegacyKeys(base44, unified, [emp.created_by_id, ...tenants.map(t => t.admin_user_id), ...creators]);
-  return [...new Set([unified, ...tenants.map(t => t.id), ...legacy].filter(Boolean))].slice(0, 24);
+  // سجلات الخزنة مكتوبة تحت مفتاح مسؤول المنشأة — يُضاف صريحاً (منشأة الموظف نفسها)
+  const admins = tenants.map((t: any) => String(t.admin_user_id || "").trim());
+  return [...new Set([unified, ...tenants.map(t => t.id), ...admins, ...legacy].filter(Boolean))].slice(0, 24);
 }
 
 function sortNewest(list: any[]) {

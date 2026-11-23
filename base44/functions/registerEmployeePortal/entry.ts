@@ -2,6 +2,7 @@ import { createClientFromRequest } from "npm:@base44/sdk@0.8.40";
 import { verifyTurnstile, createRateLimiter } from "../../shared/turnstile.ts";
 import { hashPassword } from "../../shared/ownerAuth.ts";
 import { resolvePortalEmployee, birthDateCheck } from "../../shared/portalIdentity.ts";
+import { findEmployeesByNationalId } from "../../shared/vaultIdentity.ts";
 
 // التسجيل الأول (مرة واحدة) لبوابة الموظف الذاتية:
 // يتحقق برقم الإقامة + تاريخ الميلاد من سجل الموارد البشرية (تحقق لمرة واحدة)،
@@ -34,9 +35,17 @@ export default async function (req) {
     const emp = await resolvePortalEmployee(base44, nid);
     if (!emp) return Response.json({ ok: false, error: "not_matched" });
     // تاريخ الميلاد يُطابق من الخزنة لسجل الموظف نفسه — لا يُقبل رقم الهوية وحده
-    const birth = await birthDateCheck(base44, emp, birthDate);
-    if (!birth.ok)
-      return Response.json({ ok: false, error: birth.reason === "missing_on_file" ? "no_birth_date" : "not_matched" });
+    let birth = await birthDateCheck(base44, emp, birthDate);
+    if (!birth.ok) {
+      // المطابقة الموثوقة: بحث الخزنة برقم الهوية وتاريخ الميلاد معاً — نفس مصدر
+      // التاريخ الذي تعرضه شاشة الموظف، فلا يُرفض تاريخ موجود في النظام.
+      const matched = await Promise.race([
+        findEmployeesByNationalId(base44, nid, birthDate).catch(() => [] as any[]),
+        new Promise<any[]>((resolve) => setTimeout(() => resolve([]), 7000)),
+      ]);
+      if ((matched || []).length) birth = { ok: true, reason: "ok" };
+    }
+    if (!birth.ok) return Response.json({ ok: false, error: "not_matched" });
     if (emp.status && emp.status !== "active" && emp.status !== "on_leave")
       return Response.json({ ok: false, error: "inactive" });
     if ((emp.role_level || "") === "owner")

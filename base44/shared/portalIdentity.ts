@@ -120,13 +120,19 @@ function dateMatches(stored: any, wanted: any) {
  */
 export async function birthDateCheck(base44: any, emp: any, birthDate: string): Promise<{ ok: boolean; reason: "ok" | "missing_on_file" | "mismatch" }> {
   if (!dateCandidates(birthDate).length) return { ok: false, reason: "mismatch" };
+  // تاريخ الميلاد في سجل الموظف نفسه أولاً (يظهر في ملفه داخل النظام)
+  const own = String(emp?.birth_date || "").trim();
+  if (own && dateMatches(own, birthDate)) return { ok: true, reason: "ok" };
   if (!emp?.emp_ref) {
-    const stored = String(emp?.birth_date || "").trim();
-    if (!stored) return { ok: false, reason: "missing_on_file" };
-    return dateMatches(stored, birthDate) ? { ok: true, reason: "ok" } : { ok: false, reason: "mismatch" };
+    if (!own) return { ok: false, reason: "missing_on_file" };
+    return { ok: false, reason: "mismatch" };
   }
   let keys: string[] = [];
   try { keys = await tenantKeysForEmployee(base44, emp); } catch { keys = []; }
+  // مفتاح المنشأة الأساسي (رقمها الموحّد) بديل مضمون إن تعذّر بناء مفاتيح أخرى
+  const unified = String(emp?.unified_number || "").trim();
+  if (unified && !keys.includes(unified)) keys = [unified, ...keys];
+  if (!keys.length) return { ok: false, reason: "missing_on_file" };
   let sawValue = false;
   for (const key of keys) {
     try {
