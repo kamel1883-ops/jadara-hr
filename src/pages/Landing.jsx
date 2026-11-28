@@ -662,6 +662,8 @@ export default function Landing() {
             <Link to="/contracts" className="block hover:text-violet-700">{isAr ? "إدارة العقود واللوائح" : "Contracts & Policies"}</Link>
             <Link to="/blog" className="block hover:text-violet-700">{isAr ? "مدونة HR" : "HR Blog"}</Link>
             <Link to="/affiliate-program" className="block hover:text-violet-700">{isAr ? "التسويق بالعمولة (7%)" : "Affiliate Program (7%)"}</Link>
+            <Link to="/brochure" className="block hover:text-violet-700">{isAr ? "البروشور (عربي)" : "Brochure (Arabic)"}</Link>
+            <Link to="/brochure-en" className="block hover:text-violet-700">{isAr ? "البروشور (إنجليزي)" : "Brochure (English)"}</Link>
           </div>
           <div className="space-y-1.5">
             <div className="font-semibold text-base text-foreground mb-1">{t.footContact}</div>

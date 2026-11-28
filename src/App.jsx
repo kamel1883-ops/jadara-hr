@@ -116,11 +116,11 @@ const CompanyAdminPending = () => (
 
 // الصفحات العامة فقط: التسويق والتعريف وبوابات الدخول والمستندات القانونية.
 // لا يظهر أي قسم داخلي أو مستند خاص بالمالك ضمن هذه القائمة.
-const PUBLIC_PATHS = ["/", "/course", "/about", "/contact", "/quote", "/login", "/register", "/forgot-password", "/reset-password", "/mfa", "/company-login", "/company-forgot-password", "/company-register", "/portal", "/owner-portal", "/qiwa-mudad", "/wps-mudad", "/eos-calculator", "/contracts", "/hr-system", "/payroll-system", "/attendance-system", "/performance-system", "/privacy", "/refund-policy", "/affiliate-program"];
+const PUBLIC_PATHS = ["/", "/course", "/about", "/contact", "/quote", "/login", "/register", "/forgot-password", "/reset-password", "/mfa", "/company-login", "/company-forgot-password", "/company-register", "/portal", "/owner-portal", "/qiwa-mudad", "/wps-mudad", "/eos-calculator", "/contracts", "/hr-system", "/payroll-system", "/attendance-system", "/performance-system", "/privacy", "/refund-policy", "/affiliate-program", "/brochure", "/brochure-en"];
 
 // مستندات المالك الخاصة (البروشور، العينات، العقد، الخطة الاستراتيجية، التصاميم) —
 // لا تُفتح إلا بجلسة مالك حقيقية مُوثّقة خادمياً من بوابة المالك.
-const OWNER_DOC_PATHS = ["/strategic-plan", "/ad-designs", "/app-store-screens", "/brochure", "/brochure-en", "/contract-sample", "/samples"];
+const OWNER_DOC_PATHS = ["/strategic-plan", "/ad-designs", "/app-store-screens", "/contract-sample", "/samples"];
 
 const AuthenticatedApp = () => {
   const { user, isAuthenticated, isLoadingAuth, isLoadingPublicSettings, authError, navigateToLogin } = useAuth();
@@ -146,8 +146,6 @@ const AuthenticatedApp = () => {
           <Route path="/strategic-plan" element={<StrategicPlan />} />
           <Route path="/ad-designs" element={<AdDesigns />} />
           <Route path="/app-store-screens" element={<AppStoreScreens />} />
-          <Route path="/brochure" element={<BrochureErrorBoundary><Brochure /></BrochureErrorBoundary>} />
-          <Route path="/brochure-en" element={<BrochureErrorBoundary><BrochureEn /></BrochureErrorBoundary>} />
           <Route path="/contract-sample" element={<ContractSample />} />
           <Route path="/samples" element={<Samples />} />
         </Route>
@@ -182,6 +180,8 @@ const AuthenticatedApp = () => {
           <Route path="/eos-calculator" element={<EosCalculatorPage />} />
           <Route path="/contracts" element={<ContractsPage />} />
           <Route path="/affiliate-program" element={<AffiliateProgram />} />
+          <Route path="/brochure" element={<BrochureErrorBoundary><Brochure /></BrochureErrorBoundary>} />
+          <Route path="/brochure-en" element={<BrochureErrorBoundary><BrochureEn /></BrochureErrorBoundary>} />
           <Route path="/privacy" element={<Privacy />} />
           <Route path="/refund-policy" element={<RefundPolicy />} />
           <Route path="/blog" element={<Blog />} />
